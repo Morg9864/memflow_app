@@ -146,10 +146,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       );
                     }
 
-                    final featured = items.firstWhere(
-                      (item) => item.name == 'React & Hooks',
-                      orElse: () => items.first,
-                    );
+                    final featured = items.first;
                     final others = items.where((item) => item.id != featured.id).toList();
                     final crossAxisCount = MediaQuery.of(context).size.width > 860 ? 2 : 1;
 

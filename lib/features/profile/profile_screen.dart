@@ -38,22 +38,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  Future<void> _resetMockData() async {
-    setState(() => _busy = true);
-    try {
-      await ref.read(appRepositoryProvider).resetToMockData(
-            ref.read(mockSeedServiceProvider).seedIfNeeded,
-          );
-      if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('Données mockées réinitialisées.')));
-    } finally {
-      if (mounted) {
-        setState(() => _busy = false);
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final themePreference = ref.watch(themeControllerProvider);
@@ -116,12 +100,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FilledButton.tonalIcon(
-                    onPressed: _busy ? null : _resetMockData,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Réinitialiser les données mockées'),
-                  ),
-                  const SizedBox(height: 12),
                   FilledButton.tonalIcon(
                     onPressed: _busy ? null : _exportCsv,
                     icon: const Icon(Icons.download_rounded),

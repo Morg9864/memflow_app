@@ -50,7 +50,7 @@ class AppRepository {
         ) AS due_cards
       FROM collections c
       WHERE ? = '' OR lower(c.name) LIKE ?
-      ORDER BY CASE WHEN c.name = 'React & Hooks' THEN 0 ELSE 1 END, c.name
+      ORDER BY c.name
       ''',
       variables: [
         Variable.withInt(DateTime.now().millisecondsSinceEpoch),
@@ -771,12 +771,6 @@ class AppRepository {
     }
 
     return const ListToCsvConverter(fieldDelimiter: ';').convert(rows);
-  }
-
-  Future<void> resetToMockData(Future<void> Function() seed) async {
-    await _database.clearAllUserData();
-    await seed();
-    await refreshAllDerivedData();
   }
 
   Map<String, dynamic> collectionPayload(Collection collection) => {

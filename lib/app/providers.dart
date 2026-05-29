@@ -7,7 +7,6 @@ import '../data/repositories/app_repository.dart';
 import '../domain/services/card_mode_service.dart';
 import '../domain/services/csv_export_service.dart';
 import '../domain/services/csv_import_service.dart';
-import '../domain/services/mock_seed_service.dart';
 import '../domain/services/spaced_repetition_service.dart';
 import '../domain/services/sync_service.dart';
 
@@ -71,19 +70,10 @@ final appRepositoryProvider = Provider<AppRepository>((ref) {
   );
 });
 
-final mockSeedServiceProvider = Provider<MockSeedService>((ref) {
-  return MockSeedService(
-    database: ref.watch(appDatabaseProvider),
-    cardModeService: ref.watch(cardModeServiceProvider),
-  );
-});
-
 final appInitializationProvider = FutureProvider<void>((ref) async {
   final syncService = ref.read(syncServiceProvider);
   if (syncService.isEnabled) {
     await syncService.runSync();
-  } else {
-    await ref.read(mockSeedServiceProvider).seedIfNeeded();
   }
   await ref.read(appRepositoryProvider).refreshAllDerivedData();
 });
