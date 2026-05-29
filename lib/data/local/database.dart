@@ -363,6 +363,22 @@ class AppDatabase extends _$AppDatabase {
     return meta == null ? null : DateTime.tryParse(meta.value);
   }
 
+  Future<void> writeMetaString(String key, String value) async {
+    await into(appMetaEntries).insertOnConflictUpdate(
+      AppMetaEntriesCompanion.insert(key: key, value: value),
+    );
+  }
+
+  Future<String?> readMetaString(String key) async {
+    final meta =
+        await (select(appMetaEntries)..where((table) => table.key.equals(key))).getSingleOrNull();
+    return meta?.value;
+  }
+
+  Future<void> deleteMeta(String key) {
+    return (delete(appMetaEntries)..where((table) => table.key.equals(key))).go();
+  }
+
   Future<DateTime?> readEntityUpdatedAt(SyncEntityType entityType, String entityId) async {
     switch (entityType) {
       case SyncEntityType.collection:

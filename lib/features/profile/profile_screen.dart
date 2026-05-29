@@ -38,9 +38,27 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _signOut() async {
+    final authService = ref.read(authServiceProvider);
+    if (authService == null) {
+      return;
+    }
+    setState(() => _busy = true);
+    try {
+      await authService.signOut();
+      // The router's auth redirect sends us back to /auth.
+    } finally {
+      if (mounted) {
+        setState(() => _busy = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themePreference = ref.watch(themeControllerProvider);
+    final user = ref.watch(currentUserProvider);
+    final displayName = ref.watch(displayNameProvider);
     return AppScaffold(
       bottomNavigation: AppBottomNav(location: GoRouterState.of(context).uri.path),
       child: ListView(
@@ -59,7 +77,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Morgan', style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    displayName ?? 'Invité',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  if (user?.email != null) ...[
+                    const SizedBox(height: 4),
+                    Text(user!.email!, style: Theme.of(context).textTheme.bodyMedium),
+                  ],
                   const SizedBox(height: 6),
                   Text('Objectif quotidien : 12 cartes', style: Theme.of(context).textTheme.bodyLarge),
                 ],
@@ -116,6 +141,19 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               ),
             ),
           ),
+          if (user != null) ...[
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: OutlinedButton.icon(
+                  onPressed: _busy ? null : _signOut,
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text('Se déconnecter'),
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

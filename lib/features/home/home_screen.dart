@@ -29,6 +29,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Widget build(BuildContext context) {
     final stats = ref.watch(homeStatsProvider);
     final collections = ref.watch(homeCollectionsProvider(_search));
+    final displayName = ref.watch(displayNameProvider);
     final location = GoRouterState.of(context).uri.path;
 
     return AppScaffold(
@@ -73,7 +74,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             data: (data) => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SectionLabel('Bonjour, Morgan'),
+                SectionLabel(
+                  displayName == null ? 'Bonjour' : 'Bonjour, $displayName',
+                ),
                 const SizedBox(height: 8),
                 Text(
                   '${data.dueCards} cartes t’attendent ce matin.',

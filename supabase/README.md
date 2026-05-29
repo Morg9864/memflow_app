@@ -8,23 +8,33 @@ This project uses native Flutter environment loading with:
 
 ## Apply the Database Schema
 
-Use the migration in `supabase/migrations/20260529183000_init_memflow.sql`.
+Apply the migrations in order:
+
+1. `supabase/migrations/20260529183000_init_memflow.sql` — base tables.
+2. `supabase/migrations/20260529190000_add_user_scoping.sql` — per-user ownership + RLS.
 
 Options:
 
 1. Supabase SQL Editor
 2. Supabase CLI with `supabase db push`
 
-## Current Security Model
+## Security Model
 
-The current app does not implement Supabase Auth yet.
+The app uses Supabase Auth with email + password.
 
-Because of that, the migration enables RLS but adds open policies for `anon` and `authenticated` so the existing client can read and write data.
+Each table has a `user_id` column (defaulting to `auth.uid()`) and per-user RLS
+policies (`auth.uid() = user_id`) for the `authenticated` role only. The `anon`
+role has no direct table access. The sync client stamps `user_id` on every push
+and filters pulls by the current user.
 
-This is acceptable for development and internal testing only.
+### Auth configuration (dashboard)
 
-Before production:
+Configure email confirmation for password sign-up as desired
+(**Authentication → Providers → Email**). Email is enabled by default.
 
-1. Add authentication
-2. Add a `user_id` ownership model
-3. Replace the open policies with per-user policies
+### Legacy data
+
+Rows created under the previous open-access model have a `null` `user_id` and are
+hidden by the new policies. Purge them with
+`delete from public.collections where user_id is null;` (and the other tables) if
+needed.

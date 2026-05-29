@@ -1,6 +1,11 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../features/auth/auth_screen.dart';
 import '../features/collections/collection_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/import/import_screen.dart';
@@ -9,11 +14,56 @@ import '../features/stats/stats_screen.dart';
 import '../features/study/session_summary_screen.dart';
 import '../features/study/study_screen.dart';
 import '../domain/models/models.dart';
+import 'providers.dart';
+
+/// Bridges a [Stream] to a [Listenable] so go_router re-evaluates [redirect]
+/// whenever the auth state changes.
+class _AuthRefreshNotifier extends ChangeNotifier {
+  _AuthRefreshNotifier(Stream<AuthState> stream) {
+    notifyListeners();
+    _subscription = stream.listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<AuthState> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}
 
 final routerProvider = Provider<GoRouter>((ref) {
+  final authService = ref.watch(authServiceProvider);
+  final refresh =
+      authService == null ? null : _AuthRefreshNotifier(authService.onAuthStateChange);
+  if (refresh != null) {
+    ref.onDispose(refresh.dispose);
+  }
+
   return GoRouter(
     initialLocation: '/',
+    refreshListenable: refresh,
+    redirect: (context, state) {
+      // No Supabase configured → purely local mode, no gate.
+      if (authService == null) {
+        return null;
+      }
+      final loggedIn = authService.currentSession != null;
+      final atAuth = state.matchedLocation == '/auth';
+      if (!loggedIn) {
+        return atAuth ? null : '/auth';
+      }
+      if (atAuth) {
+        return '/';
+      }
+      return null;
+    },
     routes: [
+      GoRoute(
+        path: '/auth',
+        builder: (context, state) => const AuthScreen(),
+      ),
       GoRoute(
         path: '/',
         builder: (context, state) => const HomeScreen(),

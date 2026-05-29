@@ -32,21 +32,36 @@ class SupabaseSyncRemoteSource implements SyncRemoteSource {
     SyncEntityType.reviewLog: 'created_at',
   };
 
+  String get _userId {
+    final id = _client.auth.currentUser?.id;
+    if (id == null) {
+      throw StateError('Cannot sync without an authenticated user.');
+    }
+    return id;
+  }
+
   @override
   Future<void> push(RemoteSyncRecord record) async {
     final table = _tableByEntity[record.entityType]!;
-    await _client.from(table).upsert(record.payload);
+    // Stamp ownership so the row satisfies the per-user RLS policy. Enqueued
+    // payloads stay user-agnostic; ownership is resolved at push time.
+    final payload = {...record.payload, 'user_id': _userId};
+    await _client.from(table).upsert(payload);
   }
 
   @override
   Future<List<RemoteSyncRecord>> pullChanges({required DateTime since}) async {
     final all = <RemoteSyncRecord>[];
+    final userId = _userId;
 
     for (final entry in _tableByEntity.entries) {
       final cursorColumn = _cursorColumnByEntity[entry.key]!;
+      // RLS already restricts rows to the current user; the explicit filter
+      // keeps the query robust and self-documenting.
       final rows = await _client
           .from(entry.value)
           .select()
+          .eq('user_id', userId)
           .gt(cursorColumn, since.toIso8601String());
       for (final row in rows) {
         final payload = Map<String, dynamic>.from(row as Map);

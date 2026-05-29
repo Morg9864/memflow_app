@@ -723,6 +723,47 @@ class AppRepository {
     }
   }
 
+  /// Enqueues every local entity for an upsert. Used to claim pre-existing
+  /// (anonymous) local data for an account the first time it signs in: the
+  /// sync push then stamps each row with the user's id.
+  Future<void> enqueueAllLocalEntities() async {
+    final collections = await _database.select(_database.collections).get();
+    for (final collection in collections) {
+      await _syncService.enqueueUpsert(
+        SyncEntityType.collection,
+        collection.id,
+        collectionPayload(collection),
+      );
+    }
+
+    final decks = await _database.select(_database.decks).get();
+    for (final deck in decks) {
+      await _syncService.enqueueUpsert(
+        SyncEntityType.deck,
+        deck.id,
+        deckPayload(deck),
+      );
+    }
+
+    final cards = await _database.select(_database.flashcards).get();
+    for (final card in cards) {
+      await _syncService.enqueueUpsert(
+        SyncEntityType.flashcard,
+        card.id,
+        flashcardPayload(card),
+      );
+    }
+
+    final reviewLogs = await _database.select(_database.reviewLogs).get();
+    for (final log in reviewLogs) {
+      await _syncService.enqueueUpsert(
+        SyncEntityType.reviewLog,
+        log.id,
+        reviewLogPayload(log),
+      );
+    }
+  }
+
   Future<String> exportAllCardsCsv() async {
     final collections = await _database.select(_database.collections).get();
     final decks = await _database.select(_database.decks).get();

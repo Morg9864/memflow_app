@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_bootstrap.dart';
+import 'session_controller.dart';
 import '../data/local/database.dart';
 import '../data/repositories/app_repository.dart';
+import '../domain/services/auth_service.dart';
 import '../domain/services/card_mode_service.dart';
 import '../domain/services/csv_export_service.dart';
 import '../domain/services/csv_import_service.dart';
@@ -27,10 +29,48 @@ final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
     return null;
   }
 
-  return SupabaseClient(
-    environment.supabaseUrl,
-    environment.supabaseAnonKey,
-  );
+  // Supabase.initialize() is called during bootstrap (see main.dart), so the
+  // shared client with persisted GoTrue session is reused here.
+  return Supabase.instance.client;
+});
+
+final authServiceProvider = Provider<AuthService?>((ref) {
+  final client = ref.watch(supabaseClientProvider);
+  if (client == null) {
+    return null;
+  }
+  return AuthService(client);
+});
+
+/// Emits GoTrue auth events (sign in, sign out, token refresh). Stays in the
+/// loading state when Supabase is not configured.
+final authStateProvider = StreamProvider<AuthState>((ref) {
+  final authService = ref.watch(authServiceProvider);
+  if (authService == null) {
+    return const Stream<AuthState>.empty();
+  }
+  return authService.onAuthStateChange;
+});
+
+/// The currently authenticated user, or null when signed out / not configured.
+final currentUserProvider = Provider<User?>((ref) {
+  // Re-read on every auth event so dependents rebuild on sign in/out.
+  ref.watch(authStateProvider);
+  return ref.watch(authServiceProvider)?.currentUser;
+});
+
+/// The user's chosen display name (from sign-up), falling back to the local
+/// part of their email, then null when signed out.
+final displayNameProvider = Provider<String?>((ref) {
+  final user = ref.watch(currentUserProvider);
+  if (user == null) {
+    return null;
+  }
+  final name = user.userMetadata?['display_name'] as String?;
+  if (name != null && name.trim().isNotEmpty) {
+    return name.trim();
+  }
+  return user.email?.split('@').first;
 });
 
 final spacedRepetitionServiceProvider =
@@ -70,10 +110,26 @@ final appRepositoryProvider = Provider<AppRepository>((ref) {
   );
 });
 
-final appInitializationProvider = FutureProvider<void>((ref) async {
-  final syncService = ref.read(syncServiceProvider);
-  if (syncService.isEnabled) {
-    await syncService.runSync();
+/// Reconciles the local database with the signed-in account on auth changes.
+/// Null when Supabase is not configured (purely local mode).
+final sessionControllerProvider = Provider<SessionController?>((ref) {
+  final authService = ref.watch(authServiceProvider);
+  if (authService == null) {
+    return null;
   }
+  final controller = SessionController(
+    database: ref.watch(appDatabaseProvider),
+    repository: ref.watch(appRepositoryProvider),
+    syncService: ref.watch(syncServiceProvider),
+    authStateChanges: authService.onAuthStateChange,
+  );
+  ref.onDispose(controller.dispose);
+  return controller;
+});
+
+final appInitializationProvider = FutureProvider<void>((ref) async {
+  // Start auth-driven reconciliation (claim / switch / sync). Syncing is now
+  // owned by the session controller and only runs once authenticated.
+  ref.watch(sessionControllerProvider);
   await ref.read(appRepositoryProvider).refreshAllDerivedData();
 });
