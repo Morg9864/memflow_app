@@ -1,0 +1,110 @@
+# -----------------------------
+# OS / Editor junk
+# -----------------------------
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# -----------------------------
+# Logs and temp
+# -----------------------------
+*.log
+*.tmp
+*.temp
+
+# -----------------------------
+# Dart / Flutter
+# -----------------------------
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub/
+.pub-cache/
+.packages
+build/
+coverage/
+
+# Generated docs
+doc/api/
+
+# Flutter web generated artifact (can be regenerated)
+web/flutter_bootstrap.js
+
+# Symbolication / obfuscation artifacts
+app.*.symbols
+app.*.map.json
+
+# -----------------------------
+# IDEs
+# -----------------------------
+# IntelliJ / Android Studio
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VS Code local settings (keep shared config if you prefer)
+.vscode/
+
+# -----------------------------
+# Android
+# -----------------------------
+android/.gradle/
+android/local.properties
+android/key.properties
+android/**/GeneratedPluginRegistrant.java
+android/app/debug/
+android/app/profile/
+android/app/release/
+
+# -----------------------------
+# iOS / macOS
+# -----------------------------
+ios/Flutter/.last_build_id
+ios/Flutter/ephemeral/
+ios/Flutter/flutter_export_environment.sh
+ios/Flutter/Generated.xcconfig
+ios/Pods/
+ios/.symlinks/
+
+# Xcode user data
+*.xcworkspace/xcuserdata/
+*.xcuserdatad/
+*.xcuserstate
+
+# -----------------------------
+# Generic build systems
+# -----------------------------
+.gradle/
+.build/
+
+# -----------------------------
+# Tooling / metadata
+# -----------------------------
+.history
+.svn/
+.swiftpm/
+.atom/
+migrate_working_dir/
+
+# -----------------------------
+# Secrets / environment files
+# -----------------------------
+.env
+.env.*
+*.secret
+*.secrets
+*.jks
+*.keystore
+
+# Keep example env files versioned if present
+!.env.example
+
+# codex and claude
+.codex
+.claude
+
+# metadata
+.metadata

@@ -1,0 +1,189 @@
+import 'dart:convert';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../app/providers.dart';
+import '../../domain/models/models.dart';
+import '../../widgets/ui.dart';
+
+class ImportScreen extends ConsumerStatefulWidget {
+  const ImportScreen({super.key});
+
+  @override
+  ConsumerState<ImportScreen> createState() => _ImportScreenState();
+}
+
+class _ImportScreenState extends ConsumerState<ImportScreen> {
+  CsvImportPreview? _preview;
+  bool _isBusy = false;
+
+  Future<void> _pickFile() async {
+    final result = await FilePicker.pickFiles(
+      withData: true,
+      type: FileType.custom,
+      allowedExtensions: const ['csv', 'txt'],
+    );
+    if (result == null || result.files.isEmpty) {
+      return;
+    }
+    final file = result.files.single;
+    final bytes = file.bytes;
+    if (bytes == null) {
+      return;
+    }
+    setState(() {
+      _preview = ref.read(csvImportServiceProvider).parse(bytes);
+    });
+  }
+
+  Future<void> _downloadTemplate() async {
+    final template = ref.read(csvExportServiceProvider).buildTemplate();
+    await FilePicker.saveFile(
+      dialogTitle: 'Télécharger le template CSV',
+      fileName: 'memflow_template.csv',
+      type: FileType.custom,
+      allowedExtensions: const ['csv'],
+      bytes: utf8.encode(template),
+    );
+  }
+
+  Future<void> _confirmImport() async {
+    final preview = _preview;
+    if (preview == null || preview.cards.isEmpty) {
+      return;
+    }
+    setState(() => _isBusy = true);
+    try {
+      await ref.read(appRepositoryProvider).importCards(preview);
+      if (!mounted) return;
+      context.go('/');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${preview.cards.length} cartes importées.')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isBusy = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppScaffold(
+      bottomNavigation: AppBottomNav(location: GoRouterState.of(context).uri.path),
+      child: ListView(
+        children: [
+          Row(
+            children: [
+              Text('Import CSV', style: Theme.of(context).textTheme.displaySmall),
+              const Spacer(),
+              const ThemeToggleButton(),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            'Accepte les fichiers avec ou sans header, séparés par ; , ou tabulation.',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              Expanded(
+                child: FilledButton.icon(
+                  onPressed: _isBusy ? null : _pickFile,
+                  icon: const Icon(Icons.upload_file_rounded),
+                  label: const Text('Importer un fichier CSV'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: FilledButton.tonalIcon(
+                  onPressed: _downloadTemplate,
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Télécharger le template CSV'),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 22),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                'Format recommandé : collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          if (_preview == null)
+            const EmptyState(
+              title: 'Aucun fichier chargé',
+              message: 'Charge un fichier pour prévisualiser les cartes détectées et les erreurs.',
+            )
+          else
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Prévisualisation', style: Theme.of(context).textTheme.titleLarge),
+                    const SizedBox(height: 14),
+                    Text('${_preview!.cards.length} cartes détectées'),
+                    Text('${_preview!.issues.length} lignes invalides'),
+                    Text('Séparateur : ${_preview!.delimiter == '\t' ? 'tabulation' : _preview!.delimiter}'),
+                    Text('Header : ${_preview!.withHeader ? 'oui' : 'non'}'),
+                    const SizedBox(height: 18),
+                    if (_preview!.issues.isNotEmpty) ...[
+                      const SectionLabel('Erreurs'),
+                      const SizedBox(height: 10),
+                      for (final issue in _preview!.issues)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: Text('Ligne ${issue.rowNumber} : ${issue.message}'),
+                        ),
+                      const SizedBox(height: 14),
+                    ],
+                    if (_preview!.cards.isNotEmpty) ...[
+                      const SectionLabel('Aperçu'),
+                      const SizedBox(height: 10),
+                      for (final card in _preview!.cards.take(4))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('${card.collection} • ${card.deck}',
+                                    style: Theme.of(context).textTheme.labelMedium),
+                                const SizedBox(height: 6),
+                                Text(card.question,
+                                    style: Theme.of(context).textTheme.titleMedium),
+                              ],
+                            ),
+                          ),
+                        ),
+                    ],
+                    const SizedBox(height: 8),
+                    FilledButton(
+                      onPressed: _isBusy || _preview!.cards.isEmpty ? null : _confirmImport,
+                      child: Text(_isBusy ? 'Import en cours...' : 'Confirmer l’import'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
