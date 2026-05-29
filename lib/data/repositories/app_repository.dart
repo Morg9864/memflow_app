@@ -770,7 +770,7 @@ class AppRepository {
       ]);
     }
 
-    return const ListToCsvConverter(fieldDelimiter: ';').convert(rows);
+    return Csv(fieldDelimiter: ';').encode(rows);
   }
 
   Map<String, dynamic> collectionPayload(Collection collection) => {

@@ -61,7 +61,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const Spacer(),
               IconButton.filledTonal(
-                onPressed: () => context.go('/stats'),
+                onPressed: () => context.push('/stats'),
                 icon: const Icon(Icons.notifications_none_rounded),
               ),
               const SizedBox(width: 8),
@@ -131,7 +131,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     const SectionLabel('Collections'),
                     const Spacer(),
                     TextButton(
-                      onPressed: () => context.go('/import'),
+                      onPressed: () => context.push('/import'),
                       child: const Text('Importer CSV'),
                     ),
                   ],
@@ -154,7 +154,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       children: [
                         FeaturedCollectionCard(
                           collection: featured,
-                          onTap: () => context.go('/collection/${featured.id}'),
+                          onTap: () => context.push('/collection/${featured.id}'),
                         ),
                         const SizedBox(height: 14),
                         GridView.count(
@@ -168,7 +168,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                             for (final item in others)
                               CollectionCard(
                                 collection: item,
-                                onTap: () => context.go('/collection/${item.id}'),
+                                onTap: () => context.push('/collection/${item.id}'),
                               ),
                           ],
                         ),

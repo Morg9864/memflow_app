@@ -120,7 +120,7 @@ class CollectionDetailScreen extends ConsumerWidget {
                         const SizedBox(height: 12),
                       ],
                       FilledButton.tonalIcon(
-                        onPressed: () => context.go('/import'),
+                        onPressed: () => context.push('/import'),
                         icon: const Icon(Icons.upload_file_rounded),
                         label: const Text('Importer un CSV'),
                       ),

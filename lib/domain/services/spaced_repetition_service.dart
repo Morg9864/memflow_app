@@ -50,6 +50,7 @@ class SpacedRepetitionService {
         repetitions += 1;
         intervalDays = intervalDays <= 0 ? 1 : (intervalDays * 1.2).clamp(1, 365);
         easeFactor = (easeFactor - 0.08).clamp(1.3, 3.0);
+        mastered = _isMastered(repetitions, easeFactor);
         dueAt = reviewedAt.add(Duration(days: intervalDays.round()));
         break;
       case ReviewResult.good:
@@ -61,6 +62,7 @@ class SpacedRepetitionService {
         } else {
           intervalDays = (intervalDays * easeFactor).clamp(1, 365);
         }
+        mastered = _isMastered(repetitions, easeFactor);
         dueAt = reviewedAt.add(Duration(days: intervalDays.round()));
         break;
       case ReviewResult.easy:
@@ -71,7 +73,7 @@ class SpacedRepetitionService {
         } else {
           intervalDays = (intervalDays * easeFactor * 1.4).clamp(2, 500);
         }
-        mastered = repetitions >= 3 && easeFactor >= 2.6;
+        mastered = _isMastered(repetitions, easeFactor);
         dueAt = reviewedAt.add(Duration(days: intervalDays.round()));
         break;
     }
@@ -85,5 +87,13 @@ class SpacedRepetitionService {
       mastered: mastered,
       lastReviewedAt: reviewedAt,
     );
+  }
+
+  /// Une carte est considérée maîtrisée dès qu'elle a été réussie au moins
+  /// trois fois de suite (`good` ou `easy`) tout en gardant un facteur de
+  /// facilité sain. Un `again` réinitialise les répétitions, donc la maîtrise
+  /// retombe automatiquement.
+  bool _isMastered(int repetitions, double easeFactor) {
+    return repetitions >= 3 && easeFactor >= 2.5;
   }
 }
