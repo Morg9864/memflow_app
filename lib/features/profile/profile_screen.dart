@@ -12,6 +12,9 @@ import '../../theme/theme_controller.dart';
 import '../../widgets/ui.dart';
 import '../legal/legal_document_screen.dart';
 
+// Provider wired to the sync service so the profile can trigger a re-sync.
+final _syncServiceProfileProvider = Provider((ref) => ref.watch(syncServiceProvider));
+
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -110,6 +113,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       if (mounted) {
         setState(() => _busy = false);
       }
+    }
+  }
+
+  Future<void> _forceSync() async {
+    final syncService = ref.read(_syncServiceProfileProvider);
+    if (!syncService.isEnabled) return;
+    setState(() => _busy = true);
+    try {
+      await syncService.resetSyncCursor();
+      await syncService.runSync();
+      await ref.read(appRepositoryProvider).refreshAllDerivedData();
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(const SnackBar(content: Text('Synchronisation terminée.')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text('Erreur sync : $e')));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -258,11 +285,30 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           if (user != null) ...[
             const SizedBox(height: 16),
             Card(
+              clipBehavior: Clip.antiAlias,
+              child: ListTile(
+                leading: const Icon(Icons.settings_outlined),
+                title: const Text('Paramètres du compte'),
+                subtitle: const Text('Nom, email, mot de passe'),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => context.push('/settings'),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
+                    if (ref.read(_syncServiceProfileProvider).isEnabled) ...[
+                      FilledButton.tonalIcon(
+                        onPressed: _busy ? null : _forceSync,
+                        icon: const Icon(Icons.sync_rounded),
+                        label: const Text('Forcer la synchronisation'),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     OutlinedButton.icon(
                       onPressed: _busy ? null : _signOut,
                       icon: const Icon(Icons.logout_rounded),

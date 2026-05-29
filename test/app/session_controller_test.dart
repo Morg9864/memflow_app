@@ -23,6 +23,9 @@ class FakeRemoteSource implements SyncRemoteSource {
   Future<void> push(RemoteSyncRecord record) async {
     pushed.add(record);
   }
+
+  @override
+  Future<void> deleteEntity(SyncEntityType entityType, String entityId) async {}
 }
 
 void main() {

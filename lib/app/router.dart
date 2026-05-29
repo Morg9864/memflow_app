@@ -7,10 +7,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/auth/auth_screen.dart';
 import '../features/collections/collection_detail_screen.dart';
+import '../features/collections/deck_cards_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/import/import_screen.dart';
 import '../features/legal/legal_document_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/profile/settings_screen.dart';
 import '../features/stats/stats_screen.dart';
 import '../features/study/session_summary_screen.dart';
 import '../features/study/study_screen.dart';
@@ -99,6 +101,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/settings',
+        builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/deck/:deckId/cards',
+        builder: (context, state) => DeckCardsScreen(
+          deckId: state.pathParameters['deckId']!,
+          deckName: state.uri.queryParameters['name'] ?? 'Deck',
+        ),
       ),
       GoRoute(
         path: '/legal/:doc',

@@ -35,4 +35,18 @@ class AuthService {
   }
 
   Future<void> signOut() => _auth.signOut();
+
+  Future<void> updateDisplayName(String name) {
+    return _auth.updateUser(
+      UserAttributes(data: {'display_name': name}),
+    );
+  }
+
+  Future<void> updateEmail(String email) {
+    return _auth.updateUser(UserAttributes(email: email));
+  }
+
+  Future<void> updatePassword(String password) {
+    return _auth.updateUser(UserAttributes(password: password));
+  }
 }

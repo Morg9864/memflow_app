@@ -764,6 +764,98 @@ class AppRepository {
     }
   }
 
+  Stream<List<FlashcardSummary>> watchFlashcardsForDeck(String deckId) {
+    return (_database.select(_database.flashcards)
+          ..where((t) => t.deckId.equals(deckId))
+          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
+        .watch()
+        .map(
+          (rows) => rows
+              .map(
+                (row) => FlashcardSummary(
+                  id: row.id,
+                  deckId: row.deckId,
+                  collectionId: row.collectionId,
+                  question: row.question,
+                  correctAnswer: row.correctAnswer,
+                ),
+              )
+              .toList(),
+        );
+  }
+
+  Future<void> deleteFlashcard(String cardId) async {
+    final card = await (_database.select(_database.flashcards)
+          ..where((t) => t.id.equals(cardId)))
+        .getSingle();
+    await _database.transaction(() async {
+      await (_database.delete(_database.reviewLogs)
+            ..where((t) => t.flashcardId.equals(cardId)))
+          .go();
+      await (_database.delete(_database.flashcards)..where((t) => t.id.equals(cardId))).go();
+    });
+    await refreshDerivedData(deckId: card.deckId, collectionId: card.collectionId);
+    await _syncService.enqueueDelete(SyncEntityType.flashcard, cardId);
+    _syncService.scheduleSync();
+  }
+
+  Future<void> deleteDeck(String deckId) async {
+    final deck = await (_database.select(_database.decks)
+          ..where((t) => t.id.equals(deckId)))
+        .getSingle();
+    final cardIds = (await (_database.select(_database.flashcards)
+              ..where((t) => t.deckId.equals(deckId)))
+            .get())
+        .map((c) => c.id)
+        .toList();
+    await _database.transaction(() async {
+      await (_database.delete(_database.reviewLogs)..where((t) => t.deckId.equals(deckId))).go();
+      await (_database.delete(_database.flashcards)..where((t) => t.deckId.equals(deckId))).go();
+      await (_database.delete(_database.decks)..where((t) => t.id.equals(deckId))).go();
+    });
+    await refreshDerivedData(collectionId: deck.collectionId);
+    for (final cardId in cardIds) {
+      await _syncService.enqueueDelete(SyncEntityType.flashcard, cardId);
+    }
+    await _syncService.enqueueDelete(SyncEntityType.deck, deckId);
+    _syncService.scheduleSync();
+  }
+
+  Future<void> deleteCollection(String collectionId) async {
+    final deckIds = (await (_database.select(_database.decks)
+              ..where((t) => t.collectionId.equals(collectionId)))
+            .get())
+        .map((d) => d.id)
+        .toList();
+    final cardIds = (await (_database.select(_database.flashcards)
+              ..where((t) => t.collectionId.equals(collectionId)))
+            .get())
+        .map((c) => c.id)
+        .toList();
+    await _database.transaction(() async {
+      await (_database.delete(_database.reviewLogs)
+            ..where((t) => t.collectionId.equals(collectionId)))
+          .go();
+      await (_database.delete(_database.flashcards)
+            ..where((t) => t.collectionId.equals(collectionId)))
+          .go();
+      await (_database.delete(_database.decks)
+            ..where((t) => t.collectionId.equals(collectionId)))
+          .go();
+      await (_database.delete(_database.collections)
+            ..where((t) => t.id.equals(collectionId)))
+          .go();
+    });
+    for (final cardId in cardIds) {
+      await _syncService.enqueueDelete(SyncEntityType.flashcard, cardId);
+    }
+    for (final deckId in deckIds) {
+      await _syncService.enqueueDelete(SyncEntityType.deck, deckId);
+    }
+    await _syncService.enqueueDelete(SyncEntityType.collection, collectionId);
+    _syncService.scheduleSync();
+  }
+
   Future<String> exportAllCardsCsv() async {
     final collections = await _database.select(_database.collections).get();
     final decks = await _database.select(_database.decks).get();

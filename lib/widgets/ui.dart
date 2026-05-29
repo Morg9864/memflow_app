@@ -334,14 +334,19 @@ class DeckCard extends StatelessWidget {
     super.key,
     required this.deck,
     required this.onTap,
+    this.onDelete,
+    this.onViewCards,
   });
 
   final DeckListItem deck;
   final VoidCallback onTap;
+  final VoidCallback? onDelete;
+  final VoidCallback? onViewCards;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final hasOptions = onDelete != null || onViewCards != null;
     return Card(
       child: InkWell(
         onTap: onTap,
@@ -377,21 +382,62 @@ class DeckCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 12),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(999),
+              if (hasOptions)
+                PopupMenuButton<_DeckAction>(
+                  icon: const Icon(Icons.more_vert_rounded),
+                  onSelected: (action) {
+                    switch (action) {
+                      case _DeckAction.viewCards:
+                        onViewCards?.call();
+                      case _DeckAction.delete:
+                        onDelete?.call();
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    if (onViewCards != null)
+                      const PopupMenuItem(
+                        value: _DeckAction.viewCards,
+                        child: Row(
+                          children: [
+                            Icon(Icons.list_rounded, size: 20),
+                            SizedBox(width: 12),
+                            Text('Voir les cartes'),
+                          ],
+                        ),
+                      ),
+                    if (onDelete != null)
+                      PopupMenuItem(
+                        value: _DeckAction.delete,
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete_outline_rounded,
+                                color: theme.colorScheme.error, size: 20),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Supprimer le deck',
+                              style: TextStyle(color: theme.colorScheme.error),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(999),
+                      ),
+                      child: Text(deck.badgeLabel, style: theme.textTheme.bodySmall),
                     ),
-                    child: Text(deck.badgeLabel, style: theme.textTheme.bodySmall),
-                  ),
-                  const SizedBox(height: 14),
-                  const Icon(Icons.chevron_right_rounded),
-                ],
-              )
+                    const SizedBox(height: 14),
+                    const Icon(Icons.chevron_right_rounded),
+                  ],
+                ),
             ],
           ),
         ),
@@ -399,6 +445,8 @@ class DeckCard extends StatelessWidget {
     );
   }
 }
+
+enum _DeckAction { viewCards, delete }
 
 class LevelBadge extends StatelessWidget {
   const LevelBadge({

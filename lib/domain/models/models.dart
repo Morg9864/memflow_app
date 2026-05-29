@@ -413,6 +413,22 @@ class StudyCard {
   }
 }
 
+class FlashcardSummary {
+  const FlashcardSummary({
+    required this.id,
+    required this.deckId,
+    required this.collectionId,
+    required this.question,
+    required this.correctAnswer,
+  });
+
+  final String id;
+  final String deckId;
+  final String collectionId;
+  final String question;
+  final String correctAnswer;
+}
+
 class SessionSummary {
   const SessionSummary({
     required this.collectionId,

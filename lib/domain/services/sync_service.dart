@@ -9,6 +9,8 @@ import '../models/models.dart';
 abstract class SyncRemoteSource {
   Future<void> push(RemoteSyncRecord record);
 
+  Future<void> deleteEntity(SyncEntityType entityType, String entityId);
+
   Future<List<RemoteSyncRecord>> pullChanges({
     required DateTime since,
   });
@@ -50,6 +52,12 @@ class SupabaseSyncRemoteSource implements SyncRemoteSource {
   }
 
   @override
+  Future<void> deleteEntity(SyncEntityType entityType, String entityId) async {
+    final table = _tableByEntity[entityType]!;
+    await _client.from(table).delete().eq('id', entityId).eq('user_id', _userId);
+  }
+
+  @override
   Future<List<RemoteSyncRecord>> pullChanges({required DateTime since}) async {
     final all = <RemoteSyncRecord>[];
     final userId = _userId;
@@ -62,7 +70,7 @@ class SupabaseSyncRemoteSource implements SyncRemoteSource {
           .from(entry.value)
           .select()
           .eq('user_id', userId)
-          .gt(cursorColumn, since.toIso8601String());
+          .gt(cursorColumn, since.toUtc().toIso8601String());
       for (final row in rows) {
         final payload = Map<String, dynamic>.from(row as Map);
         all.add(
@@ -107,6 +115,18 @@ class SyncService {
     );
   }
 
+  Future<void> enqueueDelete(SyncEntityType entityType, String entityId) async {
+    await _database.upsertSyncQueueEntry(
+      entityType: entityType,
+      entityId: entityId,
+      operation: SyncOperation.delete,
+      payloadJson: '{}',
+    );
+  }
+
+  /// Resets the pull cursor so the next [runSync] re-fetches all remote data.
+  Future<void> resetSyncCursor() => _database.deleteMeta('last_pull_at');
+
   void scheduleSync() {
     if (_remoteSource == null) {
       return;
@@ -138,16 +158,20 @@ class SyncService {
 
     final queue = await _database.pendingSyncEntries();
     for (final entry in queue) {
-      final payload = jsonDecode(entry.payloadJson) as Map<String, dynamic>;
-      final record = RemoteSyncRecord(
-        entityType: entry.entityType,
-        entityId: entry.entityId,
-        payload: payload,
-        updatedAt: entry.updatedAt,
-      );
-
       try {
-        await _remoteSource.push(record);
+        switch (entry.operation) {
+          case SyncOperation.upsert:
+            final payload = jsonDecode(entry.payloadJson) as Map<String, dynamic>;
+            final record = RemoteSyncRecord(
+              entityType: entry.entityType,
+              entityId: entry.entityId,
+              payload: payload,
+              updatedAt: entry.updatedAt,
+            );
+            await _remoteSource.push(record);
+          case SyncOperation.delete:
+            await _remoteSource.deleteEntity(entry.entityType, entry.entityId);
+        }
         await _database.deleteSyncQueueEntry(entry.id);
       } catch (_) {
         await _database.incrementSyncQueueAttempts(entry.id);
@@ -158,16 +182,21 @@ class SyncService {
         DateTime.fromMillisecondsSinceEpoch(0);
     final remoteChanges = await _remoteSource.pullChanges(since: since);
     for (final record in remoteChanges) {
-      final localUpdatedAt = await _database.readEntityUpdatedAt(
-        record.entityType,
-        record.entityId,
-      );
-      if (localUpdatedAt == null || pickWinner(localUpdatedAt, record.updatedAt) == SyncWinner.remote) {
-        await _database.applyRemoteRecord(record);
+      try {
+        final localUpdatedAt = await _database.readEntityUpdatedAt(
+          record.entityType,
+          record.entityId,
+        );
+        if (localUpdatedAt == null ||
+            pickWinner(localUpdatedAt, record.updatedAt) == SyncWinner.remote) {
+          await _database.applyRemoteRecord(record);
+        }
+      } catch (_) {
+        // Skip records that fail to apply rather than aborting the whole pull.
       }
     }
 
-    await _database.writeMetaDateTime('last_pull_at', DateTime.now());
+    await _database.writeMetaDateTime('last_pull_at', DateTime.now().toUtc());
   }
 
   SyncWinner pickWinner(DateTime localUpdatedAt, DateTime remoteUpdatedAt) {
