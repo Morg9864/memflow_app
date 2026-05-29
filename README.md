@@ -215,4 +215,4 @@ flutter pub get
 
 ## Licence
 
-Projet privé. Ajoutez un fichier de licence si vous prévoyez de l'ouvrir.
+MIT License - voir le fichier [LICENSE](LICENSE) pour plus de détails.
