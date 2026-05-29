@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="web/icons/Icon-192.png" alt="MemFlow icon" width="88" />
+  <img src="memflow.png" alt="MemFlow icon" width="88" />
 </p>
 
 <h1 align="center">MemFlow</h1>
