@@ -37,6 +37,12 @@ android {
             signingConfig = signingConfigs.getByName("debug")
         }
     }
+
+    sourceSets {
+        getByName("main") {
+            jniLibs.srcDirs("../../build/native_assets/android/jniLibs/lib")
+        }
+    }
 }
 
 flutter {
