@@ -26,7 +26,7 @@ class CsvExportService {
       ],
     ];
 
-    return const ListToCsvConverter(fieldDelimiter: ';').convert(rows);
+    return Csv(fieldDelimiter: ';').encode(rows);
   }
 
   String exportFlashcards(List<Flashcard> cards, Map<String, String> collectionsById,
@@ -72,6 +72,6 @@ class CsvExportService {
       ]);
     }
 
-    return const ListToCsvConverter(fieldDelimiter: ';').convert(rows);
+    return Csv(fieldDelimiter: ';').encode(rows);
   }
 }

@@ -31,11 +31,7 @@ class CsvImportService {
   CsvImportPreview parse(List<int> bytes) {
     final raw = utf8.decode(bytes, allowMalformed: true).replaceAll('\r\n', '\n');
     final delimiter = _detectDelimiter(raw);
-    final rows = const CsvToListConverter(shouldParseNumbers: false).convert(
-      raw,
-      fieldDelimiter: delimiter,
-      eol: '\n',
-    );
+    final rows = CsvDecoder(fieldDelimiter: delimiter, dynamicTyping: false).convert(raw);
 
     if (rows.isEmpty) {
       return const CsvImportPreview(
