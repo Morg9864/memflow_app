@@ -25,6 +25,12 @@ class SupabaseSyncRemoteSource implements SyncRemoteSource {
     SyncEntityType.flashcard: 'flashcards',
     SyncEntityType.reviewLog: 'review_logs',
   };
+  static const _cursorColumnByEntity = {
+    SyncEntityType.collection: 'updated_at',
+    SyncEntityType.deck: 'updated_at',
+    SyncEntityType.flashcard: 'updated_at',
+    SyncEntityType.reviewLog: 'created_at',
+  };
 
   @override
   Future<void> push(RemoteSyncRecord record) async {
@@ -37,10 +43,11 @@ class SupabaseSyncRemoteSource implements SyncRemoteSource {
     final all = <RemoteSyncRecord>[];
 
     for (final entry in _tableByEntity.entries) {
+      final cursorColumn = _cursorColumnByEntity[entry.key]!;
       final rows = await _client
           .from(entry.value)
           .select()
-          .gt('updated_at', since.toIso8601String());
+          .gt(cursorColumn, since.toIso8601String());
       for (final row in rows) {
         final payload = Map<String, dynamic>.from(row as Map);
         all.add(
@@ -48,7 +55,7 @@ class SupabaseSyncRemoteSource implements SyncRemoteSource {
             entityType: entry.key,
             entityId: payload['id'] as String,
             payload: payload,
-            updatedAt: DateTime.parse(payload['updated_at'] as String),
+            updatedAt: DateTime.parse(payload[cursorColumn] as String),
           ),
         );
       }

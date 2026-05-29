@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'app_bootstrap.dart';
 import '../data/local/database.dart';
 import '../data/repositories/app_repository.dart';
 import '../domain/services/card_mode_service.dart';
@@ -16,15 +17,21 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
   return database;
 });
 
-final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
-  const url = String.fromEnvironment('SUPABASE_URL');
-  const anonKey = String.fromEnvironment('SUPABASE_ANON_KEY');
+final appEnvironmentProvider = Provider<AppEnvironment>((ref) {
+  throw UnimplementedError('AppEnvironment must be overridden during bootstrap.');
+});
 
-  if (url.isEmpty || anonKey.isEmpty) {
+final supabaseClientProvider = Provider<SupabaseClient?>((ref) {
+  final environment = ref.watch(appEnvironmentProvider);
+
+  if (!environment.hasSupabase) {
     return null;
   }
 
-  return SupabaseClient(url, anonKey);
+  return SupabaseClient(
+    environment.supabaseUrl,
+    environment.supabaseAnonKey,
+  );
 });
 
 final spacedRepetitionServiceProvider =
@@ -72,6 +79,11 @@ final mockSeedServiceProvider = Provider<MockSeedService>((ref) {
 });
 
 final appInitializationProvider = FutureProvider<void>((ref) async {
-  await ref.read(mockSeedServiceProvider).seedIfNeeded();
+  final syncService = ref.read(syncServiceProvider);
+  if (syncService.isEnabled) {
+    await syncService.runSync();
+  } else {
+    await ref.read(mockSeedServiceProvider).seedIfNeeded();
+  }
   await ref.read(appRepositoryProvider).refreshAllDerivedData();
 });

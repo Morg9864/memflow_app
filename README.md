@@ -63,31 +63,43 @@ flutter pub get
 ### Web
 
 ```bash
-flutter run -d chrome
+flutter run -d chrome --dart-define-from-file=.env
 ```
 
 ### Android/iOS
 
 ```bash
-flutter run
+flutter run --dart-define-from-file=.env
 ```
 
 ## Supabase Configuration (Optional)
 
 Cloud sync is optional. If variables are not provided, the app still runs locally.
 
-The app expects compile-time variables:
+The app expects compile-time variables loaded natively by Flutter from `.env`:
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 
+1. Copy `.env.example` to `.env`
+2. Fill in the values from your Supabase project
+3. Run or build with `--dart-define-from-file=.env`
+
 Example:
 
 ```bash
-flutter run -d chrome \
-	--dart-define=SUPABASE_URL=https://your-project.supabase.co \
-	--dart-define=SUPABASE_ANON_KEY=your-anon-key
+flutter run -d chrome --dart-define-from-file=.env
 ```
+
+The app reads these values with `String.fromEnvironment(...)` during bootstrap.
+
+The Supabase database schema is versioned in:
+
+```bash
+supabase/migrations/20260529183000_init_memflow.sql
+```
+
+Apply it in the Supabase SQL Editor or with the Supabase CLI before using cloud sync.
 
 ## Drift Code Generation
 
@@ -124,19 +136,19 @@ flutter test test/services/sync_service_test.dart
 ### Web
 
 ```bash
-flutter build web
+flutter build web --dart-define-from-file=.env
 ```
 
 ### Android
 
 ```bash
-flutter build apk
+flutter build apk --dart-define-from-file=.env
 ```
 
 ### iOS
 
 ```bash
-flutter build ios
+flutter build ios --dart-define-from-file=.env
 ```
 
 ## Notes on Offline-First Behavior

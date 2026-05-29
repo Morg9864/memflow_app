@@ -512,6 +512,7 @@ class AppRepository {
     };
     final touchedCollectionIds = <String>{};
     final touchedDeckIds = <String>{};
+    final createdCardIds = <String>{};
 
     await _database.transaction(() async {
       for (final draft in preview.cards) {
@@ -594,6 +595,7 @@ class AppRepository {
                 updatedAt: now,
               ),
             );
+        createdCardIds.add(cardId);
         touchedCollectionIds.add(collection.id);
         touchedDeckIds.add(deck.id);
       }
@@ -605,6 +607,43 @@ class AppRepository {
     for (final collectionId in touchedCollectionIds) {
       await refreshDerivedData(collectionId: collectionId);
     }
+
+    if (createdCardIds.isNotEmpty) {
+      final cards = await (_database.select(_database.flashcards)
+            ..where((table) => table.id.isIn(createdCardIds)))
+          .get();
+      for (final card in cards) {
+        await _syncService.enqueueUpsert(
+          SyncEntityType.flashcard,
+          card.id,
+          flashcardPayload(card),
+        );
+      }
+    }
+
+    for (final deckId in touchedDeckIds) {
+      final deck = await (_database.select(_database.decks)
+            ..where((table) => table.id.equals(deckId)))
+          .getSingle();
+      await _syncService.enqueueUpsert(
+        SyncEntityType.deck,
+        deck.id,
+        deckPayload(deck),
+      );
+    }
+
+    for (final collectionId in touchedCollectionIds) {
+      final collection = await (_database.select(_database.collections)
+            ..where((table) => table.id.equals(collectionId)))
+          .getSingle();
+      await _syncService.enqueueUpsert(
+        SyncEntityType.collection,
+        collection.id,
+        collectionPayload(collection),
+      );
+    }
+
+    _syncService.scheduleSync();
   }
 
   Future<void> refreshDerivedData({
