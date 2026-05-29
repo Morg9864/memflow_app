@@ -9,6 +9,7 @@ import '../features/auth/auth_screen.dart';
 import '../features/collections/collection_detail_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/import/import_screen.dart';
+import '../features/legal/legal_document_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/stats/stats_screen.dart';
 import '../features/study/session_summary_screen.dart';
@@ -98,6 +99,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/profile',
         builder: (context, state) => const ProfileScreen(),
+      ),
+      GoRoute(
+        path: '/legal/:doc',
+        builder: (context, state) => LegalDocumentScreen(
+          document: LegalDocument.fromSlug(state.pathParameters['doc']!),
+        ),
       ),
       GoRoute(
         path: '/session-summary',

@@ -4,11 +4,13 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../theme/theme_controller.dart';
 import '../../widgets/ui.dart';
+import '../legal/legal_document_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -18,7 +20,80 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
+  static const _supportEmail = 'morgan.phemba@gmail.com';
+
   bool _busy = false;
+
+  /// Opens the user's mail client pre-filled with a deletion request to the
+  /// support address. Account deletion is handled manually for now.
+  Future<void> _requestAccountDeletion() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Demander la suppression du compte'),
+        content: const Text(
+          'Un email pré-rempli va s\'ouvrir vers notre support. '
+          'Ta demande sera traitée manuellement sous quelques jours.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Continuer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) {
+      return;
+    }
+
+    final user = ref.read(currentUserProvider);
+    final body = StringBuffer()
+      ..writeln('Bonjour,')
+      ..writeln()
+      ..writeln('Je souhaite la suppression de mon compte MemFlow et des '
+          'données associées.')
+      ..writeln()
+      ..writeln('Email du compte : ${user?.email ?? 'non renseigné'}')
+      ..writeln('Identifiant : ${user?.id ?? 'non renseigné'}');
+
+    final uri = Uri(
+      scheme: 'mailto',
+      path: _supportEmail,
+      query: _encodeQuery({
+        'subject': 'Demande de suppression de compte MemFlow',
+        'body': body.toString(),
+      }),
+    );
+
+    var launched = false;
+    try {
+      launched = await launchUrl(uri);
+    } catch (_) {
+      launched = false;
+    }
+    if (!launched && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Impossible d\'ouvrir l\'app mail. '
+                'Écris-nous à $_supportEmail.'),
+          ),
+        );
+    }
+  }
+
+  String _encodeQuery(Map<String, String> params) {
+    return params.entries
+        .map((e) =>
+            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .join('&');
+  }
 
   Future<void> _exportCsv() async {
     setState(() => _busy = true);
@@ -136,9 +211,48 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     style: Theme.of(context).textTheme.labelMedium,
                   ),
                   const SizedBox(height: 4),
-                  const Text('1.0.0+1'),
+                  Text('1.1.24', style: Theme.of(context).textTheme.bodyMedium),
                 ],
               ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(
+              children: [
+                const Padding(
+                  padding: EdgeInsets.fromLTRB(20, 20, 20, 4),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: SectionLabel('Légal'),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.privacy_tip_outlined),
+                  title: const Text('Politique de confidentialité'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/legal/${LegalDocument.privacy.slug}'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.description_outlined),
+                  title: const Text("Conditions d'utilisation"),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/legal/${LegalDocument.terms.slug}'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.gavel_rounded),
+                  title: const Text('Mentions légales'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/legal/${LegalDocument.notices.slug}'),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.article_outlined),
+                  title: const Text('Licences open-source'),
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => showMemFlowLicensePage(context),
+                ),
+              ],
             ),
           ),
           if (user != null) ...[
@@ -146,10 +260,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(20),
-                child: OutlinedButton.icon(
-                  onPressed: _busy ? null : _signOut,
-                  icon: const Icon(Icons.logout_rounded),
-                  label: const Text('Se déconnecter'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    OutlinedButton.icon(
+                      onPressed: _busy ? null : _signOut,
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Se déconnecter'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextButton.icon(
+                      onPressed: _busy ? null : _requestAccountDeletion,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).colorScheme.error,
+                      ),
+                      icon: const Icon(Icons.delete_outline_rounded),
+                      label: const Text('Demander la suppression de mon compte'),
+                    ),
+                  ],
                 ),
               ),
             ),
