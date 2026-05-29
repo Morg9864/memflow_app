@@ -1,115 +1,168 @@
-# MemFlow
+<p align="center">
+  <img src="web/icons/Icon-192.png" alt="MemFlow icon" width="88" />
+</p>
 
-MemFlow is a premium offline-first Flutter flashcards app for web and mobile.
+<h1 align="center">MemFlow</h1>
 
-The application focuses on spaced repetition, collection/deck management, CSV import/export, local-first persistence, and optional cloud synchronization.
+<p align="center">
+  Application de flashcards Flutter offline-first pour le web et le mobile.
+  <br />
+  Révision espacée, modes d'étude variés, import CSV et synchronisation cloud optionnelle.
+</p>
 
-## Core Features
+<p align="center">
+  <img src="design/C%20_%20Greeting%20_%20masonry.png" alt="Écran d'accueil MemFlow" width="320" />
+</p>
 
-- Offline-first study workflow with local persistence.
-- Spaced repetition scheduling logic.
-- Multiple test modes (QCM, classic/reversed flashcard, cloze, free text, etc.).
-- Collection and deck organization.
-- Study session summary and statistics.
-- CSV import/export services.
-- Optional Supabase sync (enabled only when env vars are provided).
-- Light and dark themes.
+<p align="center">
+  <code>Flutter</code>
+  <code>Riverpod</code>
+  <code>Drift + SQLite</code>
+  <code>go_router</code>
+  <code>Supabase</code>
+</p>
 
-## Tech Stack
+## Aperçu
 
-- Flutter + Dart
-- Riverpod (state management / DI)
-- go_router (navigation)
-- Drift + SQLite (local database)
-- Supabase (cloud sync layer)
-- shared_preferences (small local settings)
+MemFlow est une application de révision pensée pour rester fluide sans connexion et agréable à utiliser sur mobile comme sur le web. La base locale est la source de vérité, puis la synchronisation cloud vient en option quand Supabase est configuré.
 
-## Project Structure
+> Local-first par défaut. Sync seulement si vous en avez besoin.
 
-The app follows a clean, feature-first architecture:
+## Points forts
 
-```
-lib/
-	app/            # bootstrap, app root, router, providers
-	data/           # local DB and repository implementations
-	domain/         # models and business services
-	features/       # UI screens by feature (home, study, stats, import...)
-	theme/          # light/dark theme and controller
-	widgets/        # reusable UI widgets
-	utils/          # utility helpers
-```
+- `Offline-first` avec persistance locale via Drift et SQLite.
+- `Spaced repetition` pour prioriser les cartes à revoir au bon moment.
+- `Plusieurs modes d'étude` : QCM, flashcards classiques/inversées, texte à trous, saisie libre, vrai/faux.
+- `Organisation par collections et decks` pour structurer les révisions.
+- `Import / export CSV` pour alimenter rapidement vos jeux de cartes.
+- `Statistiques de progression` pour suivre la série, le taux de réussite et l'activité.
+- `Thèmes clair et sombre` avec une UI cohérente sur tous les écrans.
 
-## Requirements
+## Interface
 
-- Flutter SDK (stable)
-- Dart SDK (included with Flutter)
-- Android Studio / Xcode (for mobile targets)
-- A modern browser (for web)
+<table>
+  <tr>
+    <td align="center">
+      <img src="design/C%20_%20Greeting%20_%20masonry.png" alt="Accueil" width="210" /><br />
+      <sub>Accueil</sub>
+    </td>
+    <td align="center">
+      <img src="design/02%20_%20Collection%20detail.png" alt="Détail d'une collection" width="210" /><br />
+      <sub>Collection & decks</sub>
+    </td>
+    <td align="center">
+      <img src="design/QCM%20_%20choix%20unique.png" alt="Mode QCM" width="210" /><br />
+      <sub>Mode QCM</sub>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="design/Light%20_%20Study%20_back_.png" alt="Flashcard avec réponse révélée" width="210" /><br />
+      <sub>Flashcard révélée</sub>
+    </td>
+    <td align="center">
+      <img src="design/Texte%20_%20trous.png" alt="Mode texte à trous" width="210" /><br />
+      <sub>Texte à trous</sub>
+    </td>
+    <td align="center">
+      <img src="design/05%20_%20Statistics.png" alt="Écran de statistiques" width="210" /><br />
+      <sub>Statistiques</sub>
+    </td>
+  </tr>
+</table>
 
-Check your setup:
+## Stack technique
+
+- `Flutter` + `Dart`
+- `flutter_riverpod` pour l'état et l'injection de dépendances
+- `go_router` pour la navigation
+- `Drift` + `SQLite` pour la base locale
+- `Supabase` pour la synchronisation cloud optionnelle
+- `shared_preferences` pour les préférences légères
+- `file_picker` + `csv` pour l'import/export
+
+## Démarrage rapide
+
+### Prérequis
+
+- Flutter SDK stable
+- Dart SDK inclus avec Flutter
+- Android Studio et/ou Xcode pour les cibles mobiles
+- Un navigateur moderne pour le web
+
+Vérifiez votre environnement :
 
 ```bash
 flutter doctor
 ```
 
-## Installation
+### Installation
 
 ```bash
 flutter pub get
 ```
 
-## Run the App
+### Lancer l'application
 
-### Web
+Web :
 
 ```bash
 flutter run -d chrome --dart-define-from-file=.env
 ```
 
-### Android/iOS
+Android / iOS :
 
 ```bash
 flutter run --dart-define-from-file=.env
 ```
 
-## Supabase Configuration (Optional)
+## Synchronisation Supabase (optionnelle)
 
-Cloud sync is optional. If variables are not provided, the app still runs locally.
+Sans variables Supabase, l'application reste pleinement utilisable en local.
 
-The app expects compile-time variables loaded natively by Flutter from `.env`:
+Variables attendues :
 
 - `SUPABASE_URL`
 - `SUPABASE_ANON_KEY`
 
-1. Copy `.env.example` to `.env`
-2. Fill in the values from your Supabase project
-3. Run or build with `--dart-define-from-file=.env`
+Étapes :
 
-Example:
+1. Copier `.env.example` vers `.env`
+2. Renseigner les variables de votre projet Supabase
+3. Appliquer le schéma SQL situé dans `supabase/migrations/20260529183000_init_memflow.sql`
+4. Lancer l'application avec `--dart-define-from-file=.env`
+
+Exemple :
 
 ```bash
 flutter run -d chrome --dart-define-from-file=.env
 ```
 
-The app reads these values with `String.fromEnvironment(...)` during bootstrap.
+Les valeurs sont lues au bootstrap avec `String.fromEnvironment(...)`.
 
-The Supabase database schema is versioned in:
+## Structure du projet
 
-```bash
-supabase/migrations/20260529183000_init_memflow.sql
+Le projet suit une organisation feature-first avec une séparation claire entre UI, domaine et persistance :
+
+```text
+lib/
+  app/        bootstrap, routeur, providers
+  data/       base locale, connexions, repositories
+  domain/     modèles et services métier
+  features/   home, collections, study, import, stats, profile
+  theme/      thèmes et contrôleur d'apparence
+  widgets/    composants UI réutilisables
 ```
 
-Apply it in the Supabase SQL Editor or with the Supabase CLI before using cloud sync.
+## Génération Drift
 
-## Drift Code Generation
-
-If you change Drift schema or DAOs, regenerate files with:
+Si vous modifiez le schéma Drift, regénérez les fichiers :
 
 ```bash
 dart run build_runner build --delete-conflicting-outputs
 ```
 
-For watch mode:
+Mode watch :
 
 ```bash
 dart run build_runner watch --delete-conflicting-outputs
@@ -117,13 +170,13 @@ dart run build_runner watch --delete-conflicting-outputs
 
 ## Tests
 
-Run all tests:
+Lancer toute la suite :
 
 ```bash
 flutter test
 ```
 
-Targeted service tests:
+Tests ciblés :
 
 ```bash
 flutter test test/services/spaced_repetition_service_test.dart
@@ -133,31 +186,25 @@ flutter test test/services/sync_service_test.dart
 
 ## Build
 
-### Web
+Web :
 
 ```bash
 flutter build web --dart-define-from-file=.env
 ```
 
-### Android
+Android :
 
 ```bash
 flutter build apk --dart-define-from-file=.env
 ```
 
-### iOS
+iOS :
 
 ```bash
 flutter build ios --dart-define-from-file=.env
 ```
 
-## Notes on Offline-First Behavior
-
-- Local database is the source of truth for reads.
-- Cloud sync is best-effort and optional.
-- Without Supabase variables, synchronization is disabled and local usage remains fully functional.
-
-## Useful Commands
+## Commandes utiles
 
 ```bash
 flutter analyze
@@ -166,6 +213,6 @@ flutter clean
 flutter pub get
 ```
 
-## License
+## Licence
 
-Private project. Add a license file if you plan to open-source it.
+Projet privé. Ajoutez un fichier de licence si vous prévoyez de l'ouvrir.
