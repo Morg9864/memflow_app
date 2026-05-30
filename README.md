@@ -188,20 +188,18 @@ flutter test test/services/sync_service_test.dart
 
 Web :
 
-```bash
-flutter build web --dart-define-from-file=.env
-```
+[Lien vers le site web](https://www.memflow.one)
 
 Android :
 
 ```bash
-flutter build apk --dart-define-from-file=.env
+flutter build apk --debug --dart-define-from-file=.env
 ```
 
 iOS :
 
 ```bash
-flutter build ios --dart-define-from-file=.env
+flutter build ios --debug --dart-define-from-file=.env
 ```
 
 ## Commandes utiles
