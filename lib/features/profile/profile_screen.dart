@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../app/daily_goal_controller.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../theme/theme_controller.dart';
@@ -156,11 +157,24 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
+  Future<void> _editDailyGoal() async {
+    final current = ref.read(dailyGoalProvider);
+    final controller = TextEditingController(text: '$current');
+    final result = await showDialog<int>(
+      context: context,
+      builder: (ctx) => _DailyGoalDialog(controller: controller),
+    );
+    if (result != null) {
+      await ref.read(dailyGoalProvider.notifier).setGoal(result);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final themePreference = ref.watch(themeControllerProvider);
     final user = ref.watch(currentUserProvider);
     final displayName = ref.watch(displayNameProvider);
+    final dailyGoal = ref.watch(dailyGoalProvider);
     return AppScaffold(
       bottomNavigation: AppBottomNav(location: GoRouterState.of(context).uri.path),
       child: ListView(
@@ -187,8 +201,26 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     const SizedBox(height: 4),
                     Text(user!.email!, style: Theme.of(context).textTheme.bodyMedium),
                   ],
-                  const SizedBox(height: 6),
-                  Text('Objectif quotidien : 12 cartes', style: Theme.of(context).textTheme.bodyLarge),
+                  const SizedBox(height: 12),
+                  InkWell(
+                    onTap: _editDailyGoal,
+                    borderRadius: BorderRadius.circular(8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Objectif quotidien : $dailyGoal cartes',
+                          style: Theme.of(context).textTheme.bodyLarge,
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.edit_outlined,
+                          size: 16,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -331,5 +363,60 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ],
       ),
     );
+  }
+}
+
+class _DailyGoalDialog extends StatefulWidget {
+  const _DailyGoalDialog({required this.controller});
+
+  final TextEditingController controller;
+
+  @override
+  State<_DailyGoalDialog> createState() => _DailyGoalDialogState();
+}
+
+class _DailyGoalDialogState extends State<_DailyGoalDialog> {
+  String? _error;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Objectif quotidien'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: widget.controller,
+            keyboardType: TextInputType.number,
+            autofocus: true,
+            decoration: InputDecoration(
+              labelText: 'Nombre de cartes par jour',
+              suffixText: 'cartes',
+              errorText: _error,
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Annuler'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Enregistrer'),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    final value = int.tryParse(widget.controller.text.trim());
+    if (value == null || value < 1) {
+      setState(() => _error = 'Entrer un nombre entre 1 et 999.');
+      return;
+    }
+    Navigator.of(context).pop(value);
   }
 }

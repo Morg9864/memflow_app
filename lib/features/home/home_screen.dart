@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/daily_goal_controller.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
@@ -30,6 +31,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final stats = ref.watch(homeStatsProvider);
     final collections = ref.watch(homeCollectionsProvider(_search));
     final displayName = ref.watch(displayNameProvider);
+    final dailyGoal = ref.watch(dailyGoalProvider);
     final location = GoRouterState.of(context).uri.path;
 
     return AppScaffold(
@@ -71,19 +73,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           const SizedBox(height: 28),
           stats.when(
-            data: (data) => Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SectionLabel(
-                  displayName == null ? 'Bonjour' : 'Bonjour, $displayName',
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${data.dueCards} cartes t’attendent ce matin.',
-                  style: Theme.of(context).textTheme.displaySmall,
-                ),
-              ],
-            ),
+            data: (data) {
+              final due = data.dueCards;
+              final goalReached = due == 0;
+              final String subtitle;
+              if (goalReached) {
+                subtitle = 'Objectif atteint ! Reviens demain.';
+              } else if (due >= dailyGoal) {
+                subtitle = '$due cartes t\'attendent aujourd\'hui.';
+              } else {
+                subtitle = '$due / $dailyGoal cartes aujourd\'hui.';
+              }
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SectionLabel(
+                    displayName == null ? 'Bonjour' : 'Bonjour, $displayName',
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    subtitle,
+                    style: Theme.of(context).textTheme.displaySmall,
+                  ),
+                ],
+              );
+            },
             loading: () => const LinearProgressIndicator(),
             error: (error, stackTrace) => Text(error.toString()),
           ),
