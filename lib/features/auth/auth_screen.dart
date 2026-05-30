@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -58,6 +59,47 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
       }
     }
     return false;
+  }
+
+  Future<void> _forgotPassword() async {
+    final emailController = TextEditingController(text: _emailController.text.trim());
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Mot de passe oublié'),
+        content: TextField(
+          controller: emailController,
+          keyboardType: TextInputType.emailAddress,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: 'Ton adresse email',
+            prefixIcon: Icon(Icons.mail_outline_rounded),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Envoyer'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final email = emailController.text.trim();
+    if (email.isEmpty) return;
+    await _run(() {
+      final redirectTo = kIsWeb
+          ? Uri.base.replace(path: '/').toString()
+          : null;
+      return _authService.resetPasswordForEmail(email, redirectTo: redirectTo);
+    });
+    if (mounted) {
+      _showMessage('Un lien de réinitialisation a été envoyé à $email');
+    }
   }
 
   Future<void> _submitEmailPassword() async {
@@ -231,6 +273,11 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                           : 'Pas de compte ? En créer un',
                     ),
                   ),
+                  if (!_isSignUp)
+                    TextButton(
+                      onPressed: _busy ? null : _forgotPassword,
+                      child: const Text('Mot de passe oublié ?'),
+                    ),
                 ],
               ),
             ),

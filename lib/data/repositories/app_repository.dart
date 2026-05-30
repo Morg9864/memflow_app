@@ -1,4 +1,4 @@
-import 'dart:math';
+import 'dart:math' as math;
 
 import 'package:csv/csv.dart';
 import 'package:drift/drift.dart';
@@ -46,18 +46,23 @@ class AppRepository {
           SELECT COUNT(*)
           FROM flashcards f
           WHERE f.collection_id = c.id
-            AND f.due_at <= ?
-        ) AS due_cards
+            AND f.repetitions = 0
+        ) AS not_done_cards,
+        (
+          SELECT COUNT(*)
+          FROM review_logs rl
+          WHERE rl.collection_id = c.id
+            AND rl.was_correct = 0
+        ) AS error_count
       FROM collections c
       WHERE ? = '' OR lower(c.name) LIKE ?
       ORDER BY c.name
       ''',
       variables: [
-        Variable.withInt(DateTime.now().millisecondsSinceEpoch),
         Variable.withString(lowered),
         Variable.withString('%$lowered%'),
       ],
-      readsFrom: {_database.collections, _database.flashcards},
+      readsFrom: {_database.collections, _database.flashcards, _database.reviewLogs},
     ).watch().map(
           (rows) => rows
               .map(
@@ -71,7 +76,8 @@ class AppRepository {
                   color: row.read<int>('color'),
                   createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')),
                   updatedAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('updated_at')),
-                  dueCards: row.read<int>('due_cards'),
+                  notDoneCards: row.read<int>('not_done_cards'),
+                  errorCount: row.read<int>('error_count'),
                 ),
               )
               .toList(),
@@ -95,17 +101,22 @@ class AppRepository {
           SELECT COUNT(*)
           FROM flashcards f
           WHERE f.collection_id = c.id
-            AND f.due_at <= ?
-        ) AS due_cards
+            AND f.repetitions = 0
+        ) AS not_done_cards,
+        (
+          SELECT COUNT(*)
+          FROM review_logs rl
+          WHERE rl.collection_id = c.id
+            AND rl.was_correct = 0
+        ) AS error_count
       FROM collections c
       WHERE c.id = ?
       LIMIT 1
       ''',
       variables: [
-        Variable.withInt(DateTime.now().millisecondsSinceEpoch),
         Variable.withString(id),
       ],
-      readsFrom: {_database.collections, _database.flashcards},
+      readsFrom: {_database.collections, _database.flashcards, _database.reviewLogs},
     ).watchSingleOrNull().map(
           (row) => row == null
               ? null
@@ -119,7 +130,8 @@ class AppRepository {
                   color: row.read<int>('color'),
                   createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')),
                   updatedAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('updated_at')),
-                  dueCards: row.read<int>('due_cards'),
+                  notDoneCards: row.read<int>('not_done_cards'),
+                  errorCount: row.read<int>('error_count'),
                 ),
         );
   }
@@ -231,7 +243,7 @@ class AppRepository {
     for (final card in flashcards) {
       levelCounts.update(card.level, (value) => value + 1, ifAbsent: () => 1);
     }
-    final maxLevel = levelCounts.values.fold<int>(1, max);
+    final maxLevel = levelCounts.values.fold<int>(1, math.max);
     final levelProgress = [
       LevelProgress(
         level: 1,
@@ -301,6 +313,7 @@ class AppRepository {
   Future<StudySessionState> startStudySession({
     String? collectionId,
     String? deckId,
+    TestMode? forcedMode,
   }) async {
     final now = DateTime.now();
     final cards = await _loadSessionCards(
@@ -330,7 +343,7 @@ class AppRepository {
       deckTitle: title,
       collectionId: collectionId,
       deckId: deckId,
-      cards: cards.map(_mapStudyCard).toList(),
+      cards: cards.map((c) => _mapStudyCard(c, forcedMode: forcedMode)).toList(),
       currentIndex: 0,
       revealed: false,
       selectedOptionIndex: null,
@@ -384,7 +397,7 @@ class AppRepository {
     return load(false);
   }
 
-  StudyCard _mapStudyCard(Flashcard card) {
+  StudyCard _mapStudyCard(Flashcard card, {TestMode? forcedMode}) {
     return StudyCard(
       id: card.id,
       collectionId: card.collectionId,
@@ -394,19 +407,30 @@ class AppRepository {
       wrongAnswers: card.wrongAnswers,
       hint: card.hint,
       explanation: card.explanation,
-      currentTestMode: _effectiveMode(card),
+      currentTestMode: _resolveMode(card, forcedMode),
       allowedTestModes: card.allowedTestModes,
       clozeText: card.clozeText,
       acceptedAnswers: card.acceptedAnswers,
       level: card.level,
-      progressDots: max(3, min(6, card.repetitions + 3)),
+      progressDots: math.max(3, math.min(6, card.repetitions + 3)),
     );
   }
 
-  TestMode _effectiveMode(Flashcard card) {
-    return switch (card.currentTestMode) {
+  // forcedMode == null → random from allowedTestModes.
+  TestMode _resolveMode(Flashcard card, TestMode? forcedMode) {
+    if (forcedMode == null) {
+      final allowed = card.allowedTestModes.where(
+        (m) => m != TestMode.ordering && m != TestMode.matching,
+      ).toList();
+      if (allowed.isEmpty) return TestMode.classicFlashcard;
+      return allowed[math.Random().nextInt(allowed.length)];
+    }
+    if (forcedMode == TestMode.cloze && (card.clozeText == null || card.clozeText!.isEmpty)) {
+      return TestMode.freeText;
+    }
+    return switch (forcedMode) {
       TestMode.ordering || TestMode.matching => TestMode.classicFlashcard,
-      _ => card.currentTestMode,
+      _ => forcedMode,
     };
   }
 
@@ -662,6 +686,10 @@ class AppRepository {
           Variable.withInt(DateTime.now().millisecondsSinceEpoch),
         ],
       ).getSingle();
+      final reviewedRow = await _database.customSelect(
+        'SELECT COUNT(*) AS c FROM flashcards WHERE deck_id = ? AND repetitions > 0',
+        variables: [Variable.withString(deckId)],
+      ).getSingle();
       final masteredRow = await _database.customSelect(
         'SELECT COUNT(*) AS c FROM flashcards WHERE deck_id = ? AND mastered = 1',
         variables: [Variable.withString(deckId)],
@@ -671,11 +699,12 @@ class AppRepository {
           .getSingle();
       final total = totalRow.read<int>('c');
       final due = dueRow.read<int>('c');
+      final reviewed = reviewedRow.read<int>('c');
       final mastered = masteredRow.read<int>('c');
-      final progress = total == 0 ? 0.0 : mastered / total;
+      final progress = total == 0 ? 0.0 : reviewed / total;
       final status = due > 0
           ? DeckStatus.dues
-          : progress >= 0.9
+          : (total > 0 && mastered >= total)
               ? DeckStatus.maitrise
               : DeckStatus.nouveau;
       await _database.update(_database.decks).replace(

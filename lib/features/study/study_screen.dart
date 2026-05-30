@@ -6,6 +6,7 @@ import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
+import 'mode_selection_sheet.dart';
 import 'study_controller.dart';
 
 class StudyScreen extends ConsumerStatefulWidget {
@@ -33,14 +34,27 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   void initState() {
     super.initState();
     _controller = StudyController(ref.read(appRepositoryProvider));
-    Future.microtask(_load);
+    Future.microtask(_askModeAndLoad);
   }
 
-  Future<void> _load() async {
+  Future<void> _askModeAndLoad() async {
+    if (!mounted) return;
+    final choice = await showModeSelectionSheet(context);
+    // null = user dismissed without choosing → go back
+    if (!mounted) return;
+    if (choice == null) {
+      _exitStudy();
+      return;
+    }
+    await _load(forcedMode: choice.mode);
+  }
+
+  Future<void> _load({TestMode? forcedMode}) async {
     try {
       final session = await _controller.load(
         collectionId: widget.collectionId,
         deckId: widget.deckId,
+        forcedMode: forcedMode,
       );
       if (mounted) {
         setState(() => _state = session);

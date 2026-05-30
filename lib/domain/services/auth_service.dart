@@ -49,4 +49,8 @@ class AuthService {
   Future<void> updatePassword(String password) {
     return _auth.updateUser(UserAttributes(password: password));
   }
+
+  Future<void> resetPasswordForEmail(String email, {String? redirectTo}) {
+    return _auth.resetPasswordForEmail(email, redirectTo: redirectTo);
+  }
 }

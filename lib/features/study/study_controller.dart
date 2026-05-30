@@ -9,8 +9,13 @@ class StudyController {
   Future<StudySessionState> load({
     String? collectionId,
     String? deckId,
+    TestMode? forcedMode,
   }) {
-    return _repository.startStudySession(collectionId: collectionId, deckId: deckId);
+    return _repository.startStudySession(
+      collectionId: collectionId,
+      deckId: deckId,
+      forcedMode: forcedMode,
+    );
   }
 
   bool evaluateMultipleChoice(StudyCard card, int selectedIndex, List<String> options) {

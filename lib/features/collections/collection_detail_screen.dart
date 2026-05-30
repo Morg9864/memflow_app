@@ -56,6 +56,14 @@ class CollectionDetailScreen extends ConsumerStatefulWidget {
 class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen> {
   bool _busy = false;
 
+  Future<void> _launchStudy({String? deckId}) async {
+    if (deckId != null) {
+      context.push('/study?deckId=$deckId');
+    } else {
+      context.push('/study?collectionId=${widget.collectionId}');
+    }
+  }
+
   Future<void> _deleteCollection(CollectionListItem item) async {
     final ok = await _confirmDeletion(
       context,
@@ -95,8 +103,7 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
 
     return AppScaffold(
       floatingActionButton: FloatingActionButton(
-        onPressed:
-            _busy ? null : () => context.push('/study?collectionId=${widget.collectionId}'),
+        onPressed: _busy ? null : () => _launchStudy(),
         child: const Icon(Icons.play_arrow_rounded),
       ),
       child: collection.when(
@@ -173,17 +180,17 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
-                      value: '${(item.masteredPercentage * 100).round()}%',
-                      label: 'maîtrise',
-                      icon: Icons.stars_rounded,
+                      value: '${item.notDoneCards}',
+                      label: 'non faites',
+                      icon: Icons.hourglass_empty_rounded,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
-                      value: '${item.dueCards}',
-                      label: 'dues',
-                      icon: Icons.schedule_rounded,
+                      value: '${item.errorCount}',
+                      label: 'erronées',
+                      icon: Icons.cancel_outlined,
                     ),
                   ),
                 ],
@@ -204,7 +211,7 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
                       for (final deck in deckItems) ...[
                         DeckCard(
                           deck: deck,
-                          onTap: () => context.push('/study?deckId=${deck.id}'),
+                          onTap: () => _launchStudy(deckId: deck.id),
                           onDelete: _busy ? null : () => _deleteDeck(deck),
                           onViewCards: () => context.push(
                             '/deck/${deck.id}/cards?name=${Uri.encodeComponent(deck.name)}',

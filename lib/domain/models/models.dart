@@ -135,7 +135,8 @@ class CollectionListItem {
     required this.color,
     required this.createdAt,
     required this.updatedAt,
-    required this.dueCards,
+    required this.notDoneCards,
+    required this.errorCount,
   });
 
   final String id;
@@ -147,7 +148,8 @@ class CollectionListItem {
   final int color;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final int dueCards;
+  final int notDoneCards;
+  final int errorCount;
 }
 
 class CollectionDetailData {

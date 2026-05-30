@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../features/auth/auth_screen.dart';
+import '../features/auth/reset_password_screen.dart';
 import '../features/collections/collection_detail_screen.dart';
 import '../features/collections/deck_cards_screen.dart';
 import '../features/home/home_screen.dart';
@@ -24,8 +25,14 @@ import 'providers.dart';
 class _AuthRefreshNotifier extends ChangeNotifier {
   _AuthRefreshNotifier(Stream<AuthState> stream) {
     notifyListeners();
-    _subscription = stream.listen((_) => notifyListeners());
+    _subscription = stream.listen((authState) {
+      _isRecovery = authState.event == AuthChangeEvent.passwordRecovery;
+      notifyListeners();
+    });
   }
+
+  bool _isRecovery = false;
+  bool get isRecovery => _isRecovery;
 
   late final StreamSubscription<AuthState> _subscription;
 
@@ -54,10 +61,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
       final loggedIn = authService.currentSession != null;
       final atAuth = state.matchedLocation == '/auth';
+      final atReset = state.matchedLocation == '/reset-password';
+
+      // Password recovery link clicked → send to reset screen.
+      if (refresh?.isRecovery == true) {
+        return atReset ? null : '/reset-password';
+      }
+
       if (!loggedIn) {
         return atAuth ? null : '/auth';
       }
-      if (atAuth) {
+      if (atAuth || atReset) {
         return '/';
       }
       return null;
@@ -66,6 +80,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/auth',
         builder: (context, state) => const AuthScreen(),
+      ),
+      GoRoute(
+        path: '/reset-password',
+        builder: (context, state) => const ResetPasswordScreen(),
       ),
       GoRoute(
         path: '/',
