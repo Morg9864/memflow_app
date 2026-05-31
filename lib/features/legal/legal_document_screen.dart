@@ -195,7 +195,7 @@ void showMemFlowLicensePage(BuildContext context) {
   showLicensePage(
     context: context,
     applicationName: 'MemFlow',
-    applicationVersion: '1.1.24',
+    applicationVersion: '1.3.42',
     applicationIcon: Padding(
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
