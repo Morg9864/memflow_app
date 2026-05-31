@@ -633,6 +633,24 @@ class FlashcardSummary {
   final String correctAnswer;
 }
 
+class FlashcardDueItem {
+  const FlashcardDueItem({
+    required this.id,
+    required this.deckId,
+    required this.deckName,
+    required this.question,
+    required this.dueAt,
+    required this.isDueNow,
+  });
+
+  final String id;
+  final String deckId;
+  final String deckName;
+  final String question;
+  final DateTime dueAt;
+  final bool isDueNow;
+}
+
 class SessionSummary {
   const SessionSummary({
     required this.collectionId,

@@ -371,10 +371,67 @@ class AppRepository {
     });
   }
 
+  Stream<List<FlashcardDueItem>> watchDueCardsForCollection(
+    String collectionId,
+  ) {
+    return _combineLatest3(
+      _watchFlashcardsInternal(collectionId: collectionId),
+      _watchDecksInternal(collectionId: collectionId),
+      _clockStream(),
+      (cards, decks, now) {
+        final deckNames = {for (final deck in decks) deck.id: deck.name};
+        final sortedCards = [...cards]
+          ..sort((a, b) {
+            final byDueAt = a.dueAt.compareTo(b.dueAt);
+            if (byDueAt != 0) {
+              return byDueAt;
+            }
+
+            final byDeckName = (deckNames[a.deckId] ?? '')
+                .toLowerCase()
+                .compareTo((deckNames[b.deckId] ?? '').toLowerCase());
+            if (byDeckName != 0) {
+              return byDeckName;
+            }
+
+            return a.question.toLowerCase().compareTo(b.question.toLowerCase());
+          });
+
+        return sortedCards
+            .map(
+              (card) => FlashcardDueItem(
+                id: card.id,
+                deckId: card.deckId,
+                deckName: deckNames[card.deckId] ?? 'Deck',
+                question: card.question,
+                dueAt: card.dueAt,
+                isDueNow: !_isDueInFuture(card.dueAt, now),
+              ),
+            )
+            .toList();
+      },
+    );
+  }
+
   Future<void> deleteFlashcard(String cardId) async {
     await _client
         .from('flashcards')
         .delete()
+        .eq('id', cardId)
+        .eq('user_id', _userId);
+    _notifyDataChanged();
+  }
+
+  Future<void> updateFlashcardDueAt({
+    required String cardId,
+    required DateTime dueAt,
+  }) async {
+    await _client
+        .from('flashcards')
+        .update({
+          'due_at': dueAt.toUtc().toIso8601String(),
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
         .eq('id', cardId)
         .eq('user_id', _userId);
     _notifyDataChanged();

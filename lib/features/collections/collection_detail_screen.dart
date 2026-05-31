@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import 'collection_due_cards_screen.dart';
 import '../../widgets/ui.dart';
 
 Future<bool> _confirmDeletion(
@@ -211,6 +212,19 @@ class _CollectionDetailScreenState
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 18),
+              FilledButton.tonalIcon(
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => CollectionDueCardsScreen(
+                      collectionId: widget.collectionId,
+                      collectionName: item.name,
+                    ),
+                  ),
+                ),
+                icon: const Icon(Icons.schedule_rounded),
+                label: const Text('Voir les échéances'),
               ),
               const SizedBox(height: 24),
               Row(

@@ -108,4 +108,26 @@ void main() {
       expect(update.intervalDays, greaterThan(6));
     },
   );
+
+  test('good interval is capped to avoid excessive jumps', () {
+    final update = service.applyReview(
+      buildCard(repetitions: 6, intervalDays: 90, easeFactor: 2.8),
+      ReviewResult.good,
+      now: baseNow,
+    );
+
+    expect(update.intervalDays, 120);
+    expect(update.dueAt, baseNow.add(const Duration(days: 120)));
+  });
+
+  test('easy interval is capped to avoid year-long scheduling jumps', () {
+    final update = service.applyReview(
+      buildCard(repetitions: 6, intervalDays: 120, easeFactor: 2.8),
+      ReviewResult.easy,
+      now: baseNow,
+    );
+
+    expect(update.intervalDays, 180);
+    expect(update.dueAt, baseNow.add(const Duration(days: 180)));
+  });
 }

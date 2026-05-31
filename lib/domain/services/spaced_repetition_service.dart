@@ -23,6 +23,10 @@ class FlashcardReviewUpdate {
 class SpacedRepetitionService {
   const SpacedRepetitionService();
 
+  static const double _maxGoodIntervalDays = 120;
+  static const double _maxEasyIntervalDays = 180;
+  static const double _easyGrowthMultiplier = 1.2;
+
   FlashcardReviewUpdate applyReview(
     FlashcardRecord card,
     ReviewResult result, {
@@ -61,7 +65,10 @@ class SpacedRepetitionService {
         } else if (repetitions == 2) {
           intervalDays = 3;
         } else {
-          intervalDays = (intervalDays * easeFactor).clamp(1, 365);
+          intervalDays = (intervalDays * easeFactor).clamp(
+            1,
+            _maxGoodIntervalDays,
+          );
         }
         mastered = _isMastered(repetitions, easeFactor);
         dueAt = reviewedAt.add(Duration(days: intervalDays.round()));
@@ -72,7 +79,8 @@ class SpacedRepetitionService {
         if (repetitions == 1) {
           intervalDays = 4;
         } else {
-          intervalDays = (intervalDays * easeFactor * 1.4).clamp(2, 500);
+          intervalDays = (intervalDays * easeFactor * _easyGrowthMultiplier)
+              .clamp(2, _maxEasyIntervalDays);
         }
         mastered = _isMastered(repetitions, easeFactor);
         dueAt = reviewedAt.add(Duration(days: intervalDays.round()));

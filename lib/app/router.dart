@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../features/auth/auth_screen.dart';
 import '../features/auth/reset_password_screen.dart';
 import '../features/collections/collection_detail_screen.dart';
+import '../features/collections/collection_due_cards_screen.dart';
 import '../features/collections/deck_cards_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/import/import_screen.dart';
@@ -81,6 +82,16 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => CollectionDetailScreen(
           collectionId: state.pathParameters['collectionId']!,
         ),
+        routes: [
+          GoRoute(
+            name: 'collection-due-cards',
+            path: 'due-cards',
+            builder: (context, state) => CollectionDueCardsScreen(
+              collectionId: state.pathParameters['collectionId']!,
+              collectionName: state.uri.queryParameters['name'] ?? 'Collection',
+            ),
+          ),
+        ],
       ),
       GoRoute(
         path: '/study',
