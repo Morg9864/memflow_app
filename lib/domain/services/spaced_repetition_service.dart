@@ -1,4 +1,3 @@
-import '../../data/local/database.dart';
 import '../models/models.dart';
 
 class FlashcardReviewUpdate {
@@ -25,7 +24,7 @@ class SpacedRepetitionService {
   const SpacedRepetitionService();
 
   FlashcardReviewUpdate applyReview(
-    Flashcard card,
+    FlashcardRecord card,
     ReviewResult result, {
     DateTime? now,
   }) {
@@ -44,14 +43,16 @@ class SpacedRepetitionService {
         intervalDays = 0;
         mastered = false;
         easeFactor = (easeFactor - 0.2).clamp(1.3, 3.0);
-        dueAt = reviewedAt.add(const Duration(minutes: 10));
+        dueAt = reviewedAt.add(const Duration(minutes: 5));
         break;
       case ReviewResult.hard:
         repetitions += 1;
-        intervalDays = intervalDays <= 0 ? 1 : (intervalDays * 1.2).clamp(1, 365);
+        intervalDays = intervalDays <= 0
+            ? 1
+            : (intervalDays * 1.2).clamp(1, 365);
         easeFactor = (easeFactor - 0.08).clamp(1.3, 3.0);
         mastered = _isMastered(repetitions, easeFactor);
-        dueAt = reviewedAt.add(Duration(days: intervalDays.round()));
+        dueAt = reviewedAt.add(const Duration(minutes: 15));
         break;
       case ReviewResult.good:
         repetitions += 1;

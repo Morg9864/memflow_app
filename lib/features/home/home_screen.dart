@@ -13,8 +13,8 @@ final homeStatsProvider = StreamProvider<HomeStats>((ref) {
 
 final homeCollectionsProvider =
     StreamProvider.family<List<CollectionListItem>, String>((ref, search) {
-  return ref.watch(appRepositoryProvider).watchCollections(search: search);
-});
+      return ref.watch(appRepositoryProvider).watchCollections(search: search);
+    });
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -47,17 +47,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   children: [
                     TextSpan(
                       text: 'Mem',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(color: Theme.of(context).colorScheme.onSurface),
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                     ),
                     TextSpan(
                       text: 'Flow',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(color: Theme.of(context).colorScheme.primary),
+                      style: Theme.of(context).textTheme.headlineMedium
+                          ?.copyWith(
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
                     ),
                   ],
                 ),
@@ -115,7 +115,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 stats.when(
                   data: (data) => GridView.count(
-                    crossAxisCount: MediaQuery.of(context).size.width > 720 ? 3 : 1,
+                    crossAxisCount: MediaQuery.of(context).size.width > 720
+                        ? 3
+                        : 1,
                     shrinkWrap: true,
                     physics: const NeverScrollableScrollPhysics(),
                     mainAxisSpacing: 12,
@@ -159,36 +161,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                     if (items.isEmpty) {
                       return const EmptyState(
                         title: 'Aucune collection',
-                        message: 'Ajuste la recherche ou importe un nouveau jeu de cartes.',
+                        message:
+                            'Ajuste la recherche ou importe un nouveau jeu de cartes.',
                       );
                     }
 
-                    final featured = items.first;
-                    final others = items.where((item) => item.id != featured.id).toList();
-                    final crossAxisCount = MediaQuery.of(context).size.width > 860 ? 2 : 1;
+                    final crossAxisCount =
+                        MediaQuery.of(context).size.width > 980
+                        ? 3
+                        : MediaQuery.of(context).size.width > 680
+                        ? 2
+                        : 1;
 
-                    return Column(
+                    return GridView.count(
+                      crossAxisCount: crossAxisCount,
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      mainAxisSpacing: 12,
+                      crossAxisSpacing: 12,
+                      childAspectRatio: 1.22,
                       children: [
-                        FeaturedCollectionCard(
-                          collection: featured,
-                          onTap: () => context.push('/collection/${featured.id}'),
-                        ),
-                        const SizedBox(height: 14),
-                        GridView.count(
-                          crossAxisCount: crossAxisCount,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          mainAxisSpacing: 12,
-                          crossAxisSpacing: 12,
-                          childAspectRatio: 1.22,
-                          children: [
-                            for (final item in others)
-                              CollectionCard(
-                                collection: item,
-                                onTap: () => context.push('/collection/${item.id}'),
-                              ),
-                          ],
-                        ),
+                        for (final item in items)
+                          CollectionCard(
+                            collection: item,
+                            onTap: () => context.push('/collection/${item.id}'),
+                          ),
                       ],
                     );
                   },

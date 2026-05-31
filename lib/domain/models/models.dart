@@ -39,75 +39,75 @@ class RemoteSyncRecord {
 
 extension TestModeX on TestMode {
   String get label => switch (this) {
-        TestMode.multipleChoice => 'QCM',
-        TestMode.classicFlashcard => 'Flashcard',
-        TestMode.reversedFlashcard => 'Flashcard inversée',
-        TestMode.cloze => 'Texte à trous',
-        TestMode.freeText => 'Saisie libre',
-        TestMode.trueFalse => 'Vrai / faux',
-        TestMode.ordering => 'Ordonnancement',
-        TestMode.matching => 'Association',
-      };
+    TestMode.multipleChoice => 'QCM',
+    TestMode.classicFlashcard => 'Flashcard',
+    TestMode.reversedFlashcard => 'Flashcard inversée',
+    TestMode.cloze => 'Texte à trous',
+    TestMode.freeText => 'Saisie libre',
+    TestMode.trueFalse => 'Vrai / faux',
+    TestMode.ordering => 'Ordonnancement',
+    TestMode.matching => 'Association',
+  };
 }
 
 extension ReviewResultX on ReviewResult {
   String get label => switch (this) {
-        ReviewResult.again => 'Encore',
-        ReviewResult.hard => 'Difficile',
-        ReviewResult.good => 'Correct',
-        ReviewResult.easy => 'Facile',
-      };
+    ReviewResult.again => 'Encore',
+    ReviewResult.hard => 'Difficile',
+    ReviewResult.good => 'Correct',
+    ReviewResult.easy => 'Facile',
+  };
 
   String get description => switch (this) {
-        ReviewResult.again => 'Je ne savais pas',
-        ReviewResult.hard => 'Avec effort',
-        ReviewResult.good => 'Je savais',
-        ReviewResult.easy => 'Trop simple',
-      };
+    ReviewResult.again => 'Je ne savais pas',
+    ReviewResult.hard => 'Avec effort',
+    ReviewResult.good => 'Je savais',
+    ReviewResult.easy => 'Trop simple',
+  };
 
   Color tone(ColorScheme scheme) => switch (this) {
-        ReviewResult.again => const Color(0xFFD94A3A),
-        ReviewResult.hard => const Color(0xFFE8792F),
-        ReviewResult.good => const Color(0xFF4D9461),
-        ReviewResult.easy => const Color(0xFF4D79B5),
-      };
+    ReviewResult.again => const Color(0xFFD94A3A),
+    ReviewResult.hard => const Color(0xFFE8792F),
+    ReviewResult.good => const Color(0xFF4D9461),
+    ReviewResult.easy => const Color(0xFF4D79B5),
+  };
 
   Color background(ColorScheme scheme) => switch (this) {
-        ReviewResult.again => const Color(0xFFFBE7E4),
-        ReviewResult.hard => const Color(0xFFFCE9DC),
-        ReviewResult.good => const Color(0xFFEAF3E7),
-        ReviewResult.easy => const Color(0xFFEAF0F3),
-      };
+    ReviewResult.again => const Color(0xFFFBE7E4),
+    ReviewResult.hard => const Color(0xFFFCE9DC),
+    ReviewResult.good => const Color(0xFFEAF3E7),
+    ReviewResult.easy => const Color(0xFFEAF0F3),
+  };
 }
 
 extension DeckDifficultyX on DeckDifficulty {
   String get label => switch (this) {
-        DeckDifficulty.facile => 'Facile',
-        DeckDifficulty.moyen => 'Moyen',
-        DeckDifficulty.avance => 'Avancé',
-      };
+    DeckDifficulty.facile => 'Facile',
+    DeckDifficulty.moyen => 'Moyen',
+    DeckDifficulty.avance => 'Avancé',
+  };
 }
 
 extension DeckStatusX on DeckStatus {
   String get label => switch (this) {
-        DeckStatus.nouveau => 'Nouveau',
-        DeckStatus.maitrise => 'Maîtrisé',
-        DeckStatus.dues => 'Dues',
-      };
+    DeckStatus.nouveau => 'Nouveau',
+    DeckStatus.maitrise => 'Maîtrisé',
+    DeckStatus.dues => 'Dues',
+  };
 }
 
 extension ThemePreferenceX on ThemePreference {
   ThemeMode get themeMode => switch (this) {
-        ThemePreference.system => ThemeMode.system,
-        ThemePreference.light => ThemeMode.light,
-        ThemePreference.dark => ThemeMode.dark,
-      };
+    ThemePreference.system => ThemeMode.system,
+    ThemePreference.light => ThemeMode.light,
+    ThemePreference.dark => ThemeMode.dark,
+  };
 
   String get label => switch (this) {
-        ThemePreference.system => 'Système',
-        ThemePreference.light => 'Clair',
-        ThemePreference.dark => 'Sombre',
-      };
+    ThemePreference.system => 'Système',
+    ThemePreference.light => 'Clair',
+    ThemePreference.dark => 'Sombre',
+  };
 }
 
 class HomeStats {
@@ -131,11 +131,11 @@ class CollectionListItem {
     required this.description,
     required this.icon,
     required this.totalCards,
-    required this.masteredPercentage,
+    required this.cardsDone,
+    required this.dueCards,
     required this.color,
     required this.createdAt,
     required this.updatedAt,
-    required this.notDoneCards,
     required this.errorCount,
   });
 
@@ -144,19 +144,18 @@ class CollectionListItem {
   final String description;
   final String icon;
   final int totalCards;
-  final double masteredPercentage;
+  final int cardsDone;
+  final int dueCards;
   final int color;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final int notDoneCards;
   final int errorCount;
+
+  double get progress => totalCards == 0 ? 0 : cardsDone / totalCards;
 }
 
 class CollectionDetailData {
-  const CollectionDetailData({
-    required this.collection,
-    required this.decks,
-  });
+  const CollectionDetailData({required this.collection, required this.decks});
 
   final CollectionListItem collection;
   final List<DeckListItem> decks;
@@ -170,6 +169,7 @@ class DeckListItem {
     required this.icon,
     required this.difficulty,
     required this.totalCards,
+    required this.cardsDone,
     required this.dueCards,
     required this.progress,
     required this.status,
@@ -183,6 +183,7 @@ class DeckListItem {
   final String icon;
   final DeckDifficulty difficulty;
   final int totalCards;
+  final int cardsDone;
   final int dueCards;
   final double progress;
   final DeckStatus status;
@@ -195,6 +196,194 @@ class DeckListItem {
     }
     return status.label;
   }
+}
+
+class CollectionRecord {
+  const CollectionRecord({
+    required this.id,
+    required this.name,
+    required this.description,
+    required this.icon,
+    required this.color,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String name;
+  final String description;
+  final String icon;
+  final int color;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
+class DeckRecord {
+  const DeckRecord({
+    required this.id,
+    required this.collectionId,
+    required this.name,
+    required this.icon,
+    required this.difficulty,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String collectionId;
+  final String name;
+  final String icon;
+  final DeckDifficulty difficulty;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+}
+
+class FlashcardRecord {
+  const FlashcardRecord({
+    required this.id,
+    required this.collectionId,
+    required this.deckId,
+    required this.question,
+    required this.correctAnswer,
+    required this.answer,
+    required this.wrongAnswers,
+    required this.hint,
+    required this.explanation,
+    required this.currentTestMode,
+    required this.allowedTestModes,
+    required this.lastTestMode,
+    required this.modeHistory,
+    required this.clozeText,
+    required this.acceptedAnswers,
+    required this.source,
+    required this.difficulty,
+    required this.level,
+    required this.tags,
+    required this.dueAt,
+    required this.lastReviewedAt,
+    required this.intervalDays,
+    required this.easeFactor,
+    required this.repetitions,
+    required this.lapses,
+    required this.mastered,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  final String id;
+  final String collectionId;
+  final String deckId;
+  final String question;
+  final String correctAnswer;
+  final String? answer;
+  final List<String> wrongAnswers;
+  final String? hint;
+  final String? explanation;
+  final TestMode currentTestMode;
+  final List<TestMode> allowedTestModes;
+  final TestMode? lastTestMode;
+  final List<TestMode> modeHistory;
+  final String? clozeText;
+  final List<String> acceptedAnswers;
+  final String? source;
+  final DeckDifficulty? difficulty;
+  final int level;
+  final List<String> tags;
+  final DateTime dueAt;
+  final DateTime? lastReviewedAt;
+  final double intervalDays;
+  final double easeFactor;
+  final int repetitions;
+  final int lapses;
+  final bool mastered;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  FlashcardRecord copyWith({
+    String? id,
+    String? collectionId,
+    String? deckId,
+    String? question,
+    String? correctAnswer,
+    String? answer,
+    List<String>? wrongAnswers,
+    String? hint,
+    String? explanation,
+    TestMode? currentTestMode,
+    List<TestMode>? allowedTestModes,
+    TestMode? lastTestMode,
+    List<TestMode>? modeHistory,
+    String? clozeText,
+    List<String>? acceptedAnswers,
+    String? source,
+    DeckDifficulty? difficulty,
+    int? level,
+    List<String>? tags,
+    DateTime? dueAt,
+    DateTime? lastReviewedAt,
+    double? intervalDays,
+    double? easeFactor,
+    int? repetitions,
+    int? lapses,
+    bool? mastered,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+  }) {
+    return FlashcardRecord(
+      id: id ?? this.id,
+      collectionId: collectionId ?? this.collectionId,
+      deckId: deckId ?? this.deckId,
+      question: question ?? this.question,
+      correctAnswer: correctAnswer ?? this.correctAnswer,
+      answer: answer ?? this.answer,
+      wrongAnswers: wrongAnswers ?? this.wrongAnswers,
+      hint: hint ?? this.hint,
+      explanation: explanation ?? this.explanation,
+      currentTestMode: currentTestMode ?? this.currentTestMode,
+      allowedTestModes: allowedTestModes ?? this.allowedTestModes,
+      lastTestMode: lastTestMode ?? this.lastTestMode,
+      modeHistory: modeHistory ?? this.modeHistory,
+      clozeText: clozeText ?? this.clozeText,
+      acceptedAnswers: acceptedAnswers ?? this.acceptedAnswers,
+      source: source ?? this.source,
+      difficulty: difficulty ?? this.difficulty,
+      level: level ?? this.level,
+      tags: tags ?? this.tags,
+      dueAt: dueAt ?? this.dueAt,
+      lastReviewedAt: lastReviewedAt ?? this.lastReviewedAt,
+      intervalDays: intervalDays ?? this.intervalDays,
+      easeFactor: easeFactor ?? this.easeFactor,
+      repetitions: repetitions ?? this.repetitions,
+      lapses: lapses ?? this.lapses,
+      mastered: mastered ?? this.mastered,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+}
+
+class ReviewLogRecord {
+  const ReviewLogRecord({
+    required this.id,
+    required this.flashcardId,
+    required this.collectionId,
+    required this.deckId,
+    required this.reviewResult,
+    required this.testMode,
+    required this.wasCorrect,
+    required this.createdAt,
+    required this.scheduledDueAt,
+  });
+
+  final String id;
+  final String flashcardId;
+  final String collectionId;
+  final String deckId;
+  final ReviewResult reviewResult;
+  final TestMode testMode;
+  final bool wasCorrect;
+  final DateTime createdAt;
+  final DateTime scheduledDueAt;
 }
 
 class HeatmapCell {
@@ -246,10 +435,7 @@ class StatisticsOverview {
 }
 
 class CsvImportIssue {
-  const CsvImportIssue({
-    required this.rowNumber,
-    required this.message,
-  });
+  const CsvImportIssue({required this.rowNumber, required this.message});
 
   final int rowNumber;
   final String message;
@@ -311,6 +497,9 @@ class StudySessionState {
     required this.collectionId,
     required this.deckId,
     required this.cards,
+    required this.sessionCardIds,
+    required this.seenCardIds,
+    required this.pendingReviewResults,
     required this.currentIndex,
     required this.revealed,
     required this.selectedOptionIndex,
@@ -325,6 +514,9 @@ class StudySessionState {
   final String? collectionId;
   final String? deckId;
   final List<StudyCard> cards;
+  final Set<String> sessionCardIds;
+  final Set<String> seenCardIds;
+  final Map<String, ReviewResult> pendingReviewResults;
   final int currentIndex;
   final bool revealed;
   final int? selectedOptionIndex;
@@ -336,6 +528,8 @@ class StudySessionState {
 
   StudyCard get currentCard => cards[currentIndex];
 
+  bool get hasSeenAllCards => seenCardIds.length >= sessionCardIds.length;
+
   int get seenCount => currentIndex + (isCompleted ? 1 : 0);
 
   double get progress => cards.isEmpty ? 0 : (currentIndex + 1) / cards.length;
@@ -345,6 +539,9 @@ class StudySessionState {
     String? collectionId,
     String? deckId,
     List<StudyCard>? cards,
+    Set<String>? sessionCardIds,
+    Set<String>? seenCardIds,
+    Map<String, ReviewResult>? pendingReviewResults,
     int? currentIndex,
     bool? revealed,
     int? selectedOptionIndex,
@@ -361,15 +558,20 @@ class StudySessionState {
       collectionId: collectionId ?? this.collectionId,
       deckId: deckId ?? this.deckId,
       cards: cards ?? this.cards,
+      sessionCardIds: sessionCardIds ?? this.sessionCardIds,
+      seenCardIds: seenCardIds ?? this.seenCardIds,
+      pendingReviewResults: pendingReviewResults ?? this.pendingReviewResults,
       currentIndex: currentIndex ?? this.currentIndex,
       revealed: revealed ?? this.revealed,
-      selectedOptionIndex:
-          clearSelectedOption ? null : (selectedOptionIndex ?? this.selectedOptionIndex),
+      selectedOptionIndex: clearSelectedOption
+          ? null
+          : (selectedOptionIndex ?? this.selectedOptionIndex),
       hasValidatedAnswer: hasValidatedAnswer ?? this.hasValidatedAnswer,
       freeTextAnswer: freeTextAnswer ?? this.freeTextAnswer,
       reviewCounts: reviewCounts ?? this.reviewCounts,
-      currentAnswerWasCorrect:
-          clearCorrectness ? null : (currentAnswerWasCorrect ?? this.currentAnswerWasCorrect),
+      currentAnswerWasCorrect: clearCorrectness
+          ? null
+          : (currentAnswerWasCorrect ?? this.currentAnswerWasCorrect),
       isCompleted: isCompleted ?? this.isCompleted,
     );
   }
@@ -447,7 +649,8 @@ class SessionSummary {
   final Map<ReviewResult, int> reviewCounts;
 
   int get successCount =>
-      (reviewCounts[ReviewResult.good] ?? 0) + (reviewCounts[ReviewResult.easy] ?? 0);
+      (reviewCounts[ReviewResult.good] ?? 0) +
+      (reviewCounts[ReviewResult.easy] ?? 0);
 
   double get successRate => totalCards == 0 ? 0 : successCount / totalCards;
 }

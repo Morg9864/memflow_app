@@ -1,24 +1,49 @@
+import 'dart:math' as math;
+
 import '../../data/repositories/app_repository.dart';
 import '../../domain/models/models.dart';
 
 class StudyController {
-  StudyController(this._repository);
+  StudyController(AppRepository repository, {math.Random? random})
+    : _repository = repository,
+      _random = random ?? math.Random();
 
-  final AppRepository _repository;
+  StudyController.forTesting({math.Random? random})
+    : _repository = null,
+      _random = random ?? math.Random();
+
+  final AppRepository? _repository;
+  final math.Random _random;
+
+  AppRepository get _requiredRepository {
+    final repository = _repository;
+    if (repository == null) {
+      throw StateError(
+        'StudyController requires a repository for this action.',
+      );
+    }
+    return repository;
+  }
 
   Future<StudySessionState> load({
     String? collectionId,
     String? deckId,
     TestMode? forcedMode,
+    required int sessionCardLimit,
   }) {
-    return _repository.startStudySession(
+    return _requiredRepository.startStudySession(
       collectionId: collectionId,
       deckId: deckId,
       forcedMode: forcedMode,
+      sessionCardLimit: sessionCardLimit,
     );
   }
 
-  bool evaluateMultipleChoice(StudyCard card, int selectedIndex, List<String> options) {
+  bool evaluateMultipleChoice(
+    StudyCard card,
+    int selectedIndex,
+    List<String> options,
+  ) {
     if (selectedIndex < 0 || selectedIndex >= options.length) {
       return false;
     }
@@ -41,10 +66,9 @@ class StudyController {
   }
 
   bool evaluateCloze(StudyCard card, String answer) {
-    final matches = RegExp(r'\{\{([^}]+)\}\}')
-        .allMatches(card.clozeText ?? '')
-        .map((match) => match.group(1)!)
-        .toList();
+    final matches = RegExp(
+      r'\{\{([^}]+)\}\}',
+    ).allMatches(card.clozeText ?? '').map((match) => match.group(1)!).toList();
     final accepted = <String>[
       ...matches,
       ...card.acceptedAnswers,
@@ -58,7 +82,7 @@ class StudyController {
     required ReviewResult result,
     required bool wasCorrect,
   }) {
-    return _repository.submitReview(
+    return _requiredRepository.submitReview(
       cardId: cardId,
       reviewResult: result,
       wasCorrect: wasCorrect,
@@ -85,15 +109,48 @@ class StudyController {
   StudySessionState advance(StudySessionState state, ReviewResult result) {
     final updatedCounts = Map<ReviewResult, int>.from(state.reviewCounts)
       ..update(result, (value) => value + 1, ifAbsent: () => 1);
+    final updatedSeenCardIds = {...state.seenCardIds, state.currentCard.id};
+    final updatedPendingReviewResults = Map<String, ReviewResult>.from(
+      state.pendingReviewResults,
+    );
+
+    if (_shouldRepeatInSession(result)) {
+      updatedPendingReviewResults[state.currentCard.id] = result;
+    } else {
+      updatedPendingReviewResults.remove(state.currentCard.id);
+    }
+
+    final reviewedCards = state.cards.sublist(0, state.currentIndex + 1);
+    final upcomingCards = state.cards.sublist(state.currentIndex + 1);
+    final pendingCards = <StudyCard>[
+      ...upcomingCards,
+      if (_shouldRepeatInSession(result)) state.currentCard,
+    ];
+
+    final nextCards =
+        state.hasSeenAllCards ||
+            updatedSeenCardIds.length >= state.sessionCardIds.length
+        ? [
+            ...reviewedCards,
+            ..._reorderPhaseTwoCards(pendingCards, updatedPendingReviewResults),
+          ]
+        : [...reviewedCards, ...pendingCards];
+
     final nextIndex = state.currentIndex + 1;
-    if (nextIndex >= state.cards.length) {
+    if (nextIndex >= nextCards.length) {
       return state.copyWith(
+        cards: nextCards,
+        seenCardIds: updatedSeenCardIds,
+        pendingReviewResults: updatedPendingReviewResults,
         reviewCounts: updatedCounts,
         isCompleted: true,
       );
     }
 
     return state.copyWith(
+      cards: nextCards,
+      seenCardIds: updatedSeenCardIds,
+      pendingReviewResults: updatedPendingReviewResults,
       currentIndex: nextIndex,
       revealed: false,
       clearSelectedOption: true,
@@ -103,6 +160,27 @@ class StudyController {
       clearCorrectness: true,
       isCompleted: false,
     );
+  }
+
+  List<StudyCard> _reorderPhaseTwoCards(
+    List<StudyCard> cards,
+    Map<String, ReviewResult> pendingReviewResults,
+  ) {
+    final failedCards = cards
+        .where((card) => pendingReviewResults[card.id] == ReviewResult.again)
+        .toList();
+    final successfulCards = cards
+        .where((card) => pendingReviewResults[card.id] != ReviewResult.again)
+        .toList();
+
+    failedCards.shuffle(_random);
+    successfulCards.shuffle(_random);
+
+    return [...failedCards, ...successfulCards];
+  }
+
+  bool _shouldRepeatInSession(ReviewResult result) {
+    return result == ReviewResult.again || result == ReviewResult.hard;
   }
 
   String _normalize(String value) {

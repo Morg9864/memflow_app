@@ -1,341 +1,164 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:csv/csv.dart';
-import 'package:drift/drift.dart';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../domain/models/models.dart';
 import '../../domain/services/card_mode_service.dart';
 import '../../domain/services/spaced_repetition_service.dart';
-import '../../domain/services/sync_service.dart';
-import '../local/database.dart';
 
 class AppRepository {
   AppRepository({
-    required AppDatabase database,
+    required SupabaseClient client,
     required SpacedRepetitionService spacedRepetitionService,
     required CardModeService cardModeService,
-    required SyncService syncService,
-  })  : _database = database,
-        _spacedRepetitionService = spacedRepetitionService,
-        _cardModeService = cardModeService,
-        _syncService = syncService;
+    void Function()? onDataChanged,
+  }) : _client = client,
+       _spacedRepetitionService = spacedRepetitionService,
+       _cardModeService = cardModeService,
+       _onDataChanged = onDataChanged;
 
-  final AppDatabase _database;
+  final SupabaseClient _client;
   final SpacedRepetitionService _spacedRepetitionService;
   final CardModeService _cardModeService;
-  final SyncService _syncService;
+  final void Function()? _onDataChanged;
   final Uuid _uuid = const Uuid();
+
+  String get _userId {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) {
+      throw StateError('Une session Supabase active est requise.');
+    }
+    return userId;
+  }
+
+  void _notifyDataChanged() {
+    _onDataChanged?.call();
+  }
 
   Stream<List<CollectionListItem>> watchCollections({String search = ''}) {
     final lowered = search.trim().toLowerCase();
-    return _database.customSelect(
-      '''
-      SELECT
-        c.id,
-        c.name,
-        c.description,
-        c.icon,
-        c.total_cards,
-        c.mastered_percentage,
-        c.color,
-        c.created_at,
-        c.updated_at,
-        (
-          SELECT COUNT(*)
-          FROM flashcards f
-          WHERE f.collection_id = c.id
-            AND f.repetitions = 0
-        ) AS not_done_cards,
-        (
-          SELECT COUNT(*)
-          FROM review_logs rl
-          WHERE rl.collection_id = c.id
-            AND rl.was_correct = 0
-        ) AS error_count
-      FROM collections c
-      WHERE ? = '' OR lower(c.name) LIKE ?
-      ORDER BY c.name
-      ''',
-      variables: [
-        Variable.withString(lowered),
-        Variable.withString('%$lowered%'),
-      ],
-      readsFrom: {_database.collections, _database.flashcards, _database.reviewLogs},
-    ).watch().map(
-          (rows) => rows
-              .map(
-                (row) => CollectionListItem(
-                  id: row.read<String>('id'),
-                  name: row.read<String>('name'),
-                  description: row.read<String>('description'),
-                  icon: row.read<String>('icon'),
-                  totalCards: row.read<int>('total_cards'),
-                  masteredPercentage: row.read<double>('mastered_percentage'),
-                  color: row.read<int>('color'),
-                  createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')),
-                  updatedAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('updated_at')),
-                  notDoneCards: row.read<int>('not_done_cards'),
-                  errorCount: row.read<int>('error_count'),
-                ),
-              )
-              .toList(),
-        );
+    return _combineLatest4(
+      _watchCollectionsInternal(),
+      _watchFlashcardsInternal(),
+      _watchReviewLogsInternal(),
+      _clockStream(),
+      (collections, flashcards, reviewLogs, now) {
+        final items =
+            collections
+                .map(
+                  (collection) => _buildCollectionListItem(
+                    collection,
+                    flashcards
+                        .where((card) => card.collectionId == collection.id)
+                        .toList(),
+                    reviewLogs
+                        .where((log) => log.collectionId == collection.id)
+                        .toList(),
+                    now,
+                  ),
+                )
+                .where(
+                  (item) =>
+                      lowered.isEmpty ||
+                      item.name.toLowerCase().contains(lowered),
+                )
+                .toList()
+              ..sort(
+                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+              );
+        return items;
+      },
+    );
   }
 
   Stream<CollectionListItem?> watchCollection(String id) {
-    return _database.customSelect(
-      '''
-      SELECT
-        c.id,
-        c.name,
-        c.description,
-        c.icon,
-        c.total_cards,
-        c.mastered_percentage,
-        c.color,
-        c.created_at,
-        c.updated_at,
-        (
-          SELECT COUNT(*)
-          FROM flashcards f
-          WHERE f.collection_id = c.id
-            AND f.repetitions = 0
-        ) AS not_done_cards,
-        (
-          SELECT COUNT(*)
-          FROM review_logs rl
-          WHERE rl.collection_id = c.id
-            AND rl.was_correct = 0
-        ) AS error_count
-      FROM collections c
-      WHERE c.id = ?
-      LIMIT 1
-      ''',
-      variables: [
-        Variable.withString(id),
-      ],
-      readsFrom: {_database.collections, _database.flashcards, _database.reviewLogs},
-    ).watchSingleOrNull().map(
-          (row) => row == null
-              ? null
-              : CollectionListItem(
-                  id: row.read<String>('id'),
-                  name: row.read<String>('name'),
-                  description: row.read<String>('description'),
-                  icon: row.read<String>('icon'),
-                  totalCards: row.read<int>('total_cards'),
-                  masteredPercentage: row.read<double>('mastered_percentage'),
-                  color: row.read<int>('color'),
-                  createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')),
-                  updatedAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('updated_at')),
-                  notDoneCards: row.read<int>('not_done_cards'),
-                  errorCount: row.read<int>('error_count'),
-                ),
-        );
+    return watchCollections().map(
+      (items) => _firstWhereOrNull(items, (item) => item.id == id),
+    );
   }
 
   Stream<List<DeckListItem>> watchDecksForCollection(String collectionId) {
-    return _database.customSelect(
-      '''
-      SELECT
-        d.id,
-        d.collection_id,
-        d.name,
-        d.icon,
-        d.difficulty,
-        d.total_cards,
-        d.due_cards,
-        d.progress,
-        d.status,
-        d.created_at,
-        d.updated_at
-      FROM decks d
-      WHERE d.collection_id = ?
-      ORDER BY d.created_at
-      ''',
-      variables: [Variable.withString(collectionId)],
-      readsFrom: {_database.decks},
-    ).watch().map(
-          (rows) => rows
-              .map(
-                (row) => DeckListItem(
-                  id: row.read<String>('id'),
-                  collectionId: row.read<String>('collection_id'),
-                  name: row.read<String>('name'),
-                  icon: row.read<String>('icon'),
-                  difficulty: DeckDifficulty.values
-                      .firstWhere((value) => value.name == row.read<String>('difficulty')),
-                  totalCards: row.read<int>('total_cards'),
-                  dueCards: row.read<int>('due_cards'),
-                  progress: row.read<double>('progress'),
-                  status: DeckStatus.values
-                      .firstWhere((value) => value.name == row.read<String>('status')),
-                  createdAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('created_at')),
-                  updatedAt: DateTime.fromMillisecondsSinceEpoch(row.read<int>('updated_at')),
-                ),
-              )
-              .toList(),
-        );
+    return _combineLatest3(
+      _watchDecksInternal(collectionId: collectionId),
+      _watchFlashcardsInternal(collectionId: collectionId),
+      _clockStream(),
+      (decks, flashcards, now) {
+        final items =
+            decks
+                .map(
+                  (deck) => _buildDeckListItem(
+                    deck,
+                    flashcards.where((card) => card.deckId == deck.id).toList(),
+                    now,
+                  ),
+                )
+                .toList()
+              ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+        return items;
+      },
+    );
   }
 
   Stream<HomeStats> watchHomeStats() {
-    return _database.customSelect(
-      'SELECT 1 AS trigger',
-      readsFrom: {_database.flashcards, _database.reviewLogs},
-    ).watchSingle().asyncMap((_) => _loadHomeStats());
-  }
-
-  Future<HomeStats> _loadHomeStats() async {
-    final dueRow = await _database.customSelect(
-      'SELECT COUNT(*) AS c FROM flashcards WHERE due_at <= ?',
-      variables: [Variable.withInt(DateTime.now().millisecondsSinceEpoch)],
-    ).getSingle();
-    final reviews = await _database.select(_database.reviewLogs).get();
-    final streak = _calculateStreak(reviews.map((log) => log.createdAt).toList());
-    final successCount = reviews.where((log) => log.wasCorrect).length;
-    final successRate = reviews.isEmpty ? 0.0 : successCount / reviews.length;
-
-    return HomeStats(
-      streakDays: streak,
-      successRate: successRate,
-      dueCards: dueRow.read<int>('c'),
-      totalCardsSeen: reviews.length,
+    return _combineLatest3(
+      _watchFlashcardsInternal(),
+      _watchReviewLogsInternal(),
+      _clockStream(),
+      (flashcards, reviewLogs, now) => _buildHomeStats(
+        flashcards: flashcards,
+        reviewLogs: reviewLogs,
+        now: now,
+      ),
     );
   }
 
   Stream<StatisticsOverview> watchStatisticsOverview() {
-    return _database.customSelect(
-      'SELECT 1 AS trigger',
-      readsFrom: {_database.reviewLogs, _database.flashcards},
-    ).watchSingle().asyncMap((_) => _loadStatisticsOverview());
-  }
-
-  Future<StatisticsOverview> _loadStatisticsOverview() async {
-    final reviews = await _database.select(_database.reviewLogs).get();
-    final flashcards = await _database.select(_database.flashcards).get();
-    final streak = _calculateStreak(reviews.map((log) => log.createdAt).toList());
-    final successCount = reviews.where((log) => log.wasCorrect).length;
-    final successRate = reviews.isEmpty ? 0.0 : successCount / reviews.length;
-    final studyDayMap = <DateTime, int>{};
-    for (final review in reviews) {
-      final key = DateTime(review.createdAt.year, review.createdAt.month, review.createdAt.day);
-      studyDayMap.update(key, (value) => value + 1, ifAbsent: () => 1);
-    }
-
-    final now = DateTime.now();
-    final heatmap = List.generate(4, (weekIndex) {
-      return List.generate(7, (dayIndex) {
-        final date = DateTime(now.year, now.month, now.day)
-            .subtract(Duration(days: (3 - weekIndex) * 7 + (6 - dayIndex)));
-        final key = DateTime(date.year, date.month, date.day);
-        final count = studyDayMap[key] ?? 0;
-        return HeatmapCell(
-          label: '${key.day}/${key.month}',
-          count: count,
-          isActive: count > 0,
-        );
-      });
-    });
-
-    final levelCounts = <int, int>{1: 0, 2: 0, 3: 0, 4: 0};
-    for (final card in flashcards) {
-      levelCounts.update(card.level, (value) => value + 1, ifAbsent: () => 1);
-    }
-    final maxLevel = levelCounts.values.fold<int>(1, math.max);
-    final levelProgress = [
-      LevelProgress(
-        level: 1,
-        title: 'Basique',
-        subtitle: 'Fondations et reconnaissance',
-        count: levelCounts[1] ?? 0,
-        progress: (levelCounts[1] ?? 0) / maxLevel,
-        icon: Icons.visibility_rounded,
+    return _combineLatest3(
+      _watchFlashcardsInternal(),
+      _watchReviewLogsInternal(),
+      _clockStream(),
+      (flashcards, reviewLogs, now) => _buildStatisticsOverview(
+        flashcards: flashcards,
+        reviewLogs: reviewLogs,
+        now: now,
       ),
-      LevelProgress(
-        level: 2,
-        title: 'Intermédiaire',
-        subtitle: 'Compréhension guidée',
-        count: levelCounts[2] ?? 0,
-        progress: (levelCounts[2] ?? 0) / maxLevel,
-        icon: Icons.tune_rounded,
-      ),
-      LevelProgress(
-        level: 3,
-        title: 'Actif',
-        subtitle: 'Rappel actif et reformulation',
-        count: levelCounts[3] ?? 0,
-        progress: (levelCounts[3] ?? 0) / maxLevel,
-        icon: Icons.bolt_rounded,
-      ),
-      LevelProgress(
-        level: 4,
-        title: 'Avancé',
-        subtitle: 'Maîtrise contextuelle',
-        count: levelCounts[4] ?? 0,
-        progress: (levelCounts[4] ?? 0) / maxLevel,
-        icon: Icons.psychology_alt_rounded,
-      ),
-    ];
-
-    return StatisticsOverview(
-      streakDays: streak,
-      totalReviews: reviews.length,
-      successRate: successRate,
-      studyDays: studyDayMap.length,
-      heatmap: heatmap,
-      levelProgress: levelProgress,
     );
-  }
-
-  int _calculateStreak(List<DateTime> timestamps) {
-    final days = timestamps
-        .map((date) => DateTime(date.year, date.month, date.day))
-        .toSet()
-        .toList()
-      ..sort((a, b) => b.compareTo(a));
-    if (days.isEmpty) {
-      return 0;
-    }
-
-    final today = DateTime.now();
-    var cursor = DateTime(today.year, today.month, today.day);
-    var streak = 0;
-    final daySet = days.toSet();
-    while (daySet.contains(cursor)) {
-      streak += 1;
-      cursor = cursor.subtract(const Duration(days: 1));
-    }
-    return streak;
   }
 
   Future<StudySessionState> startStudySession({
     String? collectionId,
     String? deckId,
     TestMode? forcedMode,
+    required int sessionCardLimit,
   }) async {
     final now = DateTime.now();
     final cards = await _loadSessionCards(
       collectionId: collectionId,
       deckId: deckId,
       now: now,
+      sessionCardLimit: sessionCardLimit,
     );
 
     if (cards.isEmpty) {
       throw StateError('Aucune carte disponible pour cette session.');
     }
 
-    String title = 'Révision';
+    var title = 'Révision';
     if (deckId != null) {
-      final deck = await (_database.select(_database.decks)
-            ..where((table) => table.id.equals(deckId)))
-          .getSingle();
+      final deck = await _fetchDeck(deckId);
+      if (deck == null) {
+        throw StateError('Deck introuvable.');
+      }
       title = deck.name;
     } else if (collectionId != null) {
-      final collection = await (_database.select(_database.collections)
-            ..where((table) => table.id.equals(collectionId)))
-          .getSingle();
+      final collection = await _fetchCollection(collectionId);
+      if (collection == null) {
+        throw StateError('Collection introuvable.');
+      }
       title = collection.name;
     }
 
@@ -343,7 +166,12 @@ class AppRepository {
       deckTitle: title,
       collectionId: collectionId,
       deckId: deckId,
-      cards: cards.map((c) => _mapStudyCard(c, forcedMode: forcedMode)).toList(),
+      cards: cards
+          .map((card) => _mapStudyCard(card, forcedMode: forcedMode))
+          .toList(),
+      sessionCardIds: cards.map((card) => card.id).toSet(),
+      seenCardIds: const <String>{},
+      pendingReviewResults: const <String, ReviewResult>{},
       currentIndex: 0,
       revealed: false,
       selectedOptionIndex: null,
@@ -360,164 +188,60 @@ class AppRepository {
     );
   }
 
-  Future<List<Flashcard>> _loadSessionCards({
-    required String? collectionId,
-    required String? deckId,
-    required DateTime now,
-  }) async {
-    final predicate = [
-      if (collectionId != null) _database.flashcards.collectionId.equals(collectionId),
-      if (deckId != null) _database.flashcards.deckId.equals(deckId),
-    ];
-
-    Future<List<Flashcard>> load(bool onlyDue) {
-      final query = _database.select(_database.flashcards)
-        ..orderBy([(table) => OrderingTerm(expression: table.dueAt)])
-        ..limit(12);
-      if (predicate.isNotEmpty || onlyDue) {
-        query.where((table) {
-          Expression<bool> expression = const Constant(true);
-          for (final condition in predicate) {
-            expression = expression & condition;
-          }
-          if (onlyDue) {
-            expression =
-                expression & table.dueAt.isSmallerOrEqualValue(now.millisecondsSinceEpoch);
-          }
-          return expression;
-        });
-      }
-      return query.get();
-    }
-
-    final dueCards = await load(true);
-    if (dueCards.isNotEmpty) {
-      return dueCards;
-    }
-    return load(false);
-  }
-
-  StudyCard _mapStudyCard(Flashcard card, {TestMode? forcedMode}) {
-    return StudyCard(
-      id: card.id,
-      collectionId: card.collectionId,
-      deckId: card.deckId,
-      question: card.question,
-      correctAnswer: card.correctAnswer,
-      wrongAnswers: card.wrongAnswers,
-      hint: card.hint,
-      explanation: card.explanation,
-      currentTestMode: _resolveMode(card, forcedMode),
-      allowedTestModes: card.allowedTestModes,
-      clozeText: card.clozeText,
-      acceptedAnswers: card.acceptedAnswers,
-      level: card.level,
-      progressDots: math.max(3, math.min(6, card.repetitions + 3)),
-    );
-  }
-
-  // forcedMode == null → random from allowedTestModes.
-  TestMode _resolveMode(Flashcard card, TestMode? forcedMode) {
-    if (forcedMode == null) {
-      final allowed = card.allowedTestModes.where(
-        (m) => m != TestMode.ordering && m != TestMode.matching,
-      ).toList();
-      if (allowed.isEmpty) return TestMode.classicFlashcard;
-      return allowed[math.Random().nextInt(allowed.length)];
-    }
-    if (forcedMode == TestMode.cloze && (card.clozeText == null || card.clozeText!.isEmpty)) {
-      return TestMode.freeText;
-    }
-    return switch (forcedMode) {
-      TestMode.ordering || TestMode.matching => TestMode.classicFlashcard,
-      _ => forcedMode,
-    };
-  }
-
   Future<void> submitReview({
     required String cardId,
     required ReviewResult reviewResult,
     required bool wasCorrect,
   }) async {
     final now = DateTime.now();
-    final card = await (_database.select(_database.flashcards)
-          ..where((table) => table.id.equals(cardId)))
-        .getSingle();
+    final card = await _fetchFlashcard(cardId);
+    if (card == null) {
+      throw StateError('Carte introuvable.');
+    }
+
     final scheduleUpdate = _spacedRepetitionService.applyReview(
       card,
       reviewResult,
       now: now,
     );
     final nextMode = _cardModeService.nextMode(card, reviewResult);
-    final reviewLog = ReviewLogsCompanion.insert(
-      id: _uuid.v4(),
-      flashcardId: card.id,
-      collectionId: card.collectionId,
-      deckId: card.deckId,
-      reviewResult: reviewResult,
-      testMode: card.currentTestMode,
-      wasCorrect: wasCorrect,
-      createdAt: now,
-      scheduledDueAt: card.dueAt,
-    );
 
-    await _database.transaction(() async {
-      await _database.update(_database.flashcards).replace(
-            card.copyWith(
-              currentTestMode: nextMode,
-              lastTestMode: Value(card.currentTestMode),
-              modeHistory: _cardModeService.updatedModeHistory(card, nextMode),
-              dueAt: scheduleUpdate.dueAt,
-              lastReviewedAt: Value(scheduleUpdate.lastReviewedAt),
-              intervalDays: scheduleUpdate.intervalDays,
-              easeFactor: scheduleUpdate.easeFactor,
-              repetitions: scheduleUpdate.repetitions,
-              lapses: scheduleUpdate.lapses,
-              mastered: scheduleUpdate.mastered,
-              updatedAt: now,
-            ),
-          );
-      await _database.into(_database.reviewLogs).insert(reviewLog);
-      await refreshDerivedData(
-        collectionId: card.collectionId,
-        deckId: card.deckId,
-      );
+    await _client
+        .from('flashcards')
+        .update({
+          'current_test_mode': nextMode.name,
+          'last_test_mode': card.currentTestMode.name,
+          'mode_history': _cardModeService
+              .updatedModeHistory(card, nextMode)
+              .map((mode) => mode.name)
+              .toList(),
+          'due_at': scheduleUpdate.dueAt.toUtc().toIso8601String(),
+          'last_reviewed_at': scheduleUpdate.lastReviewedAt
+              .toUtc()
+              .toIso8601String(),
+          'interval_days': scheduleUpdate.intervalDays,
+          'ease_factor': scheduleUpdate.easeFactor,
+          'repetitions': scheduleUpdate.repetitions,
+          'lapses': scheduleUpdate.lapses,
+          'mastered': scheduleUpdate.mastered,
+          'updated_at': now.toUtc().toIso8601String(),
+        })
+        .eq('id', card.id)
+        .eq('user_id', _userId);
+
+    await _client.from('review_logs').insert({
+      'id': _uuid.v4(),
+      'flashcard_id': card.id,
+      'collection_id': card.collectionId,
+      'deck_id': card.deckId,
+      'review_result': reviewResult.name,
+      'test_mode': card.currentTestMode.name,
+      'was_correct': wasCorrect,
+      'created_at': now.toUtc().toIso8601String(),
+      'scheduled_due_at': card.dueAt.toUtc().toIso8601String(),
     });
 
-    final updatedCard = await (_database.select(_database.flashcards)
-          ..where((table) => table.id.equals(cardId)))
-        .getSingle();
-    final deck = await (_database.select(_database.decks)
-          ..where((table) => table.id.equals(card.deckId)))
-        .getSingle();
-    final collection = await (_database.select(_database.collections)
-          ..where((table) => table.id.equals(card.collectionId)))
-        .getSingle();
-    final savedReviewLog = await (_database.select(_database.reviewLogs)
-          ..where((table) => table.id.equals(reviewLog.id.value)))
-        .getSingle();
-
-    await _syncService.enqueueUpsert(
-      SyncEntityType.flashcard,
-      updatedCard.id,
-      flashcardPayload(updatedCard),
-    );
-    await _syncService.enqueueUpsert(
-      SyncEntityType.deck,
-      deck.id,
-      deckPayload(deck),
-    );
-    await _syncService.enqueueUpsert(
-      SyncEntityType.collection,
-      collection.id,
-      collectionPayload(collection),
-    );
-    await _syncService.enqueueUpsert(
-      SyncEntityType.reviewLog,
-      savedReviewLog.id,
-      reviewLogPayload(savedReviewLog),
-    );
-    _syncService.scheduleSync();
+    _notifyDataChanged();
   }
 
   Future<void> importCards(CsvImportPreview preview) async {
@@ -525,372 +249,163 @@ class AppRepository {
       return;
     }
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
+    final collections = await _fetchCollections();
+    final decks = await _fetchDecks();
     final collectionsByName = {
-      for (final collection in await _database.select(_database.collections).get())
+      for (final collection in collections)
         collection.name.toLowerCase(): collection,
     };
     final decksByKey = {
-      for (final deck in await _database.select(_database.decks).get())
+      for (final deck in decks)
         '${deck.collectionId}:${deck.name.toLowerCase()}': deck,
     };
-    final touchedCollectionIds = <String>{};
-    final touchedDeckIds = <String>{};
-    final createdCardIds = <String>{};
 
-    await _database.transaction(() async {
-      for (final draft in preview.cards) {
-        final collectionKey = draft.collection.toLowerCase();
-        var collection = collectionsByName[collectionKey];
-        if (collection == null) {
-          final collectionId = _slugify(draft.collection);
-          final companion = CollectionsCompanion.insert(
-            id: collectionId,
-            name: draft.collection,
-            description: 'Import CSV',
-            icon: '📚',
-            totalCards: 0,
-            masteredPercentage: 0,
-            color: 0xFFE8792F,
-            createdAt: now,
-            updatedAt: now,
-          );
-          await _database.into(_database.collections).insert(companion);
-          collection = await (_database.select(_database.collections)
-                ..where((table) => table.id.equals(collectionId)))
-              .getSingle();
-          collectionsByName[collectionKey] = collection;
-        }
-
-        final deckKey = '${collection.id}:${draft.deck.toLowerCase()}';
-        var deck = decksByKey[deckKey];
-        if (deck == null) {
-          final deckId = _slugify('${collection.id}-${draft.deck}');
-          final companion = DecksCompanion.insert(
-            id: deckId,
-            collectionId: collection.id,
-            name: draft.deck,
-            icon: '🗂️',
-            difficulty: draft.difficulty,
-            totalCards: 0,
-            dueCards: 0,
-            progress: 0,
-            status: DeckStatus.nouveau,
-            createdAt: now,
-            updatedAt: now,
-          );
-          await _database.into(_database.decks).insert(companion);
-          deck =
-              await (_database.select(_database.decks)..where((table) => table.id.equals(deckId)))
-                  .getSingle();
-          decksByKey[deckKey] = deck;
-        }
-
-        final cardId = _uuid.v4();
-        await _database.into(_database.flashcards).insert(
-              FlashcardsCompanion.insert(
-                id: cardId,
-                collectionId: collection.id,
-                deckId: deck.id,
-                question: draft.question,
-                correctAnswer: draft.correctAnswer,
-                answer: Value(draft.correctAnswer),
-                wrongAnswers: draft.wrongAnswers,
-                hint: Value(draft.hint),
-                explanation: Value(draft.explanation),
-                currentTestMode: TestMode.multipleChoice,
-                allowedTestModes: draft.allowedTestModes,
-                lastTestMode: const Value(null),
-                modeHistory: const [TestMode.multipleChoice],
-                clozeText: Value(draft.clozeText),
-                acceptedAnswers: draft.acceptedAnswers,
-                source: Value(draft.source),
-                difficulty: Value(draft.difficulty),
-                level: draft.level,
-                tags: draft.tags,
-                dueAt: now,
-                lastReviewedAt: const Value(null),
-                intervalDays: 0,
-                easeFactor: 2.5,
-                repetitions: 0,
-                lapses: 0,
-                mastered: false,
-                createdAt: now,
-                updatedAt: now,
-              ),
-            );
-        createdCardIds.add(cardId);
-        touchedCollectionIds.add(collection.id);
-        touchedDeckIds.add(deck.id);
-      }
-    });
-
-    for (final deckId in touchedDeckIds) {
-      await refreshDerivedData(deckId: deckId);
-    }
-    for (final collectionId in touchedCollectionIds) {
-      await refreshDerivedData(collectionId: collectionId);
-    }
-
-    if (createdCardIds.isNotEmpty) {
-      final cards = await (_database.select(_database.flashcards)
-            ..where((table) => table.id.isIn(createdCardIds)))
-          .get();
-      for (final card in cards) {
-        await _syncService.enqueueUpsert(
-          SyncEntityType.flashcard,
-          card.id,
-          flashcardPayload(card),
+    for (final draft in preview.cards) {
+      final collectionKey = draft.collection.toLowerCase();
+      var collection = collectionsByName[collectionKey];
+      if (collection == null) {
+        collection = CollectionRecord(
+          id: _uuid.v4(),
+          name: draft.collection,
+          description: 'Import CSV',
+          icon: '📚',
+          color: 0xFFE8792F,
+          createdAt: now,
+          updatedAt: now,
         );
+        await _client.from('collections').insert({
+          'id': collection.id,
+          'name': collection.name,
+          'description': collection.description,
+          'icon': collection.icon,
+          'total_cards': 0,
+          'mastered_percentage': 0,
+          'color': collection.color,
+          'created_at': collection.createdAt.toIso8601String(),
+          'updated_at': collection.updatedAt.toIso8601String(),
+        });
+        collectionsByName[collectionKey] = collection;
       }
+
+      final deckKey = '${collection.id}:${draft.deck.toLowerCase()}';
+      var deck = decksByKey[deckKey];
+      if (deck == null) {
+        deck = DeckRecord(
+          id: _uuid.v4(),
+          collectionId: collection.id,
+          name: draft.deck,
+          icon: '🗂️',
+          difficulty: draft.difficulty,
+          createdAt: now,
+          updatedAt: now,
+        );
+        await _client.from('decks').insert({
+          'id': deck.id,
+          'collection_id': deck.collectionId,
+          'name': deck.name,
+          'icon': deck.icon,
+          'difficulty': deck.difficulty.name,
+          'total_cards': 0,
+          'due_cards': 0,
+          'progress': 0,
+          'status': DeckStatus.nouveau.name,
+          'created_at': deck.createdAt.toIso8601String(),
+          'updated_at': deck.updatedAt.toIso8601String(),
+        });
+        decksByKey[deckKey] = deck;
+      }
+
+      await _client.from('flashcards').insert({
+        'id': _uuid.v4(),
+        'collection_id': collection.id,
+        'deck_id': deck.id,
+        'question': draft.question,
+        'correct_answer': draft.correctAnswer,
+        'answer': draft.correctAnswer,
+        'wrong_answers': draft.wrongAnswers,
+        'hint': draft.hint,
+        'explanation': draft.explanation,
+        'current_test_mode': TestMode.multipleChoice.name,
+        'allowed_test_modes': draft.allowedTestModes
+            .map((mode) => mode.name)
+            .toList(),
+        'last_test_mode': null,
+        'mode_history': [TestMode.multipleChoice.name],
+        'cloze_text': draft.clozeText,
+        'accepted_answers': draft.acceptedAnswers,
+        'source': draft.source,
+        'difficulty': draft.difficulty.name,
+        'level': draft.level,
+        'tags': draft.tags,
+        'due_at': now.toIso8601String(),
+        'last_reviewed_at': null,
+        'interval_days': 0,
+        'ease_factor': 2.5,
+        'repetitions': 0,
+        'lapses': 0,
+        'mastered': false,
+        'created_at': now.toIso8601String(),
+        'updated_at': now.toIso8601String(),
+      });
     }
 
-    for (final deckId in touchedDeckIds) {
-      final deck = await (_database.select(_database.decks)
-            ..where((table) => table.id.equals(deckId)))
-          .getSingle();
-      await _syncService.enqueueUpsert(
-        SyncEntityType.deck,
-        deck.id,
-        deckPayload(deck),
-      );
-    }
-
-    for (final collectionId in touchedCollectionIds) {
-      final collection = await (_database.select(_database.collections)
-            ..where((table) => table.id.equals(collectionId)))
-          .getSingle();
-      await _syncService.enqueueUpsert(
-        SyncEntityType.collection,
-        collection.id,
-        collectionPayload(collection),
-      );
-    }
-
-    _syncService.scheduleSync();
-  }
-
-  Future<void> refreshDerivedData({
-    String? collectionId,
-    String? deckId,
-  }) async {
-    if (deckId != null) {
-      final totalRow = await _database.customSelect(
-        'SELECT COUNT(*) AS c FROM flashcards WHERE deck_id = ?',
-        variables: [Variable.withString(deckId)],
-      ).getSingle();
-      final dueRow = await _database.customSelect(
-        'SELECT COUNT(*) AS c FROM flashcards WHERE deck_id = ? AND due_at <= ?',
-        variables: [
-          Variable.withString(deckId),
-          Variable.withInt(DateTime.now().millisecondsSinceEpoch),
-        ],
-      ).getSingle();
-      final reviewedRow = await _database.customSelect(
-        'SELECT COUNT(*) AS c FROM flashcards WHERE deck_id = ? AND repetitions > 0',
-        variables: [Variable.withString(deckId)],
-      ).getSingle();
-      final masteredRow = await _database.customSelect(
-        'SELECT COUNT(*) AS c FROM flashcards WHERE deck_id = ? AND mastered = 1',
-        variables: [Variable.withString(deckId)],
-      ).getSingle();
-      final deck = await (_database.select(_database.decks)
-            ..where((table) => table.id.equals(deckId)))
-          .getSingle();
-      final total = totalRow.read<int>('c');
-      final due = dueRow.read<int>('c');
-      final reviewed = reviewedRow.read<int>('c');
-      final mastered = masteredRow.read<int>('c');
-      final progress = total == 0 ? 0.0 : reviewed / total;
-      final status = due > 0
-          ? DeckStatus.dues
-          : (total > 0 && mastered >= total)
-              ? DeckStatus.maitrise
-              : DeckStatus.nouveau;
-      await _database.update(_database.decks).replace(
-            deck.copyWith(
-              totalCards: total,
-              dueCards: due,
-              progress: progress,
-              status: status,
-              updatedAt: DateTime.now(),
-            ),
-          );
-      collectionId ??= deck.collectionId;
-    }
-
-    if (collectionId != null) {
-      final resolvedCollectionId = collectionId;
-      final totalRow = await _database.customSelect(
-        'SELECT COUNT(*) AS c FROM flashcards WHERE collection_id = ?',
-        variables: [Variable.withString(resolvedCollectionId)],
-      ).getSingle();
-      final masteredRow = await _database.customSelect(
-        'SELECT COUNT(*) AS c FROM flashcards WHERE collection_id = ? AND mastered = 1',
-        variables: [Variable.withString(resolvedCollectionId)],
-      ).getSingle();
-      final collection = await (_database.select(_database.collections)
-            ..where((table) => table.id.equals(resolvedCollectionId)))
-          .getSingle();
-      final total = totalRow.read<int>('c');
-      final mastered = masteredRow.read<int>('c');
-      final mastery = total == 0 ? 0.0 : mastered / total;
-      await _database.update(_database.collections).replace(
-            collection.copyWith(
-              totalCards: total,
-              masteredPercentage: mastery,
-              updatedAt: DateTime.now(),
-            ),
-          );
-    }
-  }
-
-  Future<void> refreshAllDerivedData() async {
-    final decks = await _database.select(_database.decks).get();
-    for (final deck in decks) {
-      await refreshDerivedData(deckId: deck.id);
-    }
-  }
-
-  /// Enqueues every local entity for an upsert. Used to claim pre-existing
-  /// (anonymous) local data for an account the first time it signs in: the
-  /// sync push then stamps each row with the user's id.
-  Future<void> enqueueAllLocalEntities() async {
-    final collections = await _database.select(_database.collections).get();
-    for (final collection in collections) {
-      await _syncService.enqueueUpsert(
-        SyncEntityType.collection,
-        collection.id,
-        collectionPayload(collection),
-      );
-    }
-
-    final decks = await _database.select(_database.decks).get();
-    for (final deck in decks) {
-      await _syncService.enqueueUpsert(
-        SyncEntityType.deck,
-        deck.id,
-        deckPayload(deck),
-      );
-    }
-
-    final cards = await _database.select(_database.flashcards).get();
-    for (final card in cards) {
-      await _syncService.enqueueUpsert(
-        SyncEntityType.flashcard,
-        card.id,
-        flashcardPayload(card),
-      );
-    }
-
-    final reviewLogs = await _database.select(_database.reviewLogs).get();
-    for (final log in reviewLogs) {
-      await _syncService.enqueueUpsert(
-        SyncEntityType.reviewLog,
-        log.id,
-        reviewLogPayload(log),
-      );
-    }
+    _notifyDataChanged();
   }
 
   Stream<List<FlashcardSummary>> watchFlashcardsForDeck(String deckId) {
-    return (_database.select(_database.flashcards)
-          ..where((t) => t.deckId.equals(deckId))
-          ..orderBy([(t) => OrderingTerm(expression: t.createdAt)]))
-        .watch()
-        .map(
-          (rows) => rows
-              .map(
-                (row) => FlashcardSummary(
-                  id: row.id,
-                  deckId: row.deckId,
-                  collectionId: row.collectionId,
-                  question: row.question,
-                  correctAnswer: row.correctAnswer,
-                ),
-              )
-              .toList(),
-        );
+    return _watchFlashcardsInternal(deckId: deckId).map((cards) {
+      final sortedCards = [...cards]
+        ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
+      return sortedCards
+          .map(
+            (card) => FlashcardSummary(
+              id: card.id,
+              deckId: card.deckId,
+              collectionId: card.collectionId,
+              question: card.question,
+              correctAnswer: card.correctAnswer,
+            ),
+          )
+          .toList();
+    });
   }
 
   Future<void> deleteFlashcard(String cardId) async {
-    final card = await (_database.select(_database.flashcards)
-          ..where((t) => t.id.equals(cardId)))
-        .getSingle();
-    await _database.transaction(() async {
-      await (_database.delete(_database.reviewLogs)
-            ..where((t) => t.flashcardId.equals(cardId)))
-          .go();
-      await (_database.delete(_database.flashcards)..where((t) => t.id.equals(cardId))).go();
-    });
-    await refreshDerivedData(deckId: card.deckId, collectionId: card.collectionId);
-    await _syncService.enqueueDelete(SyncEntityType.flashcard, cardId);
-    _syncService.scheduleSync();
+    await _client
+        .from('flashcards')
+        .delete()
+        .eq('id', cardId)
+        .eq('user_id', _userId);
+    _notifyDataChanged();
   }
 
   Future<void> deleteDeck(String deckId) async {
-    final deck = await (_database.select(_database.decks)
-          ..where((t) => t.id.equals(deckId)))
-        .getSingle();
-    final cardIds = (await (_database.select(_database.flashcards)
-              ..where((t) => t.deckId.equals(deckId)))
-            .get())
-        .map((c) => c.id)
-        .toList();
-    await _database.transaction(() async {
-      await (_database.delete(_database.reviewLogs)..where((t) => t.deckId.equals(deckId))).go();
-      await (_database.delete(_database.flashcards)..where((t) => t.deckId.equals(deckId))).go();
-      await (_database.delete(_database.decks)..where((t) => t.id.equals(deckId))).go();
-    });
-    await refreshDerivedData(collectionId: deck.collectionId);
-    for (final cardId in cardIds) {
-      await _syncService.enqueueDelete(SyncEntityType.flashcard, cardId);
-    }
-    await _syncService.enqueueDelete(SyncEntityType.deck, deckId);
-    _syncService.scheduleSync();
+    await _client
+        .from('decks')
+        .delete()
+        .eq('id', deckId)
+        .eq('user_id', _userId);
+    _notifyDataChanged();
   }
 
   Future<void> deleteCollection(String collectionId) async {
-    final deckIds = (await (_database.select(_database.decks)
-              ..where((t) => t.collectionId.equals(collectionId)))
-            .get())
-        .map((d) => d.id)
-        .toList();
-    final cardIds = (await (_database.select(_database.flashcards)
-              ..where((t) => t.collectionId.equals(collectionId)))
-            .get())
-        .map((c) => c.id)
-        .toList();
-    await _database.transaction(() async {
-      await (_database.delete(_database.reviewLogs)
-            ..where((t) => t.collectionId.equals(collectionId)))
-          .go();
-      await (_database.delete(_database.flashcards)
-            ..where((t) => t.collectionId.equals(collectionId)))
-          .go();
-      await (_database.delete(_database.decks)
-            ..where((t) => t.collectionId.equals(collectionId)))
-          .go();
-      await (_database.delete(_database.collections)
-            ..where((t) => t.id.equals(collectionId)))
-          .go();
-    });
-    for (final cardId in cardIds) {
-      await _syncService.enqueueDelete(SyncEntityType.flashcard, cardId);
-    }
-    for (final deckId in deckIds) {
-      await _syncService.enqueueDelete(SyncEntityType.deck, deckId);
-    }
-    await _syncService.enqueueDelete(SyncEntityType.collection, collectionId);
-    _syncService.scheduleSync();
+    await _client
+        .from('collections')
+        .delete()
+        .eq('id', collectionId)
+        .eq('user_id', _userId);
+    _notifyDataChanged();
   }
 
   Future<String> exportAllCardsCsv() async {
-    final collections = await _database.select(_database.collections).get();
-    final decks = await _database.select(_database.decks).get();
-    final cards = await _database.select(_database.flashcards).get();
+    final collections = await _fetchCollections();
+    final decks = await _fetchDecks();
+    final cards = await _fetchFlashcards();
 
-    final collectionMap = {for (final collection in collections) collection.id: collection.name};
+    final collectionMap = {
+      for (final collection in collections) collection.id: collection.name,
+    };
     final deckMap = {for (final deck in decks) deck.id: deck.name};
     final rows = <List<String>>[
       const [
@@ -935,80 +450,690 @@ class AppRepository {
     return Csv(fieldDelimiter: ';').encode(rows);
   }
 
-  Map<String, dynamic> collectionPayload(Collection collection) => {
-        'id': collection.id,
-        'name': collection.name,
-        'description': collection.description,
-        'icon': collection.icon,
-        'total_cards': collection.totalCards,
-        'mastered_percentage': collection.masteredPercentage,
-        'color': collection.color,
-        'created_at': collection.createdAt.toIso8601String(),
-        'updated_at': collection.updatedAt.toIso8601String(),
-      };
-
-  Map<String, dynamic> deckPayload(Deck deck) => {
-        'id': deck.id,
-        'collection_id': deck.collectionId,
-        'name': deck.name,
-        'icon': deck.icon,
-        'difficulty': deck.difficulty.name,
-        'total_cards': deck.totalCards,
-        'due_cards': deck.dueCards,
-        'progress': deck.progress,
-        'status': deck.status.name,
-        'created_at': deck.createdAt.toIso8601String(),
-        'updated_at': deck.updatedAt.toIso8601String(),
-      };
-
-  Map<String, dynamic> flashcardPayload(Flashcard card) => {
-        'id': card.id,
-        'collection_id': card.collectionId,
-        'deck_id': card.deckId,
-        'question': card.question,
-        'correct_answer': card.correctAnswer,
-        'answer': card.answer,
-        'wrong_answers': card.wrongAnswers,
-        'hint': card.hint,
-        'explanation': card.explanation,
-        'current_test_mode': card.currentTestMode.name,
-        'allowed_test_modes': card.allowedTestModes.map((mode) => mode.name).toList(),
-        'last_test_mode': card.lastTestMode?.name,
-        'mode_history': card.modeHistory.map((mode) => mode.name).toList(),
-        'cloze_text': card.clozeText,
-        'accepted_answers': card.acceptedAnswers,
-        'source': card.source,
-        'difficulty': card.difficulty?.name,
-        'level': card.level,
-        'tags': card.tags,
-        'due_at': card.dueAt.toIso8601String(),
-        'last_reviewed_at': card.lastReviewedAt?.toIso8601String(),
-        'interval_days': card.intervalDays,
-        'ease_factor': card.easeFactor,
-        'repetitions': card.repetitions,
-        'lapses': card.lapses,
-        'mastered': card.mastered,
-        'created_at': card.createdAt.toIso8601String(),
-        'updated_at': card.updatedAt.toIso8601String(),
-      };
-
-  Map<String, dynamic> reviewLogPayload(ReviewLog log) => {
-        'id': log.id,
-        'flashcard_id': log.flashcardId,
-        'collection_id': log.collectionId,
-        'deck_id': log.deckId,
-        'review_result': log.reviewResult.name,
-        'test_mode': log.testMode.name,
-        'was_correct': log.wasCorrect,
-        'created_at': log.createdAt.toIso8601String(),
-        'scheduled_due_at': log.scheduledDueAt.toIso8601String(),
-      };
-
-  String _slugify(String input) {
-    final cleaned = input
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
-        .replaceAll(RegExp(r'^-|-$'), '');
-    return cleaned.isEmpty ? _uuid.v4() : cleaned;
+  Future<CollectionRecord?> _fetchCollection(String id) async {
+    final rows = await _selectRows(
+      'collections',
+      equals: {'id': id},
+      orderBy: 'created_at',
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _mapCollection(rows.first);
   }
+
+  Future<DeckRecord?> _fetchDeck(String id) async {
+    final rows = await _selectRows(
+      'decks',
+      equals: {'id': id},
+      orderBy: 'created_at',
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _mapDeck(rows.first);
+  }
+
+  Future<FlashcardRecord?> _fetchFlashcard(String id) async {
+    final rows = await _selectRows(
+      'flashcards',
+      equals: {'id': id},
+      orderBy: 'created_at',
+    );
+    if (rows.isEmpty) {
+      return null;
+    }
+    return _mapFlashcard(rows.first);
+  }
+
+  Future<List<CollectionRecord>> _fetchCollections() async {
+    final rows = await _selectRows('collections', orderBy: 'name');
+    return rows.map(_mapCollection).toList();
+  }
+
+  Future<List<DeckRecord>> _fetchDecks({String? collectionId}) async {
+    final equals = <String, Object?>{};
+    if (collectionId != null) {
+      equals['collection_id'] = collectionId;
+    }
+    final rows = await _selectRows(
+      'decks',
+      equals: equals,
+      orderBy: 'created_at',
+    );
+    return rows.map(_mapDeck).toList();
+  }
+
+  Future<List<FlashcardRecord>> _fetchFlashcards({
+    String? collectionId,
+    String? deckId,
+    DateTime? dueBeforeOrAt,
+    int? limit,
+  }) async {
+    final equals = <String, Object?>{};
+    if (collectionId != null) {
+      equals['collection_id'] = collectionId;
+    }
+    if (deckId != null) {
+      equals['deck_id'] = deckId;
+    }
+    final rows = await _selectRows(
+      'flashcards',
+      equals: equals,
+      dueBeforeOrAt: dueBeforeOrAt,
+      orderBy: 'due_at',
+      limit: limit,
+    );
+    return rows.map(_mapFlashcard).toList();
+  }
+
+  Stream<List<CollectionRecord>> _watchCollectionsInternal() {
+    return _streamRows(
+      'collections',
+      orderBy: 'name',
+    ).map((rows) => rows.map(_mapCollection).toList());
+  }
+
+  Stream<List<DeckRecord>> _watchDecksInternal({String? collectionId}) {
+    final equals = <String, Object?>{};
+    if (collectionId != null) {
+      equals['collection_id'] = collectionId;
+    }
+    return _streamRows(
+      'decks',
+      equals: equals,
+      orderBy: 'created_at',
+    ).map((rows) => rows.map(_mapDeck).toList());
+  }
+
+  Stream<List<FlashcardRecord>> _watchFlashcardsInternal({
+    String? collectionId,
+    String? deckId,
+  }) {
+    final equals = <String, Object?>{};
+    if (collectionId != null) {
+      equals['collection_id'] = collectionId;
+    }
+    if (deckId != null) {
+      equals['deck_id'] = deckId;
+    }
+    return _streamRows(
+      'flashcards',
+      equals: equals,
+      orderBy: 'due_at',
+    ).map((rows) => rows.map(_mapFlashcard).toList());
+  }
+
+  Stream<List<ReviewLogRecord>> _watchReviewLogsInternal() {
+    return _streamRows(
+      'review_logs',
+      orderBy: 'created_at',
+    ).map((rows) => rows.map(_mapReviewLog).toList());
+  }
+
+  Future<List<FlashcardRecord>> _loadSessionCards({
+    required String? collectionId,
+    required String? deckId,
+    required DateTime now,
+    required int sessionCardLimit,
+  }) async {
+    final dueCards = await _fetchFlashcards(
+      collectionId: collectionId,
+      deckId: deckId,
+      dueBeforeOrAt: now,
+    );
+    if (dueCards.isNotEmpty) {
+      return _takeSessionCards(dueCards, sessionCardLimit);
+    }
+
+    final cards = await _fetchFlashcards(
+      collectionId: collectionId,
+      deckId: deckId,
+    );
+    return _takeSessionCards(cards, sessionCardLimit);
+  }
+
+  List<FlashcardRecord> _takeSessionCards(
+    Iterable<FlashcardRecord> cards,
+    int sessionCardLimit,
+  ) {
+    final sortedCards = [...cards]
+      ..sort((a, b) {
+        final byCreatedAt = a.createdAt.compareTo(b.createdAt);
+        if (byCreatedAt != 0) {
+          return byCreatedAt;
+        }
+        return a.id.compareTo(b.id);
+      });
+
+    if (sortedCards.isEmpty) {
+      return const [];
+    }
+
+    final effectiveLimit = sessionCardLimit.clamp(1, sortedCards.length);
+    return sortedCards.take(effectiveLimit).toList();
+  }
+
+  StudyCard _mapStudyCard(FlashcardRecord card, {TestMode? forcedMode}) {
+    return StudyCard(
+      id: card.id,
+      collectionId: card.collectionId,
+      deckId: card.deckId,
+      question: card.question,
+      correctAnswer: card.correctAnswer,
+      wrongAnswers: card.wrongAnswers,
+      hint: card.hint,
+      explanation: card.explanation,
+      currentTestMode: _resolveMode(card, forcedMode),
+      allowedTestModes: card.allowedTestModes,
+      clozeText: card.clozeText,
+      acceptedAnswers: card.acceptedAnswers,
+      level: card.level,
+      progressDots: math.max(3, math.min(6, card.repetitions + 3)),
+    );
+  }
+
+  TestMode _resolveMode(FlashcardRecord card, TestMode? forcedMode) {
+    if (forcedMode == null) {
+      final allowed = card.allowedTestModes
+          .where(
+            (mode) => mode != TestMode.ordering && mode != TestMode.matching,
+          )
+          .toList();
+      if (allowed.isEmpty) {
+        return TestMode.classicFlashcard;
+      }
+      return allowed[math.Random().nextInt(allowed.length)];
+    }
+    if (forcedMode == TestMode.cloze &&
+        (card.clozeText == null || card.clozeText!.isEmpty)) {
+      return TestMode.freeText;
+    }
+    return switch (forcedMode) {
+      TestMode.ordering || TestMode.matching => TestMode.classicFlashcard,
+      _ => forcedMode,
+    };
+  }
+
+  CollectionListItem _buildCollectionListItem(
+    CollectionRecord collection,
+    List<FlashcardRecord> flashcards,
+    List<ReviewLogRecord> reviewLogs,
+    DateTime now,
+  ) {
+    final cardsDone = flashcards.where((card) => card.repetitions > 0).length;
+    final dueCards = flashcards
+        .where((card) => !_isDueInFuture(card.dueAt, now))
+        .length;
+    final errorCount = reviewLogs.where((log) => !log.wasCorrect).length;
+
+    return CollectionListItem(
+      id: collection.id,
+      name: collection.name,
+      description: collection.description,
+      icon: collection.icon,
+      totalCards: flashcards.length,
+      cardsDone: cardsDone,
+      dueCards: dueCards,
+      color: collection.color,
+      createdAt: collection.createdAt,
+      updatedAt: collection.updatedAt,
+      errorCount: errorCount,
+    );
+  }
+
+  DeckListItem _buildDeckListItem(
+    DeckRecord deck,
+    List<FlashcardRecord> flashcards,
+    DateTime now,
+  ) {
+    final cardsDone = flashcards.where((card) => card.repetitions > 0).length;
+    final dueCards = flashcards
+        .where((card) => !_isDueInFuture(card.dueAt, now))
+        .length;
+    final masteredCards = flashcards.where((card) => card.mastered).length;
+    final totalCards = flashcards.length;
+    final status = dueCards > 0
+        ? DeckStatus.dues
+        : (totalCards > 0 && masteredCards == totalCards)
+        ? DeckStatus.maitrise
+        : DeckStatus.nouveau;
+
+    return DeckListItem(
+      id: deck.id,
+      collectionId: deck.collectionId,
+      name: deck.name,
+      icon: deck.icon,
+      difficulty: deck.difficulty,
+      totalCards: totalCards,
+      cardsDone: cardsDone,
+      dueCards: dueCards,
+      progress: totalCards == 0 ? 0 : cardsDone / totalCards,
+      status: status,
+      createdAt: deck.createdAt,
+      updatedAt: deck.updatedAt,
+    );
+  }
+
+  HomeStats _buildHomeStats({
+    required List<FlashcardRecord> flashcards,
+    required List<ReviewLogRecord> reviewLogs,
+    required DateTime now,
+  }) {
+    final dueCards = flashcards
+        .where((card) => !_isDueInFuture(card.dueAt, now))
+        .length;
+    final successCount = reviewLogs.where((log) => log.wasCorrect).length;
+    final successRate = reviewLogs.isEmpty
+        ? 0.0
+        : successCount / reviewLogs.length;
+
+    return HomeStats(
+      streakDays: _calculateStreak(
+        reviewLogs.map((log) => log.createdAt).toList(),
+        now: now,
+      ),
+      successRate: successRate,
+      dueCards: dueCards,
+      totalCardsSeen: reviewLogs.length,
+    );
+  }
+
+  StatisticsOverview _buildStatisticsOverview({
+    required List<FlashcardRecord> flashcards,
+    required List<ReviewLogRecord> reviewLogs,
+    required DateTime now,
+  }) {
+    final successCount = reviewLogs.where((log) => log.wasCorrect).length;
+    final successRate = reviewLogs.isEmpty
+        ? 0.0
+        : successCount / reviewLogs.length;
+    final studyDayMap = <DateTime, int>{};
+
+    for (final review in reviewLogs) {
+      final localDate = review.createdAt.toLocal();
+      final key = DateTime(localDate.year, localDate.month, localDate.day);
+      studyDayMap.update(key, (value) => value + 1, ifAbsent: () => 1);
+    }
+
+    final localNow = now.toLocal();
+    final heatmap = List.generate(4, (weekIndex) {
+      return List.generate(7, (dayIndex) {
+        final date = DateTime(
+          localNow.year,
+          localNow.month,
+          localNow.day,
+        ).subtract(Duration(days: (3 - weekIndex) * 7 + (6 - dayIndex)));
+        final key = DateTime(date.year, date.month, date.day);
+        final count = studyDayMap[key] ?? 0;
+        return HeatmapCell(
+          label: '${key.day}/${key.month}',
+          count: count,
+          isActive: count > 0,
+        );
+      });
+    });
+
+    final levelCounts = <int, int>{1: 0, 2: 0, 3: 0, 4: 0};
+    for (final card in flashcards) {
+      levelCounts.update(card.level, (value) => value + 1, ifAbsent: () => 1);
+    }
+    final maxLevel = levelCounts.values.fold<int>(1, math.max);
+
+    return StatisticsOverview(
+      streakDays: _calculateStreak(
+        reviewLogs.map((log) => log.createdAt).toList(),
+        now: now,
+      ),
+      totalReviews: reviewLogs.length,
+      successRate: successRate,
+      studyDays: studyDayMap.length,
+      heatmap: heatmap,
+      levelProgress: [
+        LevelProgress(
+          level: 1,
+          title: 'Basique',
+          subtitle: 'Fondations et reconnaissance',
+          count: levelCounts[1] ?? 0,
+          progress: (levelCounts[1] ?? 0) / maxLevel,
+          icon: Icons.visibility_rounded,
+        ),
+        LevelProgress(
+          level: 2,
+          title: 'Intermédiaire',
+          subtitle: 'Compréhension guidée',
+          count: levelCounts[2] ?? 0,
+          progress: (levelCounts[2] ?? 0) / maxLevel,
+          icon: Icons.tune_rounded,
+        ),
+        LevelProgress(
+          level: 3,
+          title: 'Actif',
+          subtitle: 'Rappel actif et reformulation',
+          count: levelCounts[3] ?? 0,
+          progress: (levelCounts[3] ?? 0) / maxLevel,
+          icon: Icons.bolt_rounded,
+        ),
+        LevelProgress(
+          level: 4,
+          title: 'Avancé',
+          subtitle: 'Maîtrise contextuelle',
+          count: levelCounts[4] ?? 0,
+          progress: (levelCounts[4] ?? 0) / maxLevel,
+          icon: Icons.psychology_alt_rounded,
+        ),
+      ],
+    );
+  }
+
+  int _calculateStreak(List<DateTime> timestamps, {required DateTime now}) {
+    final daySet = timestamps
+        .map((date) => date.toLocal())
+        .map((date) => DateTime(date.year, date.month, date.day))
+        .toSet();
+    if (daySet.isEmpty) {
+      return 0;
+    }
+
+    final localNow = now.toLocal();
+    var cursor = DateTime(localNow.year, localNow.month, localNow.day);
+    var streak = 0;
+    while (daySet.contains(cursor)) {
+      streak += 1;
+      cursor = cursor.subtract(const Duration(days: 1));
+    }
+    return streak;
+  }
+
+  bool _isDueInFuture(DateTime dueAt, DateTime now) {
+    return dueAt.isAfter(now);
+  }
+
+  Future<List<Map<String, dynamic>>> _selectRows(
+    String table, {
+    Map<String, Object?> equals = const {},
+    DateTime? dueBeforeOrAt,
+    String? orderBy,
+    bool ascending = true,
+    int? limit,
+  }) async {
+    dynamic builder = _client.from(table).select();
+    builder = builder.eq('user_id', _userId);
+    for (final entry in equals.entries) {
+      builder = builder.eq(entry.key, entry.value);
+    }
+    if (dueBeforeOrAt != null) {
+      builder = builder.lte('due_at', dueBeforeOrAt.toUtc().toIso8601String());
+    }
+    if (orderBy != null) {
+      builder = builder.order(orderBy, ascending: ascending);
+    }
+    if (limit != null) {
+      builder = builder.limit(limit);
+    }
+    final rows = await builder;
+    return List<Map<String, dynamic>>.from(
+      (rows as List).map((row) => Map<String, dynamic>.from(row as Map)),
+    );
+  }
+
+  Stream<List<Map<String, dynamic>>> _streamRows(
+    String table, {
+    Map<String, Object?> equals = const {},
+    String? orderBy,
+    bool ascending = true,
+    int? limit,
+  }) {
+    dynamic builder = _client.from(table).stream(primaryKey: ['id']);
+    builder = builder.eq('user_id', _userId);
+    for (final entry in equals.entries) {
+      builder = builder.eq(entry.key, entry.value);
+    }
+    if (orderBy != null) {
+      builder = builder.order(orderBy, ascending: ascending);
+    }
+    if (limit != null) {
+      builder = builder.limit(limit);
+    }
+
+    return (builder as Stream<List<dynamic>>).map(
+      (rows) => rows
+          .map((row) => Map<String, dynamic>.from(row as Map))
+          .toList(growable: false),
+    );
+  }
+
+  CollectionRecord _mapCollection(Map<String, dynamic> row) {
+    return CollectionRecord(
+      id: row['id'] as String,
+      name: row['name'] as String,
+      description: row['description'] as String,
+      icon: row['icon'] as String,
+      color: (row['color'] as num).toInt(),
+      createdAt: DateTime.parse(row['created_at'] as String),
+      updatedAt: DateTime.parse(row['updated_at'] as String),
+    );
+  }
+
+  DeckRecord _mapDeck(Map<String, dynamic> row) {
+    return DeckRecord(
+      id: row['id'] as String,
+      collectionId: row['collection_id'] as String,
+      name: row['name'] as String,
+      icon: row['icon'] as String,
+      difficulty: DeckDifficulty.values.firstWhere(
+        (value) => value.name == row['difficulty'],
+      ),
+      createdAt: DateTime.parse(row['created_at'] as String),
+      updatedAt: DateTime.parse(row['updated_at'] as String),
+    );
+  }
+
+  FlashcardRecord _mapFlashcard(Map<String, dynamic> row) {
+    return FlashcardRecord(
+      id: row['id'] as String,
+      collectionId: row['collection_id'] as String,
+      deckId: row['deck_id'] as String,
+      question: row['question'] as String,
+      correctAnswer: row['correct_answer'] as String,
+      answer: row['answer'] as String?,
+      wrongAnswers: _toStringList(row['wrong_answers']),
+      hint: row['hint'] as String?,
+      explanation: row['explanation'] as String?,
+      currentTestMode: TestMode.values.firstWhere(
+        (value) => value.name == row['current_test_mode'],
+      ),
+      allowedTestModes: _toStringList(row['allowed_test_modes'])
+          .map(
+            (item) => TestMode.values.firstWhere((mode) => mode.name == item),
+          )
+          .toList(),
+      lastTestMode: row['last_test_mode'] == null
+          ? null
+          : TestMode.values.firstWhere(
+              (value) => value.name == row['last_test_mode'],
+            ),
+      modeHistory: _toStringList(row['mode_history'])
+          .map(
+            (item) => TestMode.values.firstWhere((mode) => mode.name == item),
+          )
+          .toList(),
+      clozeText: row['cloze_text'] as String?,
+      acceptedAnswers: _toStringList(row['accepted_answers']),
+      source: row['source'] as String?,
+      difficulty: row['difficulty'] == null
+          ? null
+          : DeckDifficulty.values.firstWhere(
+              (value) => value.name == row['difficulty'],
+            ),
+      level: (row['level'] as num).toInt(),
+      tags: _toStringList(row['tags']),
+      dueAt: DateTime.parse(row['due_at'] as String),
+      lastReviewedAt: row['last_reviewed_at'] == null
+          ? null
+          : DateTime.parse(row['last_reviewed_at'] as String),
+      intervalDays: (row['interval_days'] as num).toDouble(),
+      easeFactor: (row['ease_factor'] as num).toDouble(),
+      repetitions: (row['repetitions'] as num).toInt(),
+      lapses: (row['lapses'] as num).toInt(),
+      mastered: row['mastered'] as bool,
+      createdAt: DateTime.parse(row['created_at'] as String),
+      updatedAt: DateTime.parse(row['updated_at'] as String),
+    );
+  }
+
+  ReviewLogRecord _mapReviewLog(Map<String, dynamic> row) {
+    return ReviewLogRecord(
+      id: row['id'] as String,
+      flashcardId: row['flashcard_id'] as String,
+      collectionId: row['collection_id'] as String,
+      deckId: row['deck_id'] as String,
+      reviewResult: ReviewResult.values.firstWhere(
+        (value) => value.name == row['review_result'],
+      ),
+      testMode: TestMode.values.firstWhere(
+        (value) => value.name == row['test_mode'],
+      ),
+      wasCorrect: row['was_correct'] as bool,
+      createdAt: DateTime.parse(row['created_at'] as String),
+      scheduledDueAt: DateTime.parse(row['scheduled_due_at'] as String),
+    );
+  }
+
+  List<String> _toStringList(dynamic value) {
+    if (value == null) {
+      return const [];
+    }
+    return List<String>.from((value as List).map((item) => item.toString()));
+  }
+
+  T? _firstWhereOrNull<T>(Iterable<T> items, bool Function(T item) predicate) {
+    for (final item in items) {
+      if (predicate(item)) {
+        return item;
+      }
+    }
+    return null;
+  }
+
+  Stream<DateTime> _clockStream({
+    Duration interval = const Duration(minutes: 1),
+  }) async* {
+    yield DateTime.now();
+    yield* Stream.periodic(interval, (_) => DateTime.now());
+  }
+}
+
+Stream<R> _combineLatest3<A, B, C, R>(
+  Stream<A> streamA,
+  Stream<B> streamB,
+  Stream<C> streamC,
+  R Function(A a, B b, C c) combine,
+) {
+  late final StreamController<R> controller;
+  StreamSubscription<A>? subA;
+  StreamSubscription<B>? subB;
+  StreamSubscription<C>? subC;
+  A? latestA;
+  B? latestB;
+  C? latestC;
+  var hasA = false;
+  var hasB = false;
+  var hasC = false;
+
+  void emit() {
+    if (hasA && hasB && hasC) {
+      controller.add(combine(latestA as A, latestB as B, latestC as C));
+    }
+  }
+
+  controller = StreamController<R>(
+    onListen: () {
+      subA = streamA.listen((value) {
+        latestA = value;
+        hasA = true;
+        emit();
+      }, onError: controller.addError);
+      subB = streamB.listen((value) {
+        latestB = value;
+        hasB = true;
+        emit();
+      }, onError: controller.addError);
+      subC = streamC.listen((value) {
+        latestC = value;
+        hasC = true;
+        emit();
+      }, onError: controller.addError);
+    },
+    onCancel: () async {
+      await subA?.cancel();
+      await subB?.cancel();
+      await subC?.cancel();
+    },
+  );
+
+  return controller.stream;
+}
+
+Stream<R> _combineLatest4<A, B, C, D, R>(
+  Stream<A> streamA,
+  Stream<B> streamB,
+  Stream<C> streamC,
+  Stream<D> streamD,
+  R Function(A a, B b, C c, D d) combine,
+) {
+  late final StreamController<R> controller;
+  StreamSubscription<A>? subA;
+  StreamSubscription<B>? subB;
+  StreamSubscription<C>? subC;
+  StreamSubscription<D>? subD;
+  A? latestA;
+  B? latestB;
+  C? latestC;
+  D? latestD;
+  var hasA = false;
+  var hasB = false;
+  var hasC = false;
+  var hasD = false;
+
+  void emit() {
+    if (hasA && hasB && hasC && hasD) {
+      controller.add(
+        combine(latestA as A, latestB as B, latestC as C, latestD as D),
+      );
+    }
+  }
+
+  controller = StreamController<R>(
+    onListen: () {
+      subA = streamA.listen((value) {
+        latestA = value;
+        hasA = true;
+        emit();
+      }, onError: controller.addError);
+      subB = streamB.listen((value) {
+        latestB = value;
+        hasB = true;
+        emit();
+      }, onError: controller.addError);
+      subC = streamC.listen((value) {
+        latestC = value;
+        hasC = true;
+        emit();
+      }, onError: controller.addError);
+      subD = streamD.listen((value) {
+        latestD = value;
+        hasD = true;
+        emit();
+      }, onError: controller.addError);
+    },
+    onCancel: () async {
+      await subA?.cancel();
+      await subB?.cancel();
+      await subC?.cancel();
+      await subD?.cancel();
+    },
+  );
+
+  return controller.stream;
 }

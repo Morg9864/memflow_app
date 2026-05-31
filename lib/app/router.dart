@@ -45,26 +45,19 @@ class _AuthRefreshNotifier extends ChangeNotifier {
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authService = ref.watch(authServiceProvider);
-  final refresh =
-      authService == null ? null : _AuthRefreshNotifier(authService.onAuthStateChange);
-  if (refresh != null) {
-    ref.onDispose(refresh.dispose);
-  }
+  final refresh = _AuthRefreshNotifier(authService.onAuthStateChange);
+  ref.onDispose(refresh.dispose);
 
   return GoRouter(
     initialLocation: '/',
     refreshListenable: refresh,
     redirect: (context, state) {
-      // No Supabase configured → purely local mode, no gate.
-      if (authService == null) {
-        return null;
-      }
       final loggedIn = authService.currentSession != null;
       final atAuth = state.matchedLocation == '/auth';
       final atReset = state.matchedLocation == '/reset-password';
 
       // Password recovery link clicked → send to reset screen.
-      if (refresh?.isRecovery == true) {
+      if (refresh.isRecovery) {
         return atReset ? null : '/reset-password';
       }
 
@@ -77,18 +70,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      GoRoute(
-        path: '/auth',
-        builder: (context, state) => const AuthScreen(),
-      ),
+      GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
       GoRoute(
         path: '/reset-password',
         builder: (context, state) => const ResetPasswordScreen(),
       ),
-      GoRoute(
-        path: '/',
-        builder: (context, state) => const HomeScreen(),
-      ),
+      GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
       GoRoute(
         path: '/collection/:collectionId',
         builder: (context, state) => CollectionDetailScreen(
@@ -104,9 +91,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/study/:deckId',
-        builder: (context, state) => StudyScreen(
-          deckId: state.pathParameters['deckId'],
-        ),
+        builder: (context, state) =>
+            StudyScreen(deckId: state.pathParameters['deckId']),
       ),
       GoRoute(
         path: '/stats',
@@ -139,9 +125,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/session-summary',
-        builder: (context, state) => SessionSummaryScreen(
-          summary: state.extra! as SessionSummary,
-        ),
+        builder: (context, state) =>
+            SessionSummaryScreen(summary: state.extra! as SessionSummary),
       ),
     ],
   );

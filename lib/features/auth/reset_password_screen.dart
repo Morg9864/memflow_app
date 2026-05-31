@@ -10,7 +10,8 @@ class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({super.key});
 
   @override
-  ConsumerState<ResetPasswordScreen> createState() => _ResetPasswordScreenState();
+  ConsumerState<ResetPasswordScreen> createState() =>
+      _ResetPasswordScreenState();
 }
 
 class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
@@ -34,7 +35,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
     setState(() => _busy = true);
     try {
       final authService = ref.read(authServiceProvider);
-      await authService!.updatePassword(_passwordController.text);
+      await authService.updatePassword(_passwordController.text);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Mot de passe mis à jour !')),
@@ -98,7 +99,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                             obscureText: _obscurePassword,
                             decoration: InputDecoration(
                               labelText: 'Nouveau mot de passe',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                              ),
                               suffixIcon: IconButton(
                                 onPressed: () => setState(
                                   () => _obscurePassword = !_obscurePassword,
@@ -121,7 +124,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                             obscureText: _obscureConfirm,
                             decoration: InputDecoration(
                               labelText: 'Confirmer le mot de passe',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                              ),
                               suffixIcon: IconButton(
                                 onPressed: () => setState(
                                   () => _obscureConfirm = !_obscureConfirm,
@@ -135,8 +140,8 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                             ),
                             validator: (value) =>
                                 value == _passwordController.text
-                                    ? null
-                                    : 'Les mots de passe ne correspondent pas',
+                                ? null
+                                : 'Les mots de passe ne correspondent pas',
                           ),
                           const SizedBox(height: 24),
                           FilledButton(
@@ -145,7 +150,9 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                                 ? const SizedBox(
                                     height: 20,
                                     width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
                                 : const Text('Enregistrer'),
                           ),

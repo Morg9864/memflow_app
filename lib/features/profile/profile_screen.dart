@@ -13,9 +13,6 @@ import '../../theme/theme_controller.dart';
 import '../../widgets/ui.dart';
 import '../legal/legal_document_screen.dart';
 
-// Provider wired to the sync service so the profile can trigger a re-sync.
-final _syncServiceProfileProvider = Provider((ref) => ref.watch(syncServiceProvider));
-
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
 
@@ -59,8 +56,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final body = StringBuffer()
       ..writeln('Bonjour,')
       ..writeln()
-      ..writeln('Je souhaite la suppression de mon compte MemFlow et des '
-          'données associées.')
+      ..writeln(
+        'Je souhaite la suppression de mon compte MemFlow et des '
+        'données associées.',
+      )
       ..writeln()
       ..writeln('Email du compte : ${user?.email ?? 'non renseigné'}')
       ..writeln('Identifiant : ${user?.id ?? 'non renseigné'}');
@@ -85,8 +84,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         ..hideCurrentSnackBar()
         ..showSnackBar(
           const SnackBar(
-            content: Text('Impossible d\'ouvrir l\'app mail. '
-                'Écris-nous à $_supportEmail.'),
+            content: Text(
+              'Impossible d\'ouvrir l\'app mail. '
+              'Écris-nous à $_supportEmail.',
+            ),
           ),
         );
     }
@@ -94,8 +95,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   String _encodeQuery(Map<String, String> params) {
     return params.entries
-        .map((e) =>
-            '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}')
+        .map(
+          (e) =>
+              '${Uri.encodeComponent(e.key)}=${Uri.encodeComponent(e.value)}',
+        )
         .join('&');
   }
 
@@ -117,35 +120,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     }
   }
 
-  Future<void> _forceSync() async {
-    final syncService = ref.read(_syncServiceProfileProvider);
-    if (!syncService.isEnabled) return;
-    setState(() => _busy = true);
-    try {
-      await syncService.resetSyncCursor();
-      await syncService.runSync();
-      await ref.read(appRepositoryProvider).refreshAllDerivedData();
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(const SnackBar(content: Text('Synchronisation terminée.')));
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context)
-          ..hideCurrentSnackBar()
-          ..showSnackBar(SnackBar(content: Text('Erreur sync : $e')));
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
-    }
-  }
-
   Future<void> _signOut() async {
     final authService = ref.read(authServiceProvider);
-    if (authService == null) {
-      return;
-    }
     setState(() => _busy = true);
     try {
       await authService.signOut();
@@ -176,7 +152,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final displayName = ref.watch(displayNameProvider);
     final dailyGoal = ref.watch(dailyGoalProvider);
     return AppScaffold(
-      bottomNavigation: AppBottomNav(location: GoRouterState.of(context).uri.path),
+      bottomNavigation: AppBottomNav(
+        location: GoRouterState.of(context).uri.path,
+      ),
       child: ListView(
         children: [
           Row(
@@ -194,12 +172,15 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    displayName ?? 'Invité',
+                    displayName ?? 'Utilisateur',
                     style: Theme.of(context).textTheme.titleLarge,
                   ),
                   if (user?.email != null) ...[
                     const SizedBox(height: 4),
-                    Text(user!.email!, style: Theme.of(context).textTheme.bodyMedium),
+                    Text(
+                      user!.email!,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
                   ],
                   const SizedBox(height: 12),
                   InkWell(
@@ -291,19 +272,22 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                   leading: const Icon(Icons.privacy_tip_outlined),
                   title: const Text('Politique de confidentialité'),
                   trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => context.push('/legal/${LegalDocument.privacy.slug}'),
+                  onTap: () =>
+                      context.push('/legal/${LegalDocument.privacy.slug}'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.description_outlined),
                   title: const Text("Conditions d'utilisation"),
                   trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => context.push('/legal/${LegalDocument.terms.slug}'),
+                  onTap: () =>
+                      context.push('/legal/${LegalDocument.terms.slug}'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.gavel_rounded),
                   title: const Text('Mentions légales'),
                   trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => context.push('/legal/${LegalDocument.notices.slug}'),
+                  onTap: () =>
+                      context.push('/legal/${LegalDocument.notices.slug}'),
                 ),
                 ListTile(
                   leading: const Icon(Icons.article_outlined),
@@ -333,14 +317,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    if (ref.read(_syncServiceProfileProvider).isEnabled) ...[
-                      FilledButton.tonalIcon(
-                        onPressed: _busy ? null : _forceSync,
-                        icon: const Icon(Icons.sync_rounded),
-                        label: const Text('Forcer la synchronisation'),
-                      ),
-                      const SizedBox(height: 12),
-                    ],
                     OutlinedButton.icon(
                       onPressed: _busy ? null : _signOut,
                       icon: const Icon(Icons.logout_rounded),
@@ -353,7 +329,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         foregroundColor: Theme.of(context).colorScheme.error,
                       ),
                       icon: const Icon(Icons.delete_outline_rounded),
-                      label: const Text('Demander la suppression de mon compte'),
+                      label: const Text(
+                        'Demander la suppression de mon compte',
+                      ),
                     ),
                   ],
                 ),
@@ -403,10 +381,7 @@ class _DailyGoalDialogState extends State<_DailyGoalDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Annuler'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Enregistrer'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Enregistrer')),
       ],
     );
   }

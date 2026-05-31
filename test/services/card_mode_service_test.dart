@@ -1,5 +1,4 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:memflow/data/local/database.dart';
 import 'package:memflow/domain/models/models.dart';
 import 'package:memflow/domain/services/card_mode_service.dart';
 
@@ -7,14 +6,14 @@ void main() {
   const service = CardModeService();
   final now = DateTime(2026, 5, 29, 9, 0);
 
-  Flashcard buildCard({
+  FlashcardRecord buildCard({
     TestMode currentMode = TestMode.multipleChoice,
     List<TestMode>? allowedModes,
     int repetitions = 0,
     String? clozeText,
     List<String> acceptedAnswers = const [],
   }) {
-    return Flashcard(
+    return FlashcardRecord(
       id: 'card-1',
       collectionId: 'react',
       deckId: 'deck-1',
@@ -25,7 +24,8 @@ void main() {
       hint: null,
       explanation: null,
       currentTestMode: currentMode,
-      allowedTestModes: allowedModes ??
+      allowedTestModes:
+          allowedModes ??
           service.allowedModesFor(
             clozeText: clozeText,
             acceptedAnswers: acceptedAnswers,
@@ -78,10 +78,7 @@ void main() {
   });
 
   test('good promotes from multiple choice to classic flashcard', () {
-    final next = service.nextMode(
-      buildCard(repetitions: 1),
-      ReviewResult.good,
-    );
+    final next = service.nextMode(buildCard(repetitions: 1), ReviewResult.good);
 
     expect(next, TestMode.classicFlashcard);
   });

@@ -1,6 +1,6 @@
 import 'package:csv/csv.dart';
 
-import '../../data/local/database.dart';
+import '../models/models.dart';
 
 class CsvExportService {
   const CsvExportService();
@@ -29,8 +29,11 @@ class CsvExportService {
     return Csv(fieldDelimiter: ';').encode(rows);
   }
 
-  String exportFlashcards(List<Flashcard> cards, Map<String, String> collectionsById,
-      Map<String, String> decksById) {
+  String exportFlashcards(
+    List<FlashcardRecord> cards,
+    Map<String, String> collectionsById,
+    Map<String, String> decksById,
+  ) {
     final rows = <List<String>>[
       const [
         'collection',

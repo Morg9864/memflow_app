@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/session_card_limit_controller.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../theme/app_theme.dart';
@@ -10,11 +11,7 @@ import 'mode_selection_sheet.dart';
 import 'study_controller.dart';
 
 class StudyScreen extends ConsumerStatefulWidget {
-  const StudyScreen({
-    super.key,
-    this.collectionId,
-    this.deckId,
-  });
+  const StudyScreen({super.key, this.collectionId, this.deckId});
 
   final String? collectionId;
   final String? deckId;
@@ -55,6 +52,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         collectionId: widget.collectionId,
         deckId: widget.deckId,
         forcedMode: forcedMode,
+        sessionCardLimit: ref.read(sessionCardLimitProvider),
       );
       if (mounted) {
         setState(() => _state = session);
@@ -75,7 +73,11 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   void _selectOption(int index, List<String> options) {
     final state = _state;
     if (state == null || state.hasValidatedAnswer) return;
-    final isCorrect = _controller.evaluateMultipleChoice(state.currentCard, index, options);
+    final isCorrect = _controller.evaluateMultipleChoice(
+      state.currentCard,
+      index,
+      options,
+    );
     setState(() {
       _state = state.copyWith(
         selectedOptionIndex: index,
@@ -110,12 +112,16 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       await _controller.submitReview(
         cardId: state.currentCard.id,
         result: result,
-        wasCorrect: state.currentAnswerWasCorrect ?? result != ReviewResult.again,
+        wasCorrect:
+            state.currentAnswerWasCorrect ?? result != ReviewResult.again,
       );
       final nextState = _controller.advance(state, result);
       if (!mounted) return;
       if (nextState.isCompleted) {
-        context.go('/session-summary', extra: _controller.buildSummary(nextState));
+        context.go(
+          '/session-summary',
+          extra: _controller.buildSummary(nextState),
+        );
         return;
       }
       _freeTextController.clear();
@@ -144,7 +150,9 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     }
 
     final fallbackCollectionId =
-        widget.collectionId ?? _state?.collectionId ?? _state?.currentCard.collectionId;
+        widget.collectionId ??
+        _state?.collectionId ??
+        _state?.currentCard.collectionId;
     if (fallbackCollectionId != null) {
       context.go('/collection/$fallbackCollectionId');
       return;
@@ -196,8 +204,12 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
 
     final card = state.currentCard;
     final mode = card.currentTestMode;
-    final suggested = _controller.suggestedResult(state.currentAnswerWasCorrect);
-    final options = mode == TestMode.multipleChoice ? card.buildOptions() : const <String>[];
+    final suggested = _controller.suggestedResult(
+      state.currentAnswerWasCorrect,
+    );
+    final options = mode == TestMode.multipleChoice
+        ? card.buildOptions()
+        : const <String>[];
 
     return PopScope(
       canPop: _canPopStudy(),
@@ -206,13 +218,16 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         body: SafeArea(
           child: Center(
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: AppTheme.contentMaxWidth),
+              constraints: const BoxConstraints(
+                maxWidth: AppTheme.contentMaxWidth,
+              ),
               child: GestureDetector(
                 onVerticalDragEnd: (details) {
                   if (details.primaryVelocity != null &&
                       details.primaryVelocity! < -200 &&
                       !state.revealed &&
-                      (mode == TestMode.classicFlashcard || mode == TestMode.reversedFlashcard)) {
+                      (mode == TestMode.classicFlashcard ||
+                          mode == TestMode.reversedFlashcard)) {
                     _reveal();
                   }
                 },
@@ -234,16 +249,20 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                         child: AnimatedSwitcher(
                           duration: const Duration(milliseconds: 220),
                           child: switch (mode) {
-                          TestMode.multipleChoice => _McqMode(
-                              key: ValueKey('mcq-${card.id}-${state.hasValidatedAnswer}'),
+                            TestMode.multipleChoice => _McqMode(
+                              key: ValueKey(
+                                'mcq-${card.id}-${state.hasValidatedAnswer}',
+                              ),
                               card: card,
                               options: options,
                               selectedIndex: state.selectedOptionIndex,
                               hasValidatedAnswer: state.hasValidatedAnswer,
                               onSelect: _selectOption,
                             ),
-                          TestMode.cloze => _TextEntryMode(
-                              key: ValueKey('cloze-${card.id}-${state.hasValidatedAnswer}'),
+                            TestMode.cloze => _TextEntryMode(
+                              key: ValueKey(
+                                'cloze-${card.id}-${state.hasValidatedAnswer}',
+                              ),
                               title: 'Texte à trous',
                               prompt: _controller.buildClozePrompt(card),
                               hint: card.hint,
@@ -256,8 +275,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                               actionLabel: 'Valider ma réponse',
                               onSubmit: () => _submitTextAnswer(isCloze: true),
                             ),
-                          TestMode.freeText => _TextEntryMode(
-                              key: ValueKey('free-${card.id}-${state.hasValidatedAnswer}'),
+                            TestMode.freeText => _TextEntryMode(
+                              key: ValueKey(
+                                'free-${card.id}-${state.hasValidatedAnswer}',
+                              ),
                               title: 'Saisie libre',
                               prompt: card.question,
                               hint: card.hint,
@@ -270,13 +291,18 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                               actionLabel: 'Vérifier',
                               onSubmit: () => _submitTextAnswer(isCloze: false),
                             ),
-                          TestMode.trueFalse => _TrueFalseMode(
-                              key: ValueKey('tf-${card.id}-${state.hasValidatedAnswer}'),
+                            TestMode.trueFalse => _TrueFalseMode(
+                              key: ValueKey(
+                                'tf-${card.id}-${state.hasValidatedAnswer}',
+                              ),
                               card: card,
                               selectedIndex: state.selectedOptionIndex,
                               hasValidatedAnswer: state.hasValidatedAnswer,
                               onSelect: (index) {
-                                final correct = _isTrueFalseSelectionCorrect(card, index);
+                                final correct = _isTrueFalseSelectionCorrect(
+                                  card,
+                                  index,
+                                );
                                 setState(() {
                                   _state = state.copyWith(
                                     selectedOptionIndex: index,
@@ -286,8 +312,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                                 });
                               },
                             ),
-                          _ => _FlashcardMode(
-                              key: ValueKey('flash-${card.id}-${state.revealed}'),
+                            _ => _FlashcardMode(
+                              key: ValueKey(
+                                'flash-${card.id}-${state.revealed}',
+                              ),
                               card: card,
                               revealed: state.revealed,
                               reversed: mode == TestMode.reversedFlashcard,
@@ -301,7 +329,8 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                         const SectionLabel('Comment tu t’en es sorti ?'),
                         const SizedBox(height: 12),
                         GridView.count(
-                          crossAxisCount: MediaQuery.of(context).size.width > 700 ? 4 : 2,
+                          crossAxisCount:
+                              MediaQuery.of(context).size.width > 700 ? 4 : 2,
                           shrinkWrap: true,
                           physics: const NeverScrollableScrollPhysics(),
                           crossAxisSpacing: 12,
@@ -373,11 +402,16 @@ class _FlashcardMode extends StatelessWidget {
               Text(
                 card.hint!,
                 textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic),
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic),
               ),
             ],
             const SizedBox(height: 28),
-            Text('Glisse vers le haut', style: Theme.of(context).textTheme.bodySmall),
+            Text(
+              'Glisse vers le haut',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
             const SizedBox(height: 12),
             FilledButton(
               onPressed: onReveal,
@@ -396,8 +430,10 @@ class _FlashcardMode extends StatelessWidget {
           children: [
             const SectionLabel('Question'),
             const SizedBox(height: 12),
-            Text(reversed ? card.correctAnswer : card.question,
-                style: Theme.of(context).textTheme.titleLarge),
+            Text(
+              reversed ? card.correctAnswer : card.question,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
             const SizedBox(height: 18),
             const Divider(),
             const SizedBox(height: 18),
@@ -409,7 +445,10 @@ class _FlashcardMode extends StatelessWidget {
             ),
             if (card.explanation != null) ...[
               const SizedBox(height: 18),
-              Text(card.explanation!, style: Theme.of(context).textTheme.bodyLarge),
+              Text(
+                card.explanation!,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
             ],
           ],
         ),
@@ -436,7 +475,9 @@ class _McqMode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final correctIndex = options.indexWhere((item) => item == card.correctAnswer);
+    final correctIndex = options.indexWhere(
+      (item) => item == card.correctAnswer,
+    );
     return ListView(
       children: [
         Card(
@@ -447,10 +488,18 @@ class _McqMode extends StatelessWidget {
               children: [
                 const SectionLabel('Question'),
                 const SizedBox(height: 14),
-                Text(card.question, style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  card.question,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
                 if (card.hint != null) ...[
                   const SizedBox(height: 16),
-                  Text(card.hint!, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic)),
+                  Text(
+                    card.hint!,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                 ],
               ],
             ),
@@ -462,7 +511,10 @@ class _McqMode extends StatelessWidget {
             text: options[index],
             isSelected: selectedIndex == index,
             isCorrect: hasValidatedAnswer && index == correctIndex,
-            isWrong: hasValidatedAnswer && selectedIndex == index && selectedIndex != correctIndex,
+            isWrong:
+                hasValidatedAnswer &&
+                selectedIndex == index &&
+                selectedIndex != correctIndex,
             onTap: hasValidatedAnswer ? null : () => onSelect(index, options),
           ),
           const SizedBox(height: 10),
@@ -475,12 +527,22 @@ class _McqMode extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SectionLabel(selectedIndex == correctIndex ? 'Bonne réponse' : 'Réponse attendue'),
+                  SectionLabel(
+                    selectedIndex == correctIndex
+                        ? 'Bonne réponse'
+                        : 'Réponse attendue',
+                  ),
                   const SizedBox(height: 10),
-                  Text(card.correctAnswer, style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    card.correctAnswer,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   if (card.explanation != null) ...[
                     const SizedBox(height: 14),
-                    Text(card.explanation!, style: Theme.of(context).textTheme.bodyLarge),
+                    Text(
+                      card.explanation!,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
                   ],
                 ],
               ),
@@ -513,22 +575,22 @@ class _McqOptionTile extends StatelessWidget {
     final borderColor = isCorrect
         ? const Color(0xFF4D9461)
         : isWrong
-            ? const Color(0xFFD94A3A)
-            : theme.dividerColor;
+        ? const Color(0xFFD94A3A)
+        : theme.dividerColor;
     final background = isCorrect
         ? const Color(0xFFEAF3E7)
         : isWrong
-            ? const Color(0xFFFBE7E4)
-            : isSelected
-                ? theme.colorScheme.primary.withValues(alpha: 0.1)
-                : theme.cardTheme.color;
+        ? const Color(0xFFFBE7E4)
+        : isSelected
+        ? theme.colorScheme.primary.withValues(alpha: 0.1)
+        : theme.cardTheme.color;
     final foreground = isCorrect
         ? const Color(0xFF245433)
         : isWrong
-            ? const Color(0xFF8E2F24)
-            : isSelected
-                ? theme.colorScheme.primary
-                : theme.colorScheme.onSurface;
+        ? const Color(0xFF8E2F24)
+        : isSelected
+        ? theme.colorScheme.primary
+        : theme.colorScheme.onSurface;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
@@ -578,9 +640,12 @@ class _TextEntryMode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final feedbackTone = isCorrect == true ? const Color(0xFF245433) : const Color(0xFF8E2F24);
-    final feedbackBackground =
-        isCorrect == true ? const Color(0xFFEAF3E7) : const Color(0xFFFBE7E4);
+    final feedbackTone = isCorrect == true
+        ? const Color(0xFF245433)
+        : const Color(0xFF8E2F24);
+    final feedbackBackground = isCorrect == true
+        ? const Color(0xFFEAF3E7)
+        : const Color(0xFFFBE7E4);
 
     return ListView(
       children: [
@@ -595,7 +660,12 @@ class _TextEntryMode extends StatelessWidget {
                 Text(prompt, style: Theme.of(context).textTheme.headlineMedium),
                 if (hint != null) ...[
                   const SizedBox(height: 16),
-                  Text(hint!, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic)),
+                  Text(
+                    hint!,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                 ],
                 const SizedBox(height: 18),
                 TextField(
@@ -622,22 +692,26 @@ class _TextEntryMode extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    (isCorrect == true ? 'Bien joué' : answerLabel).toUpperCase(),
-                    style: Theme.of(context)
-                        .textTheme
-                        .labelMedium
-                        ?.copyWith(color: feedbackTone),
+                    (isCorrect == true ? 'Bien joué' : answerLabel)
+                        .toUpperCase(),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(color: feedbackTone),
                   ),
                   const SizedBox(height: 10),
                   Text(
                     answerText,
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(color: feedbackTone),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleLarge?.copyWith(color: feedbackTone),
                   ),
                   if (explanation != null) ...[
                     const SizedBox(height: 14),
                     Text(
                       explanation!,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: feedbackTone),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyLarge?.copyWith(color: feedbackTone),
                     ),
                   ],
                 ],
@@ -678,7 +752,10 @@ class _TrueFalseMode extends StatelessWidget {
               children: [
                 const SectionLabel('Vrai / Faux'),
                 const SizedBox(height: 14),
-                Text(card.question, style: Theme.of(context).textTheme.headlineMedium),
+                Text(
+                  card.question,
+                  style: Theme.of(context).textTheme.headlineMedium,
+                ),
               ],
             ),
           ),
@@ -690,7 +767,9 @@ class _TrueFalseMode extends StatelessWidget {
             isSelected: selectedIndex == item.$2,
             isCorrect: hasValidatedAnswer && item.$2 == correctIndex,
             isWrong:
-                hasValidatedAnswer && selectedIndex == item.$2 && selectedIndex != correctIndex,
+                hasValidatedAnswer &&
+                selectedIndex == item.$2 &&
+                selectedIndex != correctIndex,
             onTap: hasValidatedAnswer ? null : () => onSelect(item.$2),
           ),
           const SizedBox(height: 10),
@@ -705,10 +784,16 @@ class _TrueFalseMode extends StatelessWidget {
                 children: [
                   const SectionLabel('Réponse attendue'),
                   const SizedBox(height: 10),
-                  Text(card.correctAnswer, style: Theme.of(context).textTheme.titleLarge),
+                  Text(
+                    card.correctAnswer,
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
                   if (card.explanation != null) ...[
                     const SizedBox(height: 14),
-                    Text(card.explanation!, style: Theme.of(context).textTheme.bodyLarge),
+                    Text(
+                      card.explanation!,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
                   ],
                 ],
               ),
@@ -722,8 +807,10 @@ class _TrueFalseMode extends StatelessWidget {
 
 bool _isTrueFalseSelectionCorrect(StudyCard card, int index) {
   final normalized = card.correctAnswer.toLowerCase();
-  return (index == 0 && (normalized.contains('true') || normalized.contains('vrai'))) ||
-      (index == 1 && (normalized.contains('false') || normalized.contains('faux')));
+  return (index == 0 &&
+          (normalized.contains('true') || normalized.contains('vrai'))) ||
+      (index == 1 &&
+          (normalized.contains('false') || normalized.contains('faux')));
 }
 
 int _trueFalseCorrectIndex(StudyCard card) {

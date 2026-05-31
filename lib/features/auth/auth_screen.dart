@@ -34,7 +34,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     super.dispose();
   }
 
-  AuthService get _authService => ref.read(authServiceProvider)!;
+  AuthService get _authService => ref.read(authServiceProvider);
 
   bool get _isSignUp => _mode == _AuthMode.signUp;
 
@@ -62,7 +62,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Future<void> _forgotPassword() async {
-    final emailController = TextEditingController(text: _emailController.text.trim());
+    final emailController = TextEditingController(
+      text: _emailController.text.trim(),
+    );
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -92,9 +94,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final email = emailController.text.trim();
     if (email.isEmpty) return;
     await _run(() {
-      final redirectTo = kIsWeb
-          ? Uri.base.replace(path: '/').toString()
-          : null;
+      final redirectTo = kIsWeb ? Uri.base.replace(path: '/').toString() : null;
       return _authService.resetPasswordForEmail(email, redirectTo: redirectTo);
     });
     if (mounted) {
@@ -125,10 +125,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
         return;
       }
     } else {
-      await _run(() => _authService.signInWithPassword(
-            email: email,
-            password: password,
-          ));
+      await _run(
+        () => _authService.signInWithPassword(email: email, password: password),
+      );
     }
   }
 
@@ -203,7 +202,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 labelText: 'Nom',
                                 prefixIcon: Icon(Icons.person_outline_rounded),
                               ),
-                              validator: (value) => (value ?? '').trim().isNotEmpty
+                              validator: (value) =>
+                                  (value ?? '').trim().isNotEmpty
                                   ? null
                                   : 'Saisis un nom',
                             ),
@@ -218,7 +218,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                               labelText: 'Email',
                               prefixIcon: Icon(Icons.mail_outline_rounded),
                             ),
-                            validator: (value) => _isValidEmail((value ?? '').trim())
+                            validator: (value) =>
+                                _isValidEmail((value ?? '').trim())
                                 ? null
                                 : 'Email invalide',
                           ),
@@ -230,7 +231,9 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                             autofillHints: const [AutofillHints.password],
                             decoration: InputDecoration(
                               labelText: 'Mot de passe',
-                              prefixIcon: const Icon(Icons.lock_outline_rounded),
+                              prefixIcon: const Icon(
+                                Icons.lock_outline_rounded,
+                              ),
                               suffixIcon: IconButton(
                                 onPressed: () => setState(
                                   () => _obscurePassword = !_obscurePassword,
@@ -256,9 +259,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 ? const SizedBox(
                                     height: 20,
                                     width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2),
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    ),
                                   )
-                                : Text(_isSignUp ? 'Créer le compte' : 'Se connecter'),
+                                : Text(
+                                    _isSignUp
+                                        ? 'Créer le compte'
+                                        : 'Se connecter',
+                                  ),
                           ),
                         ],
                       ),

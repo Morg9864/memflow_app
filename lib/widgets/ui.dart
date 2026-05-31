@@ -28,11 +28,10 @@ class AppScaffold extends StatelessWidget {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: AppTheme.contentMaxWidth),
-            child: Padding(
-              padding: padding,
-              child: child,
+            constraints: const BoxConstraints(
+              maxWidth: AppTheme.contentMaxWidth,
             ),
+            child: Padding(padding: padding, child: child),
           ),
         ),
       ),
@@ -70,9 +69,18 @@ class AppBottomNav extends StatelessWidget {
       },
       destinations: const [
         NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Accueil'),
-        NavigationDestination(icon: Icon(Icons.insights_rounded), label: 'Stats'),
-        NavigationDestination(icon: Icon(Icons.upload_file_rounded), label: 'Importer'),
-        NavigationDestination(icon: Icon(Icons.person_rounded), label: 'Profil'),
+        NavigationDestination(
+          icon: Icon(Icons.insights_rounded),
+          label: 'Stats',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.upload_file_rounded),
+          label: 'Importer',
+        ),
+        NavigationDestination(
+          icon: Icon(Icons.person_rounded),
+          label: 'Profil',
+        ),
       ],
     );
   }
@@ -84,12 +92,16 @@ class ThemeToggleButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = ref.watch(themeControllerProvider);
-    final isDark = theme == ThemePreference.dark ||
-        (theme == ThemePreference.system && Theme.of(context).brightness == Brightness.dark);
+    final isDark =
+        theme == ThemePreference.dark ||
+        (theme == ThemePreference.system &&
+            Theme.of(context).brightness == Brightness.dark);
     return IconButton.filledTonal(
       tooltip: 'Changer de thème',
       onPressed: () {
-        ref.read(themeControllerProvider.notifier).setPreference(
+        ref
+            .read(themeControllerProvider.notifier)
+            .setPreference(
               isDark ? ThemePreference.light : ThemePreference.dark,
             );
       },
@@ -177,11 +189,7 @@ class IconTile extends StatelessWidget {
 }
 
 class ProgressPill extends StatelessWidget {
-  const ProgressPill({
-    super.key,
-    required this.value,
-    this.height = 7,
-  });
+  const ProgressPill({super.key, required this.value, this.height = 7});
 
   final double value;
   final double height;
@@ -198,80 +206,6 @@ class ProgressPill extends StatelessWidget {
             ? const Color(0xFF3A2A21)
             : const Color(0xFFF1E7DC),
         valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
-      ),
-    );
-  }
-}
-
-class FeaturedCollectionCard extends StatelessWidget {
-  const FeaturedCollectionCard({
-    super.key,
-    required this.collection,
-    required this.onTap,
-  });
-
-  final CollectionListItem collection;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: AppTheme.radiusLg,
-      child: Ink(
-        decoration: BoxDecoration(
-          borderRadius: AppTheme.radiusLg,
-          gradient: LinearGradient(
-            colors: [
-              theme.colorScheme.primary,
-              Color(collection.color),
-            ],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Collection phare'.toUpperCase(), style: theme.textTheme.labelMedium?.copyWith(color: Colors.white70)),
-              const SizedBox(height: 10),
-              Text(collection.name,
-                  style: theme.textTheme.headlineMedium?.copyWith(color: Colors.white)),
-              const SizedBox(height: 8),
-              Text(
-                collection.description,
-                style: theme.textTheme.bodyMedium?.copyWith(color: Colors.white.withValues(alpha: 0.9)),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  _metricChip(context, '${collection.totalCards}', 'cartes'),
-                  const SizedBox(width: 12),
-                  _metricChip(context, '${(collection.masteredPercentage * 100).round()}%', 'maîtrise'),
-                  const Spacer(),
-                  Icon(Icons.arrow_forward_rounded, color: Colors.white.withValues(alpha: 0.95)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _metricChip(BuildContext context, String value, String label) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.18),
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Text(
-        '$value $label',
-        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.white),
       ),
     );
   }
@@ -309,18 +243,34 @@ class CollectionCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(14),
                     ),
                     alignment: Alignment.center,
-                    child: Text(collection.icon, style: const TextStyle(fontSize: 20)),
+                    child: Text(
+                      collection.icon,
+                      style: const TextStyle(fontSize: 20),
+                    ),
                   ),
                   const Spacer(),
-                  Icon(Icons.arrow_outward_rounded, color: theme.colorScheme.primary),
+                  Icon(
+                    Icons.arrow_outward_rounded,
+                    color: theme.colorScheme.primary,
+                  ),
                 ],
               ),
               const Spacer(),
               Text(collection.name, style: theme.textTheme.titleMedium),
               const SizedBox(height: 6),
-              Text('${collection.totalCards} cartes', style: theme.textTheme.bodySmall),
+              Text(
+                '${collection.cardsDone} / ${collection.totalCards} cartes faites',
+                style: theme.textTheme.bodySmall,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${collection.dueCards} à revoir',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
               const SizedBox(height: 12),
-              ProgressPill(value: collection.masteredPercentage),
+              ProgressPill(value: collection.progress),
             ],
           ),
         ),
@@ -373,8 +323,15 @@ class DeckCard extends StatelessWidget {
                     Text(deck.name, style: theme.textTheme.titleMedium),
                     const SizedBox(height: 6),
                     Text(
-                      '${deck.totalCards} cartes • ${deck.difficulty.label}',
+                      '${deck.cardsDone} / ${deck.totalCards} cartes faites • ${deck.difficulty.label}',
                       style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${deck.dueCards} à revoir',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
                     ),
                     const SizedBox(height: 12),
                     ProgressPill(value: deck.progress),
@@ -410,8 +367,11 @@ class DeckCard extends StatelessWidget {
                         value: _DeckAction.delete,
                         child: Row(
                           children: [
-                            Icon(Icons.delete_outline_rounded,
-                                color: theme.colorScheme.error, size: 20),
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              color: theme.colorScheme.error,
+                              size: 20,
+                            ),
                             const SizedBox(width: 12),
                             Text(
                               'Supprimer le deck',
@@ -427,12 +387,18 @@ class DeckCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: theme.colorScheme.primary.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(999),
                       ),
-                      child: Text(deck.badgeLabel, style: theme.textTheme.bodySmall),
+                      child: Text(
+                        deck.badgeLabel,
+                        style: theme.textTheme.bodySmall,
+                      ),
                     ),
                     const SizedBox(height: 14),
                     const Icon(Icons.chevron_right_rounded),
@@ -449,10 +415,7 @@ class DeckCard extends StatelessWidget {
 enum _DeckAction { viewCards, delete }
 
 class LevelBadge extends StatelessWidget {
-  const LevelBadge({
-    super.key,
-    required this.level,
-  });
+  const LevelBadge({super.key, required this.level});
 
   final int level;
 
@@ -547,7 +510,7 @@ class StudyProgressHeader extends StatelessWidget {
               ),
             ),
           ],
-        )
+        ),
       ],
     );
   }
@@ -588,10 +551,7 @@ class ReviewButton extends StatelessWidget {
         alignment: Alignment.centerLeft,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: BorderSide(
-            color: borderColor,
-            width: isSuggested ? 1.5 : 1,
-          ),
+          side: BorderSide(color: borderColor, width: isSuggested ? 1.5 : 1),
         ),
       ),
       child: Column(
@@ -599,7 +559,9 @@ class ReviewButton extends StatelessWidget {
         children: [
           Text(
             result.label,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(color: tone),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(color: tone),
           ),
           const SizedBox(height: 6),
           Text(
@@ -650,8 +612,8 @@ class HeatmapGrid extends StatelessWidget {
                         color: cell.isActive
                             ? Theme.of(context).colorScheme.primary
                             : Theme.of(context).brightness == Brightness.dark
-                                ? const Color(0xFF30231A)
-                                : const Color(0xFFF3EADF),
+                            ? const Color(0xFF30231A)
+                            : const Color(0xFFF3EADF),
                         borderRadius: BorderRadius.circular(8),
                       ),
                     ),
@@ -691,10 +653,7 @@ class EmptyState extends StatelessWidget {
             Text(title, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 8),
             Text(message, textAlign: TextAlign.center),
-            if (action != null) ...[
-              const SizedBox(height: 18),
-              action!,
-            ],
+            if (action != null) ...[const SizedBox(height: 18), action!],
           ],
         ),
       ),

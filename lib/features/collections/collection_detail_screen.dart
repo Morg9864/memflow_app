@@ -6,7 +6,11 @@ import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
 
-Future<bool> _confirmDeletion(BuildContext context, String title, String message) async {
+Future<bool> _confirmDeletion(
+  BuildContext context,
+  String title,
+  String message,
+) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
@@ -31,29 +35,32 @@ Future<bool> _confirmDeletion(BuildContext context, String title, String message
   return confirmed == true;
 }
 
-final collectionProvider =
-    StreamProvider.family<CollectionListItem?, String>((ref, collectionId) {
+final collectionProvider = StreamProvider.family<CollectionListItem?, String>((
+  ref,
+  collectionId,
+) {
   return ref.watch(appRepositoryProvider).watchCollection(collectionId);
 });
 
 final collectionDecksProvider =
     StreamProvider.family<List<DeckListItem>, String>((ref, collectionId) {
-  return ref.watch(appRepositoryProvider).watchDecksForCollection(collectionId);
-});
+      return ref
+          .watch(appRepositoryProvider)
+          .watchDecksForCollection(collectionId);
+    });
 
 class CollectionDetailScreen extends ConsumerStatefulWidget {
-  const CollectionDetailScreen({
-    super.key,
-    required this.collectionId,
-  });
+  const CollectionDetailScreen({super.key, required this.collectionId});
 
   final String collectionId;
 
   @override
-  ConsumerState<CollectionDetailScreen> createState() => _CollectionDetailScreenState();
+  ConsumerState<CollectionDetailScreen> createState() =>
+      _CollectionDetailScreenState();
 }
 
-class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen> {
+class _CollectionDetailScreenState
+    extends ConsumerState<CollectionDetailScreen> {
   bool _busy = false;
 
   Future<void> _launchStudy({String? deckId}) async {
@@ -73,7 +80,9 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
     if (!ok || !mounted) return;
     setState(() => _busy = true);
     try {
-      await ref.read(appRepositoryProvider).deleteCollection(widget.collectionId);
+      await ref
+          .read(appRepositoryProvider)
+          .deleteCollection(widget.collectionId);
       if (mounted) context.go('/');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -111,7 +120,8 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
           if (item == null) {
             return const EmptyState(
               title: 'Collection introuvable',
-              message: "Cette collection n'existe pas ou n'est plus disponible.",
+              message:
+                  "Cette collection n'existe pas ou n'est plus disponible.",
             );
           }
           return Column(
@@ -137,13 +147,17 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
                         value: _CollectionAction.delete,
                         child: Row(
                           children: [
-                            Icon(Icons.delete_outline_rounded,
-                                color: Theme.of(context).colorScheme.error, size: 20),
+                            Icon(
+                              Icons.delete_outline_rounded,
+                              color: Theme.of(context).colorScheme.error,
+                              size: 20,
+                            ),
                             const SizedBox(width: 12),
                             Text(
                               'Supprimer la collection',
-                              style:
-                                  TextStyle(color: Theme.of(context).colorScheme.error),
+                              style: TextStyle(
+                                color: Theme.of(context).colorScheme.error,
+                              ),
                             ),
                           ],
                         ),
@@ -166,7 +180,10 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
               const SizedBox(height: 18),
               Text(item.name, style: Theme.of(context).textTheme.displaySmall),
               const SizedBox(height: 8),
-              Text(item.description, style: Theme.of(context).textTheme.bodyLarge),
+              Text(
+                item.description,
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
               const SizedBox(height: 22),
               Row(
                 children: [
@@ -180,17 +197,17 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
                   const SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
-                      value: '${item.notDoneCards}',
-                      label: 'non faites',
-                      icon: Icons.hourglass_empty_rounded,
+                      value: '${item.cardsDone}',
+                      label: 'faites',
+                      icon: Icons.check_circle_outline_rounded,
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
-                      value: '${item.errorCount}',
-                      label: 'erronées',
-                      icon: Icons.cancel_outlined,
+                      value: '${item.dueCards}',
+                      label: 'à revoir',
+                      icon: Icons.schedule_rounded,
                     ),
                   ),
                 ],
@@ -200,7 +217,7 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
                 children: [
                   const SectionLabel('Decks'),
                   const Spacer(),
-                  Text(deckCount == null ? '' : '$deckCount packs'),
+                  Text(deckCount == null ? '' : '$deckCount decks'),
                 ],
               ),
               const SizedBox(height: 12),
@@ -227,7 +244,8 @@ class _CollectionDetailScreenState extends ConsumerState<CollectionDetailScreen>
                       const SizedBox(height: 80),
                     ],
                   ),
-                  loading: () => const Center(child: CircularProgressIndicator()),
+                  loading: () =>
+                      const Center(child: CircularProgressIndicator()),
                   error: (error, stackTrace) => Text(error.toString()),
                 ),
               ),

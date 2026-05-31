@@ -11,12 +11,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final bootstrap = await AppBootstrap.initialize();
 
-  if (bootstrap.environment.hasSupabase) {
-    await Supabase.initialize(
-      url: bootstrap.environment.supabaseUrl,
-      anonKey: bootstrap.environment.supabaseAnonKey,
-    );
+  if (!bootstrap.environment.hasSupabase) {
+    throw StateError('SUPABASE_URL et SUPABASE_ANON_KEY doivent être définis.');
   }
+
+  await Supabase.initialize(
+    url: bootstrap.environment.supabaseUrl,
+    anonKey: bootstrap.environment.supabaseAnonKey,
+  );
 
   runApp(
     ProviderScope(
