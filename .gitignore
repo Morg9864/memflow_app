@@ -105,6 +105,7 @@ migrate_working_dir/
 # codex and claude
 .codex
 .claude
+.local/
 
 # metadata
 .metadata

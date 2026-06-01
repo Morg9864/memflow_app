@@ -32,9 +32,10 @@ MemFlow est une application de révision pensée pour rester fluide sans connexi
 
 - `Offline-first` avec persistance locale via Drift et SQLite.
 - `Spaced repetition` pour prioriser les cartes à revoir au bon moment.
-- `Plusieurs modes d'étude` : QCM, flashcards classiques/inversées, texte à trous, saisie libre, vrai/faux.
+- `Plusieurs modes d'étude` : QCM, flashcards classiques/inversées, texte à trous avec banque de mots, saisie libre, vrai/faux.
 - `Organisation par collections et decks` pour structurer les révisions.
 - `Import / export CSV` pour alimenter rapidement vos jeux de cartes.
+- `Prompt IA intégré` dans l'écran d'import, consultable, copiable et téléchargeable.
 - `Statistiques de progression` pour suivre la série, le taux de réussite et l'activité.
 - `Thèmes clair et sombre` avec une UI cohérente sur tous les écrans.
 
@@ -129,7 +130,7 @@ Variables attendues :
 
 1. Copier `.env.example` vers `.env`
 2. Renseigner les variables de votre projet Supabase
-3. Appliquer le schéma SQL situé dans `supabase/migrations/20260529183000_init_memflow.sql`
+3. Appliquer les migrations SQL du dossier `supabase/migrations/`
 4. Lancer l'application avec `--dart-define-from-file=.env`
 
 Exemple :
@@ -139,6 +140,39 @@ flutter run -d chrome --dart-define-from-file=.env
 ```
 
 Les valeurs sont lues au bootstrap avec `String.fromEnvironment(...)`.
+
+## Import CSV et prompt IA
+
+L'écran `Importer` permet :
+
+- d'importer un CSV MemFlow ;
+- de télécharger un template CSV à jour ;
+- de consulter le prompt IA complet utilisé pour générer des CSV ;
+- de copier ce prompt dans le presse-papiers ;
+- de télécharger ce prompt au format `.md`.
+
+### Format CSV attendu
+
+Colonnes recommandées :
+
+```text
+collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank
+```
+
+Rappels importants :
+
+- `accepted_answers` sert au mode `saisie libre`.
+- `cloze_text` + `cloze_answers` + `cloze_word_bank` servent au vrai mode `texte à trous`.
+- `cloze_text` utilise des trous au format `{{réponse}}`.
+- `cloze_answers` contient les bonnes réponses dans l'ordre des trous, séparées par `|`.
+- `cloze_word_bank` contient la banque de mots affichée à l'utilisateur, avec bonnes réponses et distracteurs.
+- Un ancien CSV avec seulement `cloze_text` reste importable, mais n'active plus le mode `texte à trous` structuré.
+
+Exemple :
+
+```text
+React & Hooks;Hooks de base;Quel hook React retourne une valeur et une fonction de mise à jour ?;useState;useEffect;useMemo;useRef;-;useState retourne une valeur actuelle et une fonction pour la modifier.;1;facile;react|hooks;Cours React;React, le hook {{useState}} retourne une valeur actuelle et une fonction pour la {{modifier}}.;useState|use state;useState|modifier;useState|useEffect|afficher|modifier
+```
 
 ## Structure du projet
 
@@ -181,7 +215,8 @@ Tests ciblés :
 ```bash
 flutter test test/services/spaced_repetition_service_test.dart
 flutter test test/services/card_mode_service_test.dart
-flutter test test/services/sync_service_test.dart
+flutter test test/services/csv_import_service_test.dart
+flutter test test/features/study/study_screen_test.dart
 ```
 
 ## Build
