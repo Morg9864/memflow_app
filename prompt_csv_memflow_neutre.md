@@ -142,6 +142,11 @@ Règles de qualité pour les textes à trous :
 - évite les trous ambigus où plusieurs options pourraient convenir ;
 - la banque de mots doit être crédible, homogène en longueur et en registre ;
 - les distracteurs doivent être plausibles, mais ne pas rendre la phrase absurde ;
+- chaque option de `cloze_word_bank` doit pouvoir remplacer le trou en produisant une phrase grammaticalement correcte ;
+- les distracteurs doivent être du même type grammatical que la bonne réponse : si le trou attend un groupe nominal, une date, un verbe à l'infinitif, une condition ou une expression figée, toutes les options doivent suivre ce même format ;
+- harmonise la forme des options d'une même banque : article ou non, singulier ou pluriel, genre, niveau de précision et casse initiale ;
+- n'utilise jamais la casse comme indice involontaire : si la bonne réponse apparaît en minuscule dans la phrase, les distracteurs ne doivent pas la trahir par une majuscule initiale, sauf contrainte intrinsèque impossible à éviter ;
+- avant de valider une bank, remplace mentalement le trou par chaque option et supprime toute proposition qui donne une phrase syntaxiquement cassée, sémantiquement incohérente ou manifestement hors cadre ;
 - `cloze_answers` doit reprendre exactement les bonnes réponses dans l'ordre des trous ;
 - `cloze_word_bank` doit contenir toutes les bonnes réponses, plus quelques distracteurs plausibles.
 
@@ -218,6 +223,9 @@ Règles strictes spécifiques au texte à trous :
 - si `cloze_text` est rempli, alors `cloze_answers` et `cloze_word_bank` doivent aussi être remplis ;
 - `cloze_answers` doit contenir exactement autant d'éléments qu'il y a de trous dans `cloze_text` ;
 - `cloze_word_bank` doit contenir toutes les bonnes réponses et quelques distracteurs plausibles ;
+- chaque entrée de `cloze_word_bank` doit être grammaticalement compatible avec l'emplacement du trou ;
+- aucune entrée de `cloze_word_bank` ne doit rendre la phrase absurde juste par sa forme ; elle doit être plausible comme complétion, même si elle reste factuellement fausse ;
+- les distracteurs d'une même bank doivent être formatés comme la bonne réponse, sans indice de casse, d'article ou de structure grammaticale ;
 - ne mets pas plusieurs fois inutilement le même mot dans `cloze_word_bank`.
 
 ## Critère de réussite
