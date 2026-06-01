@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../app/app_scaffold_messenger.dart';
 import '../../app/session_card_limit_controller.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
@@ -11,10 +14,18 @@ import 'mode_selection_sheet.dart';
 import 'study_controller.dart';
 
 class StudyScreen extends ConsumerStatefulWidget {
-  const StudyScreen({super.key, this.collectionId, this.deckId});
+  const StudyScreen({
+    super.key,
+    this.collectionId,
+    this.deckId,
+    this.forcedMode,
+    this.controller,
+  });
 
   final String? collectionId;
   final String? deckId;
+  final TestMode? forcedMode;
+  final StudyController? controller;
 
   @override
   ConsumerState<StudyScreen> createState() => _StudyScreenState();
@@ -23,14 +34,22 @@ class StudyScreen extends ConsumerStatefulWidget {
 class _StudyScreenState extends ConsumerState<StudyScreen> {
   StudySessionState? _state;
   Object? _error;
-  bool _submitting = false;
   late final StudyController _controller;
   final TextEditingController _freeTextController = TextEditingController();
+  final List<_PendingReviewSubmission> _pendingReviewSubmissions = [];
+  bool _isApplyingReview = false;
+  bool _isProcessingReviewQueue = false;
+  bool _isReviewRetryPending = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = StudyController(ref.read(appRepositoryProvider));
+    _controller =
+        widget.controller ?? StudyController(ref.read(appRepositoryProvider));
+    if (widget.forcedMode != null) {
+      Future.microtask(() => _load(forcedMode: widget.forcedMode));
+      return;
+    }
     Future.microtask(_askModeAndLoad);
   }
 
@@ -55,7 +74,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         sessionCardLimit: ref.read(sessionCardLimitProvider),
       );
       if (mounted) {
-        setState(() => _state = session);
+        setState(() => _state = _controller.prepareCurrentCard(session));
       }
     } catch (error) {
       if (mounted) {
@@ -105,32 +124,101 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
 
   Future<void> _applyReview(ReviewResult result) async {
     final state = _state;
-    if (state == null || _submitting) return;
+    if (state == null || _isApplyingReview) return;
 
-    setState(() => _submitting = true);
+    _isApplyingReview = true;
     try {
-      await _controller.submitReview(
+      final submission = _PendingReviewSubmission(
         cardId: state.currentCard.id,
         result: result,
         wasCorrect:
             state.currentAnswerWasCorrect ?? result != ReviewResult.again,
       );
       final nextState = _controller.advance(state, result);
-      if (!mounted) return;
+
+      _queueReviewSubmission(submission);
+      _freeTextController.clear();
+
       if (nextState.isCompleted) {
+        if (!mounted) return;
         context.go(
           '/session-summary',
           extra: _controller.buildSummary(nextState),
         );
         return;
       }
-      _freeTextController.clear();
+
+      if (!mounted) return;
       setState(() => _state = nextState);
     } finally {
-      if (mounted) {
-        setState(() => _submitting = false);
-      }
+      _isApplyingReview = false;
     }
+  }
+
+  void _queueReviewSubmission(_PendingReviewSubmission submission) {
+    _pendingReviewSubmissions.add(submission);
+    if (_isReviewRetryPending || _isProcessingReviewQueue) {
+      return;
+    }
+    unawaited(_flushPendingReviewSubmissions());
+  }
+
+  Future<void> _flushPendingReviewSubmissions() async {
+    if (_isProcessingReviewQueue || _isReviewRetryPending) {
+      return;
+    }
+
+    _isProcessingReviewQueue = true;
+    try {
+      while (_pendingReviewSubmissions.isNotEmpty) {
+        final submission = _pendingReviewSubmissions.first;
+        try {
+          await _controller.submitReview(
+            cardId: submission.cardId,
+            result: submission.result,
+            wasCorrect: submission.wasCorrect,
+          );
+          _pendingReviewSubmissions.removeAt(0);
+        } catch (_) {
+          _isReviewRetryPending = true;
+          _showReviewSaveError();
+          break;
+        }
+      }
+    } finally {
+      _isProcessingReviewQueue = false;
+    }
+  }
+
+  void _retryPendingReviewSubmissions() {
+    if (_pendingReviewSubmissions.isEmpty) {
+      _isReviewRetryPending = false;
+      return;
+    }
+
+    _isReviewRetryPending = false;
+    unawaited(_flushPendingReviewSubmissions());
+  }
+
+  void _showReviewSaveError() {
+    final messenger = appScaffoldMessengerKey.currentState;
+    if (messenger == null) {
+      return;
+    }
+
+    messenger
+      ..clearSnackBars()
+      ..showSnackBar(
+        SnackBar(
+          content: const Text(
+            'La carte suivante est déjà prête, mais une sauvegarde a échoué.',
+          ),
+          action: SnackBarAction(
+            label: 'Réessayer',
+            onPressed: _retryPendingReviewSubmissions,
+          ),
+        ),
+      );
   }
 
   void _reveal() {
@@ -173,6 +261,23 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     _exitStudy();
   }
 
+  String _sessionErrorMessage(Object error) {
+    final rawMessage = error is StateError
+        ? error.message.toString()
+        : error.toString();
+
+    if (rawMessage.contains('Aucune carte disponible')) {
+      return 'Il n’y a aucune carte à réviser ici pour le moment.';
+    }
+    if (rawMessage.contains('Deck introuvable')) {
+      return 'Ce deck n’est plus disponible.';
+    }
+    if (rawMessage.contains('Collection introuvable')) {
+      return 'Cette collection n’est plus disponible.';
+    }
+    return 'Impossible de démarrer cette session pour le moment.';
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = _state;
@@ -184,7 +289,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
           body: SafeArea(
             child: EmptyState(
               title: 'Session indisponible',
-              message: _error.toString(),
+              message: _sessionErrorMessage(_error!),
               action: FilledButton(
                 onPressed: _exitStudy,
                 child: const Text('Retour'),
@@ -210,6 +315,13 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     final options = mode == TestMode.multipleChoice
         ? card.buildOptions()
         : const <String>[];
+    // Proposition stable affichée en mode vrai/faux (fallback sûr sur la bonne
+    // réponse si l'état n'en contient pas encore ou est vide).
+    final storedProposition = state.trueFalseProposition;
+    final trueFalseProposition =
+        (storedProposition == null || storedProposition.trim().isEmpty)
+        ? card.correctAnswer
+        : storedProposition;
 
     return PopScope(
       canPop: _canPopStudy(),
@@ -296,12 +408,19 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                                 'tf-${card.id}-${state.hasValidatedAnswer}',
                               ),
                               card: card,
+                              proposition: trueFalseProposition,
+                              propositionIsCorrect: _controller
+                                  .isTrueFalsePropositionCorrect(
+                                    card,
+                                    trueFalseProposition,
+                                  ),
                               selectedIndex: state.selectedOptionIndex,
                               hasValidatedAnswer: state.hasValidatedAnswer,
                               onSelect: (index) {
-                                final correct = _isTrueFalseSelectionCorrect(
+                                final correct = _controller.evaluateTrueFalse(
                                   card,
-                                  index,
+                                  trueFalseProposition,
+                                  answeredTrue: index == 0,
                                 );
                                 setState(() {
                                   _state = state.copyWith(
@@ -341,7 +460,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                               ReviewButton(
                                 result: result,
                                 isSuggested: result == suggested,
-                                enabled: !_submitting,
                                 onPressed: () => _applyReview(result),
                               ),
                           ],
@@ -367,6 +485,18 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     }
     return state.revealed;
   }
+}
+
+class _PendingReviewSubmission {
+  const _PendingReviewSubmission({
+    required this.cardId,
+    required this.result,
+    required this.wasCorrect,
+  });
+
+  final String cardId;
+  final ReviewResult result;
+  final bool wasCorrect;
 }
 
 class _FlashcardMode extends StatelessWidget {
@@ -728,19 +858,26 @@ class _TrueFalseMode extends StatelessWidget {
   const _TrueFalseMode({
     super.key,
     required this.card,
+    required this.proposition,
+    required this.propositionIsCorrect,
     required this.selectedIndex,
     required this.hasValidatedAnswer,
     required this.onSelect,
   });
 
   final StudyCard card;
+  final String proposition;
+  final bool propositionIsCorrect;
   final int? selectedIndex;
   final bool hasValidatedAnswer;
   final void Function(int index) onSelect;
 
   @override
   Widget build(BuildContext context) {
-    final correctIndex = _trueFalseCorrectIndex(card);
+    // "Vrai" (index 0) est la bonne réponse quand la proposition affichée
+    // correspond à la bonne réponse, sinon c'est "Faux" (index 1).
+    final correctIndex = propositionIsCorrect ? 0 : 1;
+    final theme = Theme.of(context);
 
     return ListView(
       children: [
@@ -750,12 +887,35 @@ class _TrueFalseMode extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SectionLabel('Vrai / Faux'),
-                const SizedBox(height: 14),
-                Text(
-                  card.question,
-                  style: Theme.of(context).textTheme.headlineMedium,
+                const SectionLabel('Question'),
+                const SizedBox(height: 12),
+                Text(card.question, style: theme.textTheme.headlineMedium),
+                const SizedBox(height: 18),
+                // Petit séparateur visuel entre la question et la réponse
+                // proposée (volontairement plus court que la ligne pleine).
+                Container(
+                  width: 44,
+                  height: 3,
+                  decoration: BoxDecoration(
+                    color: theme.dividerColor,
+                    borderRadius: BorderRadius.circular(999),
+                  ),
                 ),
+                const SizedBox(height: 18),
+                const SectionLabel('Cette réponse est-elle correcte ?'),
+                const SizedBox(height: 12),
+                Text(proposition, style: theme.textTheme.headlineSmall),
+                if (card.hint != null) ...[
+                  const SizedBox(height: 22),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    card.hint!,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -782,18 +942,12 @@ class _TrueFalseMode extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SectionLabel('Réponse attendue'),
+                  const SectionLabel('Réponse correcte'),
                   const SizedBox(height: 10),
-                  Text(
-                    card.correctAnswer,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
+                  Text(card.correctAnswer, style: theme.textTheme.titleLarge),
                   if (card.explanation != null) ...[
                     const SizedBox(height: 14),
-                    Text(
-                      card.explanation!,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
+                    Text(card.explanation!, style: theme.textTheme.bodyLarge),
                   ],
                 ],
               ),
@@ -803,16 +957,4 @@ class _TrueFalseMode extends StatelessWidget {
       ],
     );
   }
-}
-
-bool _isTrueFalseSelectionCorrect(StudyCard card, int index) {
-  final normalized = card.correctAnswer.toLowerCase();
-  return (index == 0 &&
-          (normalized.contains('true') || normalized.contains('vrai'))) ||
-      (index == 1 &&
-          (normalized.contains('false') || normalized.contains('faux')));
-}
-
-int _trueFalseCorrectIndex(StudyCard card) {
-  return _isTrueFalseSelectionCorrect(card, 0) ? 0 : 1;
 }

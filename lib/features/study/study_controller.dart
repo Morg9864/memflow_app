@@ -50,6 +50,52 @@ class StudyController {
     return _normalize(options[selectedIndex]) == _normalize(card.correctAnswer);
   }
 
+  /// Tire au sort la proposition affichée en mode vrai/faux parmi la bonne
+  /// réponse et les mauvaises réponses de la carte. Retourne `null` lorsque la
+  /// carte n'est pas en mode vrai/faux.
+  String? buildTrueFalseProposition(StudyCard card) {
+    if (card.currentTestMode != TestMode.trueFalse) {
+      return null;
+    }
+    final wrongAnswers = card.wrongAnswers
+        .where((answer) => answer.trim().isNotEmpty)
+        .toList();
+    final pool = <String>[
+      if (card.correctAnswer.trim().isNotEmpty) card.correctAnswer,
+      ...wrongAnswers,
+    ];
+    if (pool.isEmpty) {
+      return null;
+    }
+    return pool[_random.nextInt(pool.length)];
+  }
+
+  /// Mémorise dans l'état une proposition stable pour la carte courante.
+  /// À appeler au chargement de la session et à chaque changement de carte.
+  StudySessionState prepareCurrentCard(StudySessionState state) {
+    final proposition = buildTrueFalseProposition(state.currentCard);
+    return state.copyWith(
+      trueFalseProposition: proposition,
+      clearTrueFalseProposition: proposition == null,
+    );
+  }
+
+  /// Indique si la proposition affichée correspond à la bonne réponse.
+  bool isTrueFalsePropositionCorrect(StudyCard card, String proposition) {
+    return _normalize(proposition) == _normalize(card.correctAnswer);
+  }
+
+  /// Corrige une réponse vrai/faux à partir de la proposition affichée.
+  /// "Vrai" ([answeredTrue] = true) est correct si la proposition est la bonne
+  /// réponse ; "Faux" est correct si c'est une mauvaise réponse.
+  bool evaluateTrueFalse(
+    StudyCard card,
+    String proposition, {
+    required bool answeredTrue,
+  }) {
+    return answeredTrue == isTrueFalsePropositionCorrect(card, proposition);
+  }
+
   bool evaluateFreeText(StudyCard card, String answer) {
     final normalizedAnswer = _normalize(answer);
     final accepted = card.acceptedAnswers.isEmpty
@@ -147,6 +193,8 @@ class StudyController {
       );
     }
 
+    final nextProposition = buildTrueFalseProposition(nextCards[nextIndex]);
+
     return state.copyWith(
       cards: nextCards,
       seenCardIds: updatedSeenCardIds,
@@ -159,6 +207,8 @@ class StudyController {
       reviewCounts: updatedCounts,
       clearCorrectness: true,
       isCompleted: false,
+      trueFalseProposition: nextProposition,
+      clearTrueFalseProposition: nextProposition == null,
     );
   }
 
@@ -180,7 +230,7 @@ class StudyController {
   }
 
   bool _shouldRepeatInSession(ReviewResult result) {
-    return result == ReviewResult.again || result == ReviewResult.hard;
+    return result == ReviewResult.again;
   }
 
   String _normalize(String value) {

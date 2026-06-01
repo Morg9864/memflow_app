@@ -79,6 +79,7 @@ class AppTheme {
       textTheme: TextTheme(
         displaySmall: title.copyWith(fontSize: 34, height: 1.1),
         headlineMedium: title.copyWith(fontSize: 28, height: 1.1),
+        headlineSmall: title.copyWith(fontSize: 24, height: 1.15),
         titleLarge: title.copyWith(fontSize: 22, height: 1.15),
         titleMedium: body.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
         bodyLarge: body.copyWith(fontSize: 16, height: 1.45),

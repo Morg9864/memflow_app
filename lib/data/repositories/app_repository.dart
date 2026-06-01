@@ -691,6 +691,20 @@ class AppRepository {
   }
 
   TestMode _resolveMode(FlashcardRecord card, TestMode? forcedMode) {
+    final resolved = _selectMode(card, forcedMode);
+    // Le mode vrai/faux a besoin d'au moins une mauvaise réponse pour pouvoir
+    // afficher une proposition incorrecte. Sans cela, on bascule sur la
+    // flashcard classique plutôt que de présenter un mode dégradé.
+    final hasWrongAnswer = card.wrongAnswers.any(
+      (answer) => answer.trim().isNotEmpty,
+    );
+    if (resolved == TestMode.trueFalse && !hasWrongAnswer) {
+      return TestMode.classicFlashcard;
+    }
+    return resolved;
+  }
+
+  TestMode _selectMode(FlashcardRecord card, TestMode? forcedMode) {
     if (forcedMode == null) {
       final allowed = card.allowedTestModes
           .where(

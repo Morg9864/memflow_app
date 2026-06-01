@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../domain/models/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
+import 'app_scaffold_messenger.dart';
 import 'providers.dart';
 import 'router.dart';
 
@@ -19,6 +20,7 @@ class MemFlowApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'MemFlow',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: appScaffoldMessengerKey,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themePreference.themeMode,
@@ -29,12 +31,10 @@ class MemFlowApp extends ConsumerWidget {
             duration: const Duration(milliseconds: 180),
             child: child ?? const SizedBox.shrink(),
           ),
-          loading: () => const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          ),
-          error: (error, stackTrace) => Scaffold(
-            body: Center(child: Text(error.toString())),
-          ),
+          loading: () =>
+              const Scaffold(body: Center(child: CircularProgressIndicator())),
+          error: (error, stackTrace) =>
+              Scaffold(body: Center(child: Text(error.toString()))),
         );
       },
     );

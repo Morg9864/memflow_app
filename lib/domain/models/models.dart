@@ -508,6 +508,7 @@ class StudySessionState {
     required this.reviewCounts,
     required this.currentAnswerWasCorrect,
     required this.isCompleted,
+    this.trueFalseProposition,
   });
 
   final String deckTitle;
@@ -525,6 +526,11 @@ class StudySessionState {
   final Map<ReviewResult, int> reviewCounts;
   final bool? currentAnswerWasCorrect;
   final bool isCompleted;
+
+  /// Proposition affichée pour le mode vrai/faux, tirée au sort parmi la bonne
+  /// réponse et les mauvaises réponses. Reste stable tant que la carte courante
+  /// ne change pas. `null` pour les autres modes.
+  final String? trueFalseProposition;
 
   StudyCard get currentCard => cards[currentIndex];
 
@@ -552,6 +558,8 @@ class StudySessionState {
     bool clearSelectedOption = false,
     bool clearCorrectness = false,
     bool? isCompleted,
+    String? trueFalseProposition,
+    bool clearTrueFalseProposition = false,
   }) {
     return StudySessionState(
       deckTitle: deckTitle ?? this.deckTitle,
@@ -573,6 +581,9 @@ class StudySessionState {
           ? null
           : (currentAnswerWasCorrect ?? this.currentAnswerWasCorrect),
       isCompleted: isCompleted ?? this.isCompleted,
+      trueFalseProposition: clearTrueFalseProposition
+          ? null
+          : (trueFalseProposition ?? this.trueFalseProposition),
     );
   }
 }

@@ -13,6 +13,7 @@ import '../features/collections/deck_cards_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/import/import_screen.dart';
 import '../features/legal/legal_document_screen.dart';
+import '../features/navigation/not_found_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/settings_screen.dart';
 import '../features/stats/stats_screen.dart';
@@ -52,6 +53,8 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: '/',
     refreshListenable: refresh,
+    errorBuilder: (context, state) =>
+        NotFoundScreen(requestedPath: state.uri.toString()),
     redirect: (context, state) {
       final loggedIn = authService.currentSession != null;
       final atAuth = state.matchedLocation == '/auth';
