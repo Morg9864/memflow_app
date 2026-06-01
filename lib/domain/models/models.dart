@@ -175,6 +175,7 @@ class DeckListItem {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.isDisabled = false,
   });
 
   final String id;
@@ -189,6 +190,7 @@ class DeckListItem {
   final DeckStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isDisabled;
 
   String get badgeLabel {
     if (status == DeckStatus.dues && dueCards > 0) {
@@ -227,6 +229,7 @@ class DeckRecord {
     required this.difficulty,
     required this.createdAt,
     required this.updatedAt,
+    this.isDisabled = false,
   });
 
   final String id;
@@ -236,6 +239,7 @@ class DeckRecord {
   final DeckDifficulty difficulty;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isDisabled;
 }
 
 class FlashcardRecord {

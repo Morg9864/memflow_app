@@ -41,18 +41,20 @@ class AppRepository {
 
   Stream<List<CollectionListItem>> watchCollections({String search = ''}) {
     final lowered = search.trim().toLowerCase();
-    return _combineLatest4(
+    return _combineLatest5(
       _watchCollectionsInternal(),
+      _watchDecksInternal(),
       _watchFlashcardsInternal(),
       _watchReviewLogsInternal(),
       _clockStream(),
-      (collections, flashcards, reviewLogs, now) {
+      (collections, decks, flashcards, reviewLogs, now) {
+        final activeCards = _excludeDisabledDeckCards(flashcards, decks);
         final items =
             collections
                 .map(
                   (collection) => _buildCollectionListItem(
                     collection,
-                    flashcards
+                    activeCards
                         .where((card) => card.collectionId == collection.id)
                         .toList(),
                     reviewLogs
@@ -104,12 +106,13 @@ class AppRepository {
   }
 
   Stream<HomeStats> watchHomeStats() {
-    return _combineLatest3(
+    return _combineLatest4(
+      _watchDecksInternal(),
       _watchFlashcardsInternal(),
       _watchReviewLogsInternal(),
       _clockStream(),
-      (flashcards, reviewLogs, now) => _buildHomeStats(
-        flashcards: flashcards,
+      (decks, flashcards, reviewLogs, now) => _buildHomeStats(
+        flashcards: _excludeDisabledDeckCards(flashcards, decks),
         reviewLogs: reviewLogs,
         now: now,
       ),
@@ -382,7 +385,7 @@ class AppRepository {
       _clockStream(),
       (cards, decks, now) {
         final deckNames = {for (final deck in decks) deck.id: deck.name};
-        final sortedCards = [...cards]
+        final sortedCards = [..._excludeDisabledDeckCards(cards, decks)]
           ..sort((a, b) {
             final byDueAt = a.dueAt.compareTo(b.dueAt);
             if (byDueAt != 0) {
@@ -443,6 +446,18 @@ class AppRepository {
     await _client
         .from('decks')
         .delete()
+        .eq('id', deckId)
+        .eq('user_id', _userId);
+    _notifyDataChanged();
+  }
+
+  Future<void> setDeckDisabled(String deckId, bool isDisabled) async {
+    await _client
+        .from('decks')
+        .update({
+          'is_disabled': isDisabled,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
         .eq('id', deckId)
         .eq('user_id', _userId);
     _notifyDataChanged();
@@ -567,6 +582,11 @@ class AppRepository {
     return rows.map(_mapDeck).toList();
   }
 
+  Future<Set<String>> _fetchDisabledDeckIds() async {
+    final rows = await _selectRows('decks', equals: {'is_disabled': true});
+    return {for (final row in rows) row['id'] as String};
+  }
+
   Future<List<FlashcardRecord>> _fetchFlashcards({
     String? collectionId,
     String? deckId,
@@ -640,20 +660,28 @@ class AppRepository {
     required DateTime now,
     required int sessionCardLimit,
   }) async {
+    final disabledDeckIds = await _fetchDisabledDeckIds();
+
     final dueCards = await _fetchFlashcards(
       collectionId: collectionId,
       deckId: deckId,
       dueBeforeOrAt: now,
     );
-    if (dueCards.isNotEmpty) {
-      return _takeSessionCards(dueCards, sessionCardLimit);
+    final dueActiveCards = dueCards
+        .where((card) => !disabledDeckIds.contains(card.deckId))
+        .toList();
+    if (dueActiveCards.isNotEmpty) {
+      return _takeSessionCards(dueActiveCards, sessionCardLimit);
     }
 
     final cards = await _fetchFlashcards(
       collectionId: collectionId,
       deckId: deckId,
     );
-    return _takeSessionCards(cards, sessionCardLimit);
+    final activeCards = cards
+        .where((card) => !disabledDeckIds.contains(card.deckId))
+        .toList();
+    return _takeSessionCards(activeCards, sessionCardLimit);
   }
 
   List<FlashcardRecord> _takeSessionCards(
@@ -800,7 +828,27 @@ class AppRepository {
       status: status,
       createdAt: deck.createdAt,
       updatedAt: deck.updatedAt,
+      isDisabled: deck.isDisabled,
     );
+  }
+
+  /// Removes cards that belong to a disabled deck so they no longer count
+  /// towards study sessions or due-card totals. Historical review logs are
+  /// never filtered this way.
+  List<FlashcardRecord> _excludeDisabledDeckCards(
+    List<FlashcardRecord> flashcards,
+    List<DeckRecord> decks,
+  ) {
+    final disabledDeckIds = {
+      for (final deck in decks)
+        if (deck.isDisabled) deck.id,
+    };
+    if (disabledDeckIds.isEmpty) {
+      return flashcards;
+    }
+    return flashcards
+        .where((card) => !disabledDeckIds.contains(card.deckId))
+        .toList();
   }
 
   HomeStats _buildHomeStats({
@@ -1014,6 +1062,7 @@ class AppRepository {
       ),
       createdAt: DateTime.parse(row['created_at'] as String),
       updatedAt: DateTime.parse(row['updated_at'] as String),
+      isDisabled: (row['is_disabled'] as bool?) ?? false,
     );
   }
 
@@ -1222,6 +1271,85 @@ Stream<R> _combineLatest4<A, B, C, D, R>(
       await subB?.cancel();
       await subC?.cancel();
       await subD?.cancel();
+    },
+  );
+
+  return controller.stream;
+}
+
+Stream<R> _combineLatest5<A, B, C, D, E, R>(
+  Stream<A> streamA,
+  Stream<B> streamB,
+  Stream<C> streamC,
+  Stream<D> streamD,
+  Stream<E> streamE,
+  R Function(A a, B b, C c, D d, E e) combine,
+) {
+  late final StreamController<R> controller;
+  StreamSubscription<A>? subA;
+  StreamSubscription<B>? subB;
+  StreamSubscription<C>? subC;
+  StreamSubscription<D>? subD;
+  StreamSubscription<E>? subE;
+  A? latestA;
+  B? latestB;
+  C? latestC;
+  D? latestD;
+  E? latestE;
+  var hasA = false;
+  var hasB = false;
+  var hasC = false;
+  var hasD = false;
+  var hasE = false;
+
+  void emit() {
+    if (hasA && hasB && hasC && hasD && hasE) {
+      controller.add(
+        combine(
+          latestA as A,
+          latestB as B,
+          latestC as C,
+          latestD as D,
+          latestE as E,
+        ),
+      );
+    }
+  }
+
+  controller = StreamController<R>(
+    onListen: () {
+      subA = streamA.listen((value) {
+        latestA = value;
+        hasA = true;
+        emit();
+      }, onError: controller.addError);
+      subB = streamB.listen((value) {
+        latestB = value;
+        hasB = true;
+        emit();
+      }, onError: controller.addError);
+      subC = streamC.listen((value) {
+        latestC = value;
+        hasC = true;
+        emit();
+      }, onError: controller.addError);
+      subD = streamD.listen((value) {
+        latestD = value;
+        hasD = true;
+        emit();
+      }, onError: controller.addError);
+      subE = streamE.listen((value) {
+        latestE = value;
+        hasE = true;
+        emit();
+      }, onError: controller.addError);
+    },
+    onCancel: () async {
+      await subA?.cancel();
+      await subB?.cancel();
+      await subC?.cancel();
+      await subD?.cancel();
+      await subE?.cancel();
     },
   );
 

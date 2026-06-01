@@ -105,6 +105,29 @@ class _CollectionDetailScreenState
     }
   }
 
+  Future<void> _toggleDeckDisabled(DeckListItem deck) async {
+    final willDisable = !deck.isDisabled;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(appRepositoryProvider)
+          .setDeckDisabled(deck.id, willDisable);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              willDisable
+                  ? '"${deck.name}" désactivé'
+                  : '"${deck.name}" réactivé',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final collection = ref.watch(collectionProvider(widget.collectionId));
@@ -244,6 +267,9 @@ class _CollectionDetailScreenState
                           deck: deck,
                           onTap: () => _launchStudy(deckId: deck.id),
                           onDelete: _busy ? null : () => _deleteDeck(deck),
+                          onToggleDisabled: _busy
+                              ? null
+                              : () => _toggleDeckDisabled(deck),
                           onViewCards: () => context.push(
                             '/deck/${deck.id}/cards?name=${Uri.encodeComponent(deck.name)}',
                           ),
