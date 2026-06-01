@@ -26,6 +26,32 @@ void main() {
       currentTestMode: TestMode.multipleChoice,
       allowedTestModes: const [TestMode.multipleChoice],
       clozeText: null,
+      clozeAnswers: const [],
+      clozeWordBank: const [],
+      acceptedAnswers: const [],
+      level: 1,
+      progressDots: 3,
+    );
+  }
+
+  StudyCard buildClozeCard() {
+    return StudyCard(
+      id: 'cloze',
+      collectionId: 'react',
+      deckId: 'deck-1',
+      question:
+          'Quel hook React retourne une valeur et une fonction de mise à jour ?',
+      correctAnswer: 'useState',
+      wrongAnswers: const ['useEffect', 'useMemo', 'useRef'],
+      hint: null,
+      explanation:
+          'useState retourne une valeur actuelle et une fonction pour la modifier.',
+      currentTestMode: TestMode.cloze,
+      allowedTestModes: const [TestMode.cloze],
+      clozeText:
+          'React, le hook {{useState}} retourne une valeur actuelle et une fonction pour la {{modifier}}.',
+      clozeAnswers: const ['useState', 'modifier'],
+      clozeWordBank: const ['useState', 'useEffect', 'afficher', 'modifier'],
       acceptedAnswers: const [],
       level: 1,
       progressDots: 3,
@@ -168,6 +194,47 @@ void main() {
 
       expect(attempts, 2);
       expect(controller.submissions.length, 2);
+    },
+  );
+
+  testWidgets(
+    'structured cloze mode fills blanks from the word bank and validates the full text',
+    (tester) async {
+      final controller = _FakeStudyController(
+        initialState: buildState([buildClozeCard()]),
+        submitReviewImpl:
+            ({
+              required String cardId,
+              required ReviewResult result,
+              required bool wasCorrect,
+            }) async {},
+      );
+
+      await pumpStudyScreen(tester, controller: controller);
+
+      expect(find.text('useEffect'), findsOneWidget);
+      expect(find.text('afficher'), findsOneWidget);
+
+      await tester.tap(find.text('_____').first);
+      await tester.pump();
+      await tester.tap(find.text('useState'));
+      await tester.pump();
+
+      await tester.tap(find.text('_____').first);
+      await tester.pump();
+      await tester.tap(find.text('modifier'));
+      await tester.pump();
+
+      await tester.tap(find.text('Valider ma réponse'));
+      await tester.pump();
+
+      expect(
+        find.text(
+          'React, le hook useState retourne une valeur actuelle et une fonction pour la modifier.',
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('useEffect'), findsWidgets);
     },
   );
 }

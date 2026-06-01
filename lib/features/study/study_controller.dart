@@ -3,6 +3,17 @@ import 'dart:math' as math;
 import '../../data/repositories/app_repository.dart';
 import '../../domain/models/models.dart';
 
+class ClozeToken {
+  const ClozeToken.text(this.text) : gapIndex = null;
+
+  const ClozeToken.gap(this.gapIndex) : text = null;
+
+  final String? text;
+  final int? gapIndex;
+
+  bool get isGap => gapIndex != null;
+}
+
 class StudyController {
   StudyController(AppRepository repository, {math.Random? random})
     : _repository = repository,
@@ -104,23 +115,59 @@ class StudyController {
     return accepted.contains(normalizedAnswer);
   }
 
-  String buildClozePrompt(StudyCard card) {
-    return (card.clozeText ?? card.question).replaceAllMapped(
-      RegExp(r'\{\{([^}]+)\}\}'),
-      (_) => '_____',
-    );
+  List<ClozeToken> buildClozeTokens(StudyCard card) {
+    final source = card.clozeText ?? card.question;
+    final matches = RegExp(r'\{\{([^}]+)\}\}').allMatches(source).toList();
+    if (matches.isEmpty) {
+      return [ClozeToken.text(source)];
+    }
+
+    final tokens = <ClozeToken>[];
+    var cursor = 0;
+    for (var gapIndex = 0; gapIndex < matches.length; gapIndex++) {
+      final match = matches[gapIndex];
+      if (match.start > cursor) {
+        tokens.add(ClozeToken.text(source.substring(cursor, match.start)));
+      }
+      tokens.add(ClozeToken.gap(gapIndex));
+      cursor = match.end;
+    }
+    if (cursor < source.length) {
+      tokens.add(ClozeToken.text(source.substring(cursor)));
+    }
+    return tokens;
   }
 
-  bool evaluateCloze(StudyCard card, String answer) {
-    final matches = RegExp(
-      r'\{\{([^}]+)\}\}',
-    ).allMatches(card.clozeText ?? '').map((match) => match.group(1)!).toList();
-    final accepted = <String>[
-      ...matches,
-      ...card.acceptedAnswers,
-      card.correctAnswer,
-    ].map(_normalize);
-    return accepted.contains(_normalize(answer));
+  List<String> buildClozeWordBank(StudyCard card) {
+    final wordBank = [...card.clozeWordBank];
+    wordBank.shuffle(_random);
+    return wordBank;
+  }
+
+  List<bool> evaluateClozeGaps(StudyCard card, List<String?> answers) {
+    return List.generate(card.clozeAnswers.length, (index) {
+      final providedAnswer = index < answers.length ? answers[index] : null;
+      return _normalize(providedAnswer ?? '') ==
+          _normalize(card.clozeAnswers[index]);
+    });
+  }
+
+  bool evaluateCloze(StudyCard card, List<String?> answers) {
+    final results = evaluateClozeGaps(card, answers);
+    return results.isNotEmpty && results.every((isCorrect) => isCorrect);
+  }
+
+  String buildClozeSolution(StudyCard card) {
+    final source = card.clozeText ?? card.question;
+    var gapIndex = 0;
+    return source.replaceAllMapped(RegExp(r'\{\{([^}]+)\}\}'), (match) {
+      final fallback = match.group(1)?.trim() ?? '';
+      if (gapIndex >= card.clozeAnswers.length) {
+        gapIndex += 1;
+        return fallback;
+      }
+      return card.clozeAnswers[gapIndex++];
+    });
   }
 
   Future<void> submitReview({

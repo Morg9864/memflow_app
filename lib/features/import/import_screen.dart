@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
@@ -19,6 +20,21 @@ class ImportScreen extends ConsumerStatefulWidget {
 class _ImportScreenState extends ConsumerState<ImportScreen> {
   CsvImportPreview? _preview;
   bool _isBusy = false;
+  String? _csvPrompt;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCsvPrompt();
+  }
+
+  Future<void> _loadCsvPrompt() async {
+    final prompt = await rootBundle.loadString('prompt_csv_memflow_neutre.md');
+    if (!mounted) {
+      return;
+    }
+    setState(() => _csvPrompt = prompt);
+  }
 
   Future<void> _pickFile() async {
     final result = await FilePicker.pickFiles(
@@ -50,6 +66,34 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     );
   }
 
+  Future<void> _downloadPrompt() async {
+    final prompt = _csvPrompt;
+    if (prompt == null) {
+      return;
+    }
+    await FilePicker.saveFile(
+      dialogTitle: 'Télécharger le prompt CSV Memflow',
+      fileName: 'prompt_csv_memflow_neutre.md',
+      type: FileType.custom,
+      allowedExtensions: const ['md'],
+      bytes: utf8.encode(prompt),
+    );
+  }
+
+  Future<void> _copyPrompt() async {
+    final prompt = _csvPrompt;
+    if (prompt == null) {
+      return;
+    }
+    await Clipboard.setData(ClipboardData(text: prompt));
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Prompt copié dans le presse-papiers.')),
+    );
+  }
+
   Future<void> _confirmImport() async {
     final preview = _preview;
     if (preview == null || preview.cards.isEmpty) {
@@ -73,12 +117,17 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      bottomNavigation: AppBottomNav(location: GoRouterState.of(context).uri.path),
+      bottomNavigation: AppBottomNav(
+        location: GoRouterState.of(context).uri.path,
+      ),
       child: ListView(
         children: [
           Row(
             children: [
-              Text('Import CSV', style: Theme.of(context).textTheme.displaySmall),
+              Text(
+                'Import CSV',
+                style: Theme.of(context).textTheme.displaySmall,
+              ),
               const Spacer(),
               const ThemeToggleButton(),
             ],
@@ -113,16 +162,74 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Text(
-                'Format recommandé : collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers',
+                'Format recommandé : collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
+            ),
+          ),
+          const SizedBox(height: 22),
+          Card(
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(horizontal: 20),
+              childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+              title: Text(
+                'Prompt CSV Memflow',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              subtitle: Text(
+                'Déplie cette section pour lire, copier ou télécharger le prompt complet.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: _csvPrompt == null ? null : _copyPrompt,
+                        icon: const Icon(Icons.content_copy_rounded),
+                        label: const Text('Copier le prompt'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton.tonalIcon(
+                        onPressed: _csvPrompt == null ? null : _downloadPrompt,
+                        icon: const Icon(Icons.download_rounded),
+                        label: const Text('Télécharger le .md'),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 360),
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Theme.of(
+                      context,
+                    ).colorScheme.primary.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Theme.of(context).dividerColor),
+                  ),
+                  child: _csvPrompt == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : SingleChildScrollView(
+                          child: SelectableText(
+                            _csvPrompt!,
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
+                        ),
+                ),
+              ],
             ),
           ),
           const SizedBox(height: 22),
           if (_preview == null)
             const EmptyState(
               title: 'Aucun fichier chargé',
-              message: 'Charge un fichier pour prévisualiser les cartes détectées et les erreurs.',
+              message:
+                  'Charge un fichier pour prévisualiser les cartes détectées et les erreurs.',
             )
           else
             Card(
@@ -131,11 +238,16 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Prévisualisation', style: Theme.of(context).textTheme.titleLarge),
+                    Text(
+                      'Prévisualisation',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
                     const SizedBox(height: 14),
                     Text('${_preview!.cards.length} cartes détectées'),
                     Text('${_preview!.issues.length} lignes invalides'),
-                    Text('Séparateur : ${_preview!.delimiter == '\t' ? 'tabulation' : _preview!.delimiter}'),
+                    Text(
+                      'Séparateur : ${_preview!.delimiter == '\t' ? 'tabulation' : _preview!.delimiter}',
+                    ),
                     Text('Header : ${_preview!.withHeader ? 'oui' : 'non'}'),
                     const SizedBox(height: 18),
                     if (_preview!.issues.isNotEmpty) ...[
@@ -144,7 +256,9 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                       for (final issue in _preview!.issues)
                         Padding(
                           padding: const EdgeInsets.only(bottom: 8),
-                          child: Text('Ligne ${issue.rowNumber} : ${issue.message}'),
+                          child: Text(
+                            'Ligne ${issue.rowNumber} : ${issue.message}',
+                          ),
                         ),
                       const SizedBox(height: 14),
                     ],
@@ -157,17 +271,27 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                           child: Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.primary.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('${card.collection} • ${card.deck}',
-                                    style: Theme.of(context).textTheme.labelMedium),
+                                Text(
+                                  '${card.collection} • ${card.deck}',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.labelMedium,
+                                ),
                                 const SizedBox(height: 6),
-                                Text(card.question,
-                                    style: Theme.of(context).textTheme.titleMedium),
+                                Text(
+                                  card.question,
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.titleMedium,
+                                ),
                               ],
                             ),
                           ),
@@ -175,8 +299,12 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     ],
                     const SizedBox(height: 8),
                     FilledButton(
-                      onPressed: _isBusy || _preview!.cards.isEmpty ? null : _confirmImport,
-                      child: Text(_isBusy ? 'Import en cours...' : 'Confirmer l’import'),
+                      onPressed: _isBusy || _preview!.cards.isEmpty
+                          ? null
+                          : _confirmImport,
+                      child: Text(
+                        _isBusy ? 'Import en cours...' : 'Confirmer l’import',
+                      ),
                     ),
                   ],
                 ),

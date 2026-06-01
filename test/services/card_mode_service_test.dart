@@ -11,6 +11,8 @@ void main() {
     List<TestMode>? allowedModes,
     int repetitions = 0,
     String? clozeText,
+    List<String> clozeAnswers = const [],
+    List<String> clozeWordBank = const [],
     List<String> acceptedAnswers = const [],
   }) {
     return FlashcardRecord(
@@ -28,11 +30,15 @@ void main() {
           allowedModes ??
           service.allowedModesFor(
             clozeText: clozeText,
+            clozeAnswers: clozeAnswers,
+            clozeWordBank: clozeWordBank,
             acceptedAnswers: acceptedAnswers,
           ),
       lastTestMode: null,
       modeHistory: const [TestMode.multipleChoice],
       clozeText: clozeText,
+      clozeAnswers: clozeAnswers,
+      clozeWordBank: clozeWordBank,
       acceptedAnswers: acceptedAnswers,
       source: null,
       difficulty: DeckDifficulty.facile,
@@ -53,11 +59,23 @@ void main() {
   test('allowed modes include cloze and free text only when data exists', () {
     final modes = service.allowedModesFor(
       clozeText: 'React utilise {{useEffect}}.',
+      clozeAnswers: const ['useEffect'],
+      clozeWordBank: const ['useEffect', 'useState', 'useMemo'],
       acceptedAnswers: const ['useEffect'],
     );
 
     expect(modes, contains(TestMode.multipleChoice));
     expect(modes, contains(TestMode.cloze));
+    expect(modes, contains(TestMode.freeText));
+  });
+
+  test('legacy cloze text alone does not activate cloze mode anymore', () {
+    final modes = service.allowedModesFor(
+      clozeText: 'React utilise {{useEffect}}.',
+      acceptedAnswers: const ['useEffect'],
+    );
+
+    expect(modes, isNot(contains(TestMode.cloze)));
     expect(modes, contains(TestMode.freeText));
   });
 
@@ -89,6 +107,8 @@ void main() {
         currentMode: TestMode.classicFlashcard,
         repetitions: 3,
         clozeText: 'React utilise {{useEffect}}.',
+        clozeAnswers: const ['useEffect'],
+        clozeWordBank: const ['useEffect', 'useState', 'useMemo'],
         acceptedAnswers: const ['useEffect'],
       ),
       ReviewResult.easy,

@@ -21,6 +21,8 @@ void main() {
         TestMode.classicFlashcard,
       ],
       clozeText: null,
+      clozeAnswers: const [],
+      clozeWordBank: const [],
       acceptedAnswers: const [],
       level: 1,
       progressDots: 3,
@@ -44,6 +46,30 @@ void main() {
       currentTestMode: TestMode.trueFalse,
       allowedTestModes: const [TestMode.trueFalse],
       clozeText: null,
+      clozeAnswers: const [],
+      clozeWordBank: const [],
+      acceptedAnswers: const [],
+      level: 1,
+      progressDots: 3,
+    );
+  }
+
+  StudyCard buildClozeCard() {
+    return StudyCard(
+      id: 'cloze',
+      collectionId: 'react',
+      deckId: 'deck-1',
+      question: 'Quel hook React gère un état local ?',
+      correctAnswer: 'useState',
+      wrongAnswers: const ['useEffect', 'useMemo', 'useRef'],
+      hint: null,
+      explanation: null,
+      currentTestMode: TestMode.cloze,
+      allowedTestModes: const [TestMode.cloze],
+      clozeText:
+          'React, le hook {{useState}} retourne une valeur actuelle et une fonction pour la {{modifier}}.',
+      clozeAnswers: const ['useState', 'modifier'],
+      clozeWordBank: const ['useState', 'useEffect', 'afficher', 'modifier'],
       acceptedAnswers: const [],
       level: 1,
       progressDots: 3,
@@ -237,6 +263,46 @@ void main() {
         expect(proposition!.trim().isNotEmpty, isTrue);
         expect({'Paris', 'Lyon'}.contains(proposition), isTrue);
       }
+    });
+  });
+
+  group('mode texte à trous', () {
+    final controller = StudyController.forTesting(random: math.Random(0));
+
+    test('construit des tokens inline pour les trous', () {
+      final tokens = controller.buildClozeTokens(buildClozeCard());
+
+      expect(tokens.where((token) => token.isGap).length, 2);
+      expect(
+        tokens.where((token) => !token.isGap).map((token) => token.text).join(),
+        contains('React, le hook '),
+      );
+    });
+
+    test('valide chaque trou dans l’ordre attendu', () {
+      final card = buildClozeCard();
+
+      expect(
+        controller.evaluateCloze(card, const ['useState', 'modifier']),
+        isTrue,
+      );
+      expect(
+        controller.evaluateCloze(card, const ['modifier', 'useState']),
+        isFalse,
+      );
+      expect(
+        controller.evaluateClozeGaps(card, const ['useState', 'afficher']),
+        [true, false],
+      );
+    });
+
+    test('reconstruit le texte complet pour le feedback', () {
+      final solution = controller.buildClozeSolution(buildClozeCard());
+
+      expect(
+        solution,
+        'React, le hook useState retourne une valeur actuelle et une fonction pour la modifier.',
+      );
     });
   });
 }

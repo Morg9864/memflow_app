@@ -65,3 +65,4 @@ flutter:
   assets:
     - design/
     - memflow.png
+    - prompt_csv_memflow_neutre.md

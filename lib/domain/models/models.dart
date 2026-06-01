@@ -254,6 +254,8 @@ class FlashcardRecord {
     required this.lastTestMode,
     required this.modeHistory,
     required this.clozeText,
+    required this.clozeAnswers,
+    required this.clozeWordBank,
     required this.acceptedAnswers,
     required this.source,
     required this.difficulty,
@@ -284,6 +286,8 @@ class FlashcardRecord {
   final TestMode? lastTestMode;
   final List<TestMode> modeHistory;
   final String? clozeText;
+  final List<String> clozeAnswers;
+  final List<String> clozeWordBank;
   final List<String> acceptedAnswers;
   final String? source;
   final DeckDifficulty? difficulty;
@@ -314,6 +318,8 @@ class FlashcardRecord {
     TestMode? lastTestMode,
     List<TestMode>? modeHistory,
     String? clozeText,
+    List<String>? clozeAnswers,
+    List<String>? clozeWordBank,
     List<String>? acceptedAnswers,
     String? source,
     DeckDifficulty? difficulty,
@@ -344,6 +350,8 @@ class FlashcardRecord {
       lastTestMode: lastTestMode ?? this.lastTestMode,
       modeHistory: modeHistory ?? this.modeHistory,
       clozeText: clozeText ?? this.clozeText,
+      clozeAnswers: clozeAnswers ?? this.clozeAnswers,
+      clozeWordBank: clozeWordBank ?? this.clozeWordBank,
       acceptedAnswers: acceptedAnswers ?? this.acceptedAnswers,
       source: source ?? this.source,
       difficulty: difficulty ?? this.difficulty,
@@ -455,6 +463,8 @@ class CsvImportCardDraft {
     required this.tags,
     required this.source,
     required this.clozeText,
+    required this.clozeAnswers,
+    required this.clozeWordBank,
     required this.acceptedAnswers,
     required this.allowedTestModes,
   });
@@ -471,6 +481,8 @@ class CsvImportCardDraft {
   final List<String> tags;
   final String? source;
   final String? clozeText;
+  final List<String> clozeAnswers;
+  final List<String> clozeWordBank;
   final List<String> acceptedAnswers;
   final List<TestMode> allowedTestModes;
 }
@@ -601,6 +613,8 @@ class StudyCard {
     required this.currentTestMode,
     required this.allowedTestModes,
     required this.clozeText,
+    required this.clozeAnswers,
+    required this.clozeWordBank,
     required this.acceptedAnswers,
     required this.level,
     required this.progressDots,
@@ -617,6 +631,8 @@ class StudyCard {
   final TestMode currentTestMode;
   final List<TestMode> allowedTestModes;
   final String? clozeText;
+  final List<String> clozeAnswers;
+  final List<String> clozeWordBank;
   final List<String> acceptedAnswers;
   final int level;
   final int progressDots;

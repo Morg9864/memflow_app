@@ -333,6 +333,8 @@ class AppRepository {
         'last_test_mode': null,
         'mode_history': [TestMode.multipleChoice.name],
         'cloze_text': draft.clozeText,
+        'cloze_answers': draft.clozeAnswers,
+        'cloze_word_bank': draft.clozeWordBank,
         'accepted_answers': draft.acceptedAnswers,
         'source': draft.source,
         'difficulty': draft.difficulty.name,
@@ -481,6 +483,8 @@ class AppRepository {
         'source',
         'cloze_text',
         'accepted_answers',
+        'cloze_answers',
+        'cloze_word_bank',
       ],
     ];
 
@@ -501,6 +505,8 @@ class AppRepository {
         card.source ?? '',
         card.clozeText ?? '',
         card.acceptedAnswers.join('|'),
+        card.clozeAnswers.join('|'),
+        card.clozeWordBank.join('|'),
       ]);
     }
 
@@ -684,6 +690,8 @@ class AppRepository {
       currentTestMode: _resolveMode(card, forcedMode),
       allowedTestModes: card.allowedTestModes,
       clozeText: card.clozeText,
+      clozeAnswers: card.clozeAnswers,
+      clozeWordBank: card.clozeWordBank,
       acceptedAnswers: card.acceptedAnswers,
       level: card.level,
       progressDots: math.max(3, math.min(6, card.repetitions + 3)),
@@ -716,14 +724,23 @@ class AppRepository {
       }
       return allowed[math.Random().nextInt(allowed.length)];
     }
+    if (forcedMode == TestMode.ordering || forcedMode == TestMode.matching) {
+      return TestMode.classicFlashcard;
+    }
+    if (card.allowedTestModes.contains(forcedMode)) {
+      return forcedMode;
+    }
     if (forcedMode == TestMode.cloze &&
-        (card.clozeText == null || card.clozeText!.isEmpty)) {
+        card.allowedTestModes.contains(TestMode.freeText)) {
       return TestMode.freeText;
     }
-    return switch (forcedMode) {
-      TestMode.ordering || TestMode.matching => TestMode.classicFlashcard,
-      _ => forcedMode,
-    };
+    if (card.allowedTestModes.contains(TestMode.classicFlashcard)) {
+      return TestMode.classicFlashcard;
+    }
+    if (card.allowedTestModes.isNotEmpty) {
+      return card.allowedTestModes.first;
+    }
+    return TestMode.classicFlashcard;
   }
 
   CollectionListItem _buildCollectionListItem(
@@ -1030,6 +1047,8 @@ class AppRepository {
           )
           .toList(),
       clozeText: row['cloze_text'] as String?,
+      clozeAnswers: _toStringList(row['cloze_answers']),
+      clozeWordBank: _toStringList(row['cloze_word_bank']),
       acceptedAnswers: _toStringList(row['accepted_answers']),
       source: row['source'] as String?,
       difficulty: row['difficulty'] == null

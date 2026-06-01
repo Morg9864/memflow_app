@@ -36,6 +36,9 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   Object? _error;
   late final StudyController _controller;
   final TextEditingController _freeTextController = TextEditingController();
+  List<String?> _clozeSelections = const [];
+  List<String> _clozeWordBank = const [];
+  int? _activeClozeGapIndex;
   final List<_PendingReviewSubmission> _pendingReviewSubmissions = [];
   bool _isApplyingReview = false;
   bool _isProcessingReviewQueue = false;
@@ -73,8 +76,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         forcedMode: forcedMode,
         sessionCardLimit: ref.read(sessionCardLimitProvider),
       );
+      final preparedSession = _controller.prepareCurrentCard(session);
+      _prepareCardInputState(preparedSession.currentCard);
       if (mounted) {
-        setState(() => _state = _controller.prepareCurrentCard(session));
+        setState(() => _state = preparedSession);
       }
     } catch (error) {
       if (mounted) {
@@ -109,10 +114,24 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   void _submitTextAnswer({required bool isCloze}) {
     final state = _state;
     if (state == null || state.hasValidatedAnswer) return;
+    if (isCloze) {
+      final isCorrect = _controller.evaluateCloze(
+        state.currentCard,
+        _clozeSelections,
+      );
+      setState(() {
+        _state = state.copyWith(
+          hasValidatedAnswer: true,
+          currentAnswerWasCorrect: isCorrect,
+          freeTextAnswer: _clozeSelections.whereType<String>().join(' | '),
+        );
+        _activeClozeGapIndex = null;
+      });
+      return;
+    }
+
     final answer = _freeTextController.text.trim();
-    final isCorrect = isCloze
-        ? _controller.evaluateCloze(state.currentCard, answer)
-        : _controller.evaluateFreeText(state.currentCard, answer);
+    final isCorrect = _controller.evaluateFreeText(state.currentCard, answer);
     setState(() {
       _state = state.copyWith(
         hasValidatedAnswer: true,
@@ -120,6 +139,94 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         freeTextAnswer: answer,
       );
     });
+  }
+
+  void _prepareCardInputState(StudyCard card) {
+    _freeTextController.clear();
+    _activeClozeGapIndex = null;
+    if (card.currentTestMode != TestMode.cloze) {
+      _clozeSelections = const [];
+      _clozeWordBank = const [];
+      return;
+    }
+
+    _clozeSelections = List<String?>.filled(
+      card.clozeAnswers.length,
+      null,
+      growable: false,
+    );
+    _clozeWordBank = _controller.buildClozeWordBank(card);
+  }
+
+  void _selectClozeGap(int gapIndex) {
+    final state = _state;
+    if (state == null || state.hasValidatedAnswer) {
+      return;
+    }
+
+    final nextSelections = List<String?>.from(_clozeSelections);
+    final hadWord = nextSelections[gapIndex] != null;
+    if (hadWord) {
+      nextSelections[gapIndex] = null;
+    }
+
+    setState(() {
+      _clozeSelections = List<String?>.unmodifiable(nextSelections);
+      _activeClozeGapIndex = gapIndex;
+    });
+  }
+
+  void _fillClozeGap(String word) {
+    final state = _state;
+    if (state == null || state.hasValidatedAnswer) {
+      return;
+    }
+
+    final gapIndex =
+        _activeClozeGapIndex ??
+        _clozeSelections.indexWhere((value) => value == null);
+    if (gapIndex < 0) {
+      return;
+    }
+
+    final nextSelections = List<String?>.from(_clozeSelections);
+    nextSelections[gapIndex] = word;
+    setState(() {
+      _clozeSelections = List<String?>.unmodifiable(nextSelections);
+      _activeClozeGapIndex = _nextEmptyClozeGap(nextSelections, gapIndex);
+    });
+  }
+
+  int? _nextEmptyClozeGap(List<String?> selections, int currentIndex) {
+    for (var index = currentIndex + 1; index < selections.length; index++) {
+      if (selections[index] == null) {
+        return index;
+      }
+    }
+    for (var index = 0; index < currentIndex; index++) {
+      if (selections[index] == null) {
+        return index;
+      }
+    }
+    return null;
+  }
+
+  List<String> _availableClozeWords() {
+    final selectedCounts = <String, int>{};
+    for (final word in _clozeSelections.whereType<String>()) {
+      selectedCounts.update(word, (count) => count + 1, ifAbsent: () => 1);
+    }
+
+    final available = <String>[];
+    for (final word in _clozeWordBank) {
+      final count = selectedCounts[word] ?? 0;
+      if (count > 0) {
+        selectedCounts[word] = count - 1;
+        continue;
+      }
+      available.add(word);
+    }
+    return available;
   }
 
   Future<void> _applyReview(ReviewResult result) async {
@@ -137,7 +244,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       final nextState = _controller.advance(state, result);
 
       _queueReviewSubmission(submission);
-      _freeTextController.clear();
 
       if (nextState.isCompleted) {
         if (!mounted) return;
@@ -149,6 +255,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       }
 
       if (!mounted) return;
+      _prepareCardInputState(nextState.currentCard);
       setState(() => _state = nextState);
     } finally {
       _isApplyingReview = false;
@@ -315,6 +422,18 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     final options = mode == TestMode.multipleChoice
         ? card.buildOptions()
         : const <String>[];
+    final clozeTokens = mode == TestMode.cloze
+        ? _controller.buildClozeTokens(card)
+        : const <ClozeToken>[];
+    final clozeResults = mode == TestMode.cloze
+        ? _controller.evaluateClozeGaps(card, _clozeSelections)
+        : const <bool>[];
+    final clozeSolution = mode == TestMode.cloze
+        ? _controller.buildClozeSolution(card)
+        : '';
+    final availableClozeWords = mode == TestMode.cloze
+        ? _availableClozeWords()
+        : const <String>[];
     // Proposition stable affichée en mode vrai/faux (fallback sûr sur la bonne
     // réponse si l'état n'en contient pas encore ou est vide).
     final storedProposition = state.trueFalseProposition;
@@ -371,20 +490,23 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                               hasValidatedAnswer: state.hasValidatedAnswer,
                               onSelect: _selectOption,
                             ),
-                            TestMode.cloze => _TextEntryMode(
+                            TestMode.cloze => _ClozeMode(
                               key: ValueKey(
                                 'cloze-${card.id}-${state.hasValidatedAnswer}',
                               ),
-                              title: 'Texte à trous',
-                              prompt: _controller.buildClozePrompt(card),
-                              hint: card.hint,
-                              controller: _freeTextController,
+                              prompt: card.question,
+                              tokens: clozeTokens,
+                              selectedWords: _clozeSelections,
+                              availableWords: availableClozeWords,
+                              activeGapIndex: _activeClozeGapIndex,
                               hasValidated: state.hasValidatedAnswer,
                               isCorrect: state.currentAnswerWasCorrect,
-                              answerLabel: 'Réponse attendue',
-                              answerText: card.correctAnswer,
+                              validationResults: clozeResults,
+                              solutionText: clozeSolution,
+                              hint: card.hint,
                               explanation: card.explanation,
-                              actionLabel: 'Valider ma réponse',
+                              onGapTap: _selectClozeGap,
+                              onWordTap: _fillClozeGap,
                               onSubmit: () => _submitTextAnswer(isCloze: true),
                             ),
                             TestMode.freeText => _TextEntryMode(
@@ -734,6 +856,315 @@ class _McqOptionTile extends StatelessWidget {
         child: Text(
           text,
           style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClozeMode extends StatelessWidget {
+  const _ClozeMode({
+    super.key,
+    required this.prompt,
+    required this.tokens,
+    required this.selectedWords,
+    required this.availableWords,
+    required this.activeGapIndex,
+    required this.hasValidated,
+    required this.isCorrect,
+    required this.validationResults,
+    required this.solutionText,
+    required this.hint,
+    required this.explanation,
+    required this.onGapTap,
+    required this.onWordTap,
+    required this.onSubmit,
+  });
+
+  final String prompt;
+  final List<ClozeToken> tokens;
+  final List<String?> selectedWords;
+  final List<String> availableWords;
+  final int? activeGapIndex;
+  final bool hasValidated;
+  final bool? isCorrect;
+  final List<bool> validationResults;
+  final String solutionText;
+  final String? hint;
+  final String? explanation;
+  final void Function(int gapIndex) onGapTap;
+  final void Function(String word) onWordTap;
+  final VoidCallback onSubmit;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final feedbackTone = isCorrect == true
+        ? const Color(0xFF245433)
+        : const Color(0xFF8E2F24);
+    final feedbackBackground = isCorrect == true
+        ? const Color(0xFFEAF3E7)
+        : const Color(0xFFFBE7E4);
+    final promptStyle =
+        theme.textTheme.headlineSmall?.copyWith(height: 1.5) ??
+        theme.textTheme.titleLarge;
+
+    return ListView(
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionLabel('Question'),
+                const SizedBox(height: 12),
+                Text(prompt, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 22),
+                const SectionLabel('Complète le texte'),
+                const SizedBox(height: 14),
+                Text.rich(
+                  TextSpan(
+                    style: promptStyle,
+                    children: [
+                      for (final token in tokens)
+                        if (!token.isGap)
+                          TextSpan(text: token.text)
+                        else
+                          WidgetSpan(
+                            alignment: PlaceholderAlignment.middle,
+                            child: Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
+                              child: _ClozeBlankChip(
+                                text: selectedWords[token.gapIndex!] ?? '_____',
+                                isActive:
+                                    !hasValidated &&
+                                    activeGapIndex == token.gapIndex,
+                                isFilled:
+                                    selectedWords[token.gapIndex!] != null,
+                                isValidated: hasValidated,
+                                isCorrect: hasValidated
+                                    ? validationResults[token.gapIndex!]
+                                    : null,
+                                onTap: hasValidated
+                                    ? null
+                                    : () => onGapTap(token.gapIndex!),
+                              ),
+                            ),
+                          ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Appuie sur un trou puis sur un mot de la banque.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                if (hint != null) ...[
+                  const SizedBox(height: 18),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  Text(
+                    hint!,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionLabel('Banque de mots'),
+                const SizedBox(height: 12),
+                if (availableWords.isEmpty)
+                  Text(
+                    hasValidated
+                        ? 'Tous les mots sont placés.'
+                        : 'Tous les mots de la banque sont actuellement utilisés.',
+                    style: theme.textTheme.bodyMedium,
+                  )
+                else
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: [
+                      for (final word in availableWords)
+                        _ClozeWordChip(
+                          text: word,
+                          enabled: !hasValidated,
+                          onTap: hasValidated ? null : () => onWordTap(word),
+                        ),
+                    ],
+                  ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: hasValidated ? null : onSubmit,
+                  child: const Text('Valider ma réponse'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        if (hasValidated) ...[
+          const SizedBox(height: 16),
+          Card(
+            color: feedbackBackground,
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    (isCorrect == true ? 'Bien joué' : 'Texte complété')
+                        .toUpperCase(),
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: feedbackTone,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    solutionText,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      color: feedbackTone,
+                    ),
+                  ),
+                  if (explanation != null) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      explanation!,
+                      style: theme.textTheme.bodyLarge?.copyWith(
+                        color: feedbackTone,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _ClozeBlankChip extends StatelessWidget {
+  const _ClozeBlankChip({
+    required this.text,
+    required this.isActive,
+    required this.isFilled,
+    required this.isValidated,
+    required this.isCorrect,
+    required this.onTap,
+  });
+
+  final String text;
+  final bool isActive;
+  final bool isFilled;
+  final bool isValidated;
+  final bool? isCorrect;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final borderColor = isValidated
+        ? (isCorrect == true
+              ? const Color(0xFF4D9461)
+              : const Color(0xFFD94A3A))
+        : isActive
+        ? theme.colorScheme.primary
+        : isFilled
+        ? theme.colorScheme.primary.withValues(alpha: 0.55)
+        : theme.dividerColor;
+    final background = isValidated
+        ? (isCorrect == true
+              ? const Color(0xFFEAF3E7)
+              : const Color(0xFFFBE7E4))
+        : isActive
+        ? theme.colorScheme.primary.withValues(alpha: 0.14)
+        : isFilled
+        ? theme.colorScheme.primary.withValues(alpha: 0.08)
+        : theme.colorScheme.surface;
+    final foreground = isValidated
+        ? (isCorrect == true
+              ? const Color(0xFF245433)
+              : const Color(0xFF8E2F24))
+        : isFilled
+        ? theme.colorScheme.onSurface
+        : theme.colorScheme.onSurfaceVariant;
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: background,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor),
+        ),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: 76),
+          child: Text(
+            text,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.titleSmall?.copyWith(color: foreground),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ClozeWordChip extends StatelessWidget {
+  const _ClozeWordChip({
+    required this.text,
+    required this.enabled,
+    required this.onTap,
+  });
+
+  final String text;
+  final bool enabled;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(999),
+      child: Ink(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+          color: enabled
+              ? theme.colorScheme.primary.withValues(alpha: 0.08)
+              : theme.colorScheme.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: enabled
+                ? theme.colorScheme.primary.withValues(alpha: 0.25)
+                : theme.dividerColor,
+          ),
+        ),
+        child: Text(
+          text,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: enabled
+                ? theme.colorScheme.onSurface
+                : theme.colorScheme.onSurfaceVariant,
+          ),
         ),
       ),
     );

@@ -31,6 +31,8 @@ void main() {
       lastTestMode: null,
       modeHistory: const [TestMode.multipleChoice],
       clozeText: null,
+      clozeAnswers: const [],
+      clozeWordBank: const [],
       acceptedAnswers: const ['Réponse'],
       source: null,
       difficulty: DeckDifficulty.facile,

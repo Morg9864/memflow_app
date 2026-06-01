@@ -104,7 +104,7 @@ class _ModeSelectionBody extends StatelessWidget {
     _ModeOptionData(
       icon: Icons.text_fields_rounded,
       label: 'Texte à trous',
-      description: 'Complète les mots manquants',
+      description: 'Place les mots dans les trous',
       mode: TestMode.cloze,
     ),
   ];

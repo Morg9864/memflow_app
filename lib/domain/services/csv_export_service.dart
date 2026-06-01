@@ -23,6 +23,8 @@ class CsvExportService {
         'source',
         'cloze_text',
         'accepted_answers',
+        'cloze_answers',
+        'cloze_word_bank',
       ],
     ];
 
@@ -51,6 +53,8 @@ class CsvExportService {
         'source',
         'cloze_text',
         'accepted_answers',
+        'cloze_answers',
+        'cloze_word_bank',
       ],
     ];
 
@@ -72,6 +76,8 @@ class CsvExportService {
         card.source ?? '',
         card.clozeText ?? '',
         card.acceptedAnswers.join('|'),
+        card.clozeAnswers.join('|'),
+        card.clozeWordBank.join('|'),
       ]);
     }
 
