@@ -634,56 +634,144 @@ class ReviewButton extends StatelessWidget {
   }
 }
 
-class HeatmapGrid extends StatelessWidget {
-  const HeatmapGrid({super.key, required this.rows});
+class ActivityBarChart extends StatelessWidget {
+  const ActivityBarChart({super.key, required this.days});
 
-  final List<List<HeatmapCell>> rows;
+  final List<HeatmapCell> days;
+
+  static const _monthNames = [
+    '', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
+    'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc',
+  ];
+
+  int _monthOf(String label) {
+    final parts = label.split('/');
+    return parts.length >= 2 ? (int.tryParse(parts[1]) ?? 0) : 0;
+  }
+
+  int _dayOf(String label) {
+    return int.tryParse(label.split('/').first) ?? 0;
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          children: const [
-            SizedBox(width: 28),
-            Expanded(child: Text('L')),
-            Expanded(child: Text('M')),
-            Expanded(child: Text('M')),
-            Expanded(child: Text('J')),
-            Expanded(child: Text('V')),
-            Expanded(child: Text('S')),
-            Expanded(child: Text('D')),
-          ],
-        ),
-        const SizedBox(height: 12),
-        ...List.generate(rows.length, (weekIndex) {
-          final row = rows[weekIndex];
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: Row(
-              children: [
-                SizedBox(width: 28, child: Text('S${weekIndex + 1}')),
-                ...row.map(
-                  (cell) => Expanded(
-                    child: Container(
-                      height: 24,
-                      margin: const EdgeInsets.symmetric(horizontal: 3),
-                      decoration: BoxDecoration(
-                        color: cell.isActive
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).brightness == Brightness.dark
-                            ? const Color(0xFF30231A)
-                            : const Color(0xFFF3EADF),
-                        borderRadius: BorderRadius.circular(8),
+    final primary = Theme.of(context).colorScheme.primary;
+    final inactive = Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF30231A)
+        : const Color(0xFFF3EADF);
+    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10);
+
+    final maxCount = days.fold(0, (m, d) => d.count > m ? d.count : m);
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        const gap = 5.0;
+        const chartHeight = 72.0;
+        final barWidth = (constraints.maxWidth - (days.length - 1) * gap) / days.length;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Bar chart
+            SizedBox(
+              height: chartHeight,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(days.length, (i) {
+                  final day = days[i];
+                  final barH = maxCount == 0
+                      ? 3.0
+                      : (day.count / maxCount * chartHeight).clamp(3.0, chartHeight);
+                  return Row(
+                    children: [
+                      if (i > 0) const SizedBox(width: gap),
+                      Container(
+                        width: barWidth,
+                        height: barH,
+                        decoration: BoxDecoration(
+                          color: day.count > 0 ? primary : inactive,
+                          borderRadius:
+                              const BorderRadius.vertical(top: Radius.circular(4)),
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+            // Baseline
+            Container(height: 1, color: inactive),
+            const SizedBox(height: 5),
+            // Day number labels
+            Row(
+              children: List.generate(days.length, (i) {
+                final day = days[i];
+                final isToday = i == days.length - 1;
+                return Row(
+                  children: [
+                    if (i > 0) const SizedBox(width: gap),
+                    SizedBox(
+                      width: barWidth,
+                      child: Column(
+                        children: [
+                          Text(
+                            '${_dayOf(day.label)}',
+                            textAlign: TextAlign.center,
+                            style: labelStyle?.copyWith(
+                              fontWeight: isToday ? FontWeight.bold : null,
+                            ),
+                          ),
+                          if (isToday)
+                            Container(
+                              width: 4,
+                              height: 4,
+                              margin: const EdgeInsets.only(top: 2),
+                              decoration: BoxDecoration(
+                                color: primary,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
                       ),
                     ),
-                  ),
-                ),
-              ],
+                  ],
+                );
+              }),
             ),
-          );
-        }),
-      ],
+            const SizedBox(height: 2),
+            // Month labels (show only on first day of each new month)
+            Row(
+              children: List.generate(days.length, (i) {
+                final month = _monthOf(days[i].label);
+                final prevMonth = i > 0 ? _monthOf(days[i - 1].label) : -1;
+                final showMonth = month != prevMonth;
+                return Row(
+                  children: [
+                    if (i > 0) const SizedBox(width: gap),
+                    SizedBox(
+                      width: barWidth,
+                      child: showMonth
+                          ? Text(
+                              _monthNames[month],
+                              textAlign: TextAlign.center,
+                              style: labelStyle?.copyWith(
+                                color: Theme.of(context)
+                                    .colorScheme
+                                    .onSurface
+                                    .withValues(alpha: 0.45),
+                              ),
+                              softWrap: false,
+                              overflow: TextOverflow.visible,
+                            )
+                          : null,
+                    ),
+                  ],
+                );
+              }),
+            ),
+          ],
+        );
+      },
     );
   }
 }

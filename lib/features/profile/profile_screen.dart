@@ -251,7 +251,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     style: Theme.of(context).textTheme.labelMedium,
                   ),
                   const SizedBox(height: 4),
-                  Text('1.4.0', style: Theme.of(context).textTheme.bodyMedium),
+                  Text('1.5.0', style: Theme.of(context).textTheme.bodyMedium),
                 ],
               ),
             ),

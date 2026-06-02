@@ -442,7 +442,7 @@ class StatisticsOverview {
   final int totalReviews;
   final double successRate;
   final int studyDays;
-  final List<List<HeatmapCell>> heatmap;
+  final List<HeatmapCell> heatmap;
   final List<LevelProgress> levelProgress;
 }
 

@@ -893,21 +893,16 @@ class AppRepository {
     }
 
     final localNow = now.toLocal();
-    final heatmap = List.generate(4, (weekIndex) {
-      return List.generate(7, (dayIndex) {
-        final date = DateTime(
-          localNow.year,
-          localNow.month,
-          localNow.day,
-        ).subtract(Duration(days: (3 - weekIndex) * 7 + (6 - dayIndex)));
-        final key = DateTime(date.year, date.month, date.day);
-        final count = studyDayMap[key] ?? 0;
-        return HeatmapCell(
-          label: '${key.day}/${key.month}',
-          count: count,
-          isActive: count > 0,
-        );
-      });
+    final heatmap = List.generate(14, (i) {
+      final date = DateTime(localNow.year, localNow.month, localNow.day)
+          .subtract(Duration(days: 13 - i));
+      final key = DateTime(date.year, date.month, date.day);
+      final count = studyDayMap[key] ?? 0;
+      return HeatmapCell(
+        label: '${key.day}/${key.month}',
+        count: count,
+        isActive: count > 0,
+      );
     });
 
     final levelCounts = <int, int>{1: 0, 2: 0, 3: 0, 4: 0};
