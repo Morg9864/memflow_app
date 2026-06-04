@@ -664,6 +664,15 @@ class FlashcardSummary {
   final String correctAnswer;
 }
 
+class PaginatedSlice<T> {
+  const PaginatedSlice({required this.items, required this.totalCount});
+
+  final List<T> items;
+  final int totalCount;
+
+  bool get hasMore => items.length < totalCount;
+}
+
 class FlashcardDueItem {
   const FlashcardDueItem({
     required this.id,

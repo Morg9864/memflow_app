@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../app/app_version.dart';
 import '../../app/daily_goal_controller.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
@@ -251,7 +252,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     style: Theme.of(context).textTheme.labelMedium,
                   ),
                   const SizedBox(height: 4),
-                  Text('1.5.0', style: Theme.of(context).textTheme.bodyMedium),
+                  Text(
+                    appVersion,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
                 ],
               ),
             ),

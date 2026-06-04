@@ -5,21 +5,78 @@ import 'package:go_router/go_router.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
+import 'paginated_list_controller.dart';
 
-final _deckCardsProvider =
-    StreamProvider.family<List<FlashcardSummary>, String>((ref, deckId) {
-  return ref.watch(appRepositoryProvider).watchFlashcardsForDeck(deckId);
-});
-
-class DeckCardsScreen extends ConsumerWidget {
-  const DeckCardsScreen({super.key, required this.deckId, required this.deckName});
+class DeckCardsScreen extends ConsumerStatefulWidget {
+  const DeckCardsScreen({
+    super.key,
+    required this.deckId,
+    required this.deckName,
+  });
 
   final String deckId;
   final String deckName;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final cardsAsync = ref.watch(_deckCardsProvider(deckId));
+  ConsumerState<DeckCardsScreen> createState() => _DeckCardsScreenState();
+}
+
+class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
+  static const _pageSize = 40;
+
+  late final PaginatedListController<FlashcardSummary> _controller;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    final repository = ref.read(appRepositoryProvider);
+    _controller = PaginatedListController<FlashcardSummary>(
+      pageSize: _pageSize,
+      loadSlice: ({required offset, required limit}) {
+        return repository.fetchFlashcardsForDeckPage(
+          deckId: widget.deckId,
+          offset: offset,
+          limit: limit,
+        );
+      },
+      refreshStream: repository.watchDeckCardsRevision(widget.deckId),
+    )..addListener(_handleControllerChange);
+    _scrollController.addListener(_handleScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.start();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    _controller
+      ..removeListener(_handleControllerChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleControllerChange() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    if (_scrollController.position.extentAfter < 280) {
+      _controller.loadMore();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final state = _controller.state;
 
     return AppScaffold(
       child: Column(
@@ -36,43 +93,62 @@ class DeckCardsScreen extends ConsumerWidget {
             ],
           ),
           const SizedBox(height: 8),
-          Text(deckName, style: Theme.of(context).textTheme.displaySmall),
+          Text(
+            widget.deckName,
+            style: Theme.of(context).textTheme.displaySmall,
+          ),
           const SizedBox(height: 4),
-          cardsAsync.when(
-            data: (cards) => Text(
-              '${cards.length} carte${cards.length == 1 ? '' : 's'}',
+          if (!state.isInitialLoading)
+            Text(
+              '${state.totalCount} carte${state.totalCount == 1 ? '' : 's'}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            loading: () => const SizedBox.shrink(),
-            error: (e, s) => const SizedBox.shrink(),
-          ),
           const SizedBox(height: 20),
-          Expanded(
-            child: cardsAsync.when(
-              data: (cards) {
-                if (cards.isEmpty) {
-                  return const EmptyState(
-                    title: 'Aucune carte',
-                    message: 'Ce deck ne contient aucune carte.',
-                  );
-                }
-                return ListView.separated(
-                  itemCount: cards.length,
-                  separatorBuilder: (context, index) => const SizedBox(height: 8),
-                  itemBuilder: (context, index) {
-                    final card = cards[index];
-                    return _CardTile(
-                      card: card,
-                      onDelete: () => _confirmDeleteCard(context, ref, card),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, _) => Text(error.toString()),
-            ),
-          ),
+          Expanded(child: _buildBody(context, state)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBody(
+    BuildContext context,
+    PaginatedListState<FlashcardSummary> state,
+  ) {
+    if (state.isInitialLoading && state.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (state.error != null && state.items.isEmpty) {
+      return _PaginatedErrorState(
+        message: 'Impossible de charger les cartes.',
+        onRetry: _controller.refresh,
+      );
+    }
+
+    if (state.items.isEmpty) {
+      return const EmptyState(
+        title: 'Aucune carte',
+        message: 'Ce deck ne contient aucune carte.',
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _controller.refresh,
+      child: ListView.separated(
+        controller: _scrollController,
+        itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+        separatorBuilder: (context, index) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          if (index >= state.items.length) {
+            return const _PaginationFooter();
+          }
+
+          final card = state.items[index];
+          return _CardTile(
+            card: card,
+            onDelete: () => _confirmDeleteCard(context, ref, card),
+          );
+        },
       ),
     );
   }
@@ -105,8 +181,11 @@ class DeckCardsScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (confirmed != true) return;
+    if (confirmed != true) {
+      return;
+    }
     await ref.read(appRepositoryProvider).deleteFlashcard(card.id);
+    await _controller.refresh();
   }
 }
 
@@ -147,12 +226,51 @@ class _CardTile extends StatelessWidget {
               ),
             ),
             IconButton(
-              icon: Icon(Icons.delete_outline_rounded, color: theme.colorScheme.error),
+              icon: Icon(
+                Icons.delete_outline_rounded,
+                color: theme.colorScheme.error,
+              ),
               tooltip: 'Supprimer',
               onPressed: onDelete,
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PaginationFooter extends StatelessWidget {
+  const _PaginationFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 14),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _PaginatedErrorState extends StatelessWidget {
+  const _PaginatedErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () => onRetry(),
+            child: const Text('Réessayer'),
+          ),
+        ],
       ),
     );
   }

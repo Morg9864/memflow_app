@@ -11,6 +11,8 @@ import '../../domain/services/card_mode_service.dart';
 import '../../domain/services/spaced_repetition_service.dart';
 
 class AppRepository {
+  static const int _pagedFetchSize = 500;
+
   AppRepository({
     required SupabaseClient client,
     required SpacedRepetitionService spacedRepetitionService,
@@ -376,6 +378,59 @@ class AppRepository {
     });
   }
 
+  Future<PaginatedSlice<FlashcardSummary>> fetchFlashcardsForDeckPage({
+    required String deckId,
+    required int offset,
+    required int limit,
+  }) async {
+    final totalCount = await _client
+        .from('flashcards')
+        .count(CountOption.exact)
+        .eq('user_id', _userId)
+        .eq('deck_id', deckId);
+
+    if (totalCount == 0) {
+      return const PaginatedSlice(items: [], totalCount: 0);
+    }
+
+    final rows = await _client
+        .from('flashcards')
+        .select()
+        .eq('user_id', _userId)
+        .eq('deck_id', deckId)
+        .order('created_at', ascending: true)
+        .order('id', ascending: true)
+        .range(offset, offset + limit - 1);
+
+    final items =
+        List<Map<String, dynamic>>.from(
+              (rows as List).map(
+                (row) => Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .map((row) {
+              final card = _mapFlashcard(row);
+              return FlashcardSummary(
+                id: card.id,
+                deckId: card.deckId,
+                collectionId: card.collectionId,
+                question: card.question,
+                correctAnswer: card.correctAnswer,
+              );
+            })
+            .toList(growable: false);
+
+    return PaginatedSlice(items: items, totalCount: totalCount);
+  }
+
+  Stream<int> watchDeckCardsRevision(String deckId) {
+    return _watchTableEvents(
+      'flashcards',
+      filterColumn: 'deck_id',
+      filterValue: deckId,
+    );
+  }
+
   Stream<List<FlashcardDueItem>> watchDueCardsForCollection(
     String collectionId,
   ) {
@@ -416,6 +471,79 @@ class AppRepository {
             .toList();
       },
     );
+  }
+
+  Future<PaginatedSlice<FlashcardDueItem>> fetchDueCardsForCollectionPage({
+    required String collectionId,
+    required int offset,
+    required int limit,
+  }) async {
+    final decks = await _fetchDecks(collectionId: collectionId);
+    final activeDecks = decks.where((deck) => !deck.isDisabled).toList();
+    if (activeDecks.isEmpty) {
+      return const PaginatedSlice(items: [], totalCount: 0);
+    }
+
+    final deckNames = {for (final deck in activeDecks) deck.id: deck.name};
+    final activeDeckIds = activeDecks.map((deck) => deck.id).toList();
+
+    final totalCount = await _client
+        .from('flashcards')
+        .count(CountOption.exact)
+        .eq('user_id', _userId)
+        .eq('collection_id', collectionId)
+        .inFilter('deck_id', activeDeckIds);
+
+    if (totalCount == 0) {
+      return const PaginatedSlice(items: [], totalCount: 0);
+    }
+
+    final rows = await _client
+        .from('flashcards')
+        .select()
+        .eq('user_id', _userId)
+        .eq('collection_id', collectionId)
+        .inFilter('deck_id', activeDeckIds)
+        .order('due_at', ascending: true)
+        .order('id', ascending: true)
+        .range(offset, offset + limit - 1);
+
+    final now = DateTime.now();
+    final items =
+        List<Map<String, dynamic>>.from(
+              (rows as List).map(
+                (row) => Map<String, dynamic>.from(row as Map),
+              ),
+            )
+            .map((row) {
+              final card = _mapFlashcard(row);
+              return FlashcardDueItem(
+                id: card.id,
+                deckId: card.deckId,
+                deckName: deckNames[card.deckId] ?? 'Deck',
+                question: card.question,
+                dueAt: card.dueAt,
+                isDueNow: !_isDueInFuture(card.dueAt, now),
+              );
+            })
+            .toList(growable: false);
+
+    return PaginatedSlice(items: items, totalCount: totalCount);
+  }
+
+  Stream<int> watchDueCardsForCollectionRevision(String collectionId) {
+    return _mergeEventStreams([
+      _watchTableEvents(
+        'flashcards',
+        filterColumn: 'collection_id',
+        filterValue: collectionId,
+      ),
+      _watchTableEvents(
+        'decks',
+        filterColumn: 'collection_id',
+        filterValue: collectionId,
+      ),
+    ]);
   }
 
   Future<void> deleteFlashcard(String cardId) async {
@@ -894,8 +1022,11 @@ class AppRepository {
 
     final localNow = now.toLocal();
     final heatmap = List.generate(14, (i) {
-      final date = DateTime(localNow.year, localNow.month, localNow.day)
-          .subtract(Duration(days: 13 - i));
+      final date = DateTime(
+        localNow.year,
+        localNow.month,
+        localNow.day,
+      ).subtract(Duration(days: 13 - i));
       final key = DateTime(date.year, date.month, date.day);
       final count = studyDayMap[key] ?? 0;
       return HeatmapCell(
@@ -988,24 +1119,49 @@ class AppRepository {
     bool ascending = true,
     int? limit,
   }) async {
-    dynamic builder = _client.from(table).select();
-    builder = builder.eq('user_id', _userId);
-    for (final entry in equals.entries) {
-      builder = builder.eq(entry.key, entry.value);
+    final allRows = <Map<String, dynamic>>[];
+    var offset = 0;
+
+    while (true) {
+      final remaining = limit == null ? null : limit - allRows.length;
+      if (remaining != null && remaining <= 0) {
+        break;
+      }
+
+      final pageSize = remaining == null
+          ? _pagedFetchSize
+          : math.min(_pagedFetchSize, remaining);
+
+      dynamic builder = _client.from(table).select();
+      builder = builder.eq('user_id', _userId);
+      for (final entry in equals.entries) {
+        builder = builder.eq(entry.key, entry.value);
+      }
+      if (dueBeforeOrAt != null) {
+        builder = builder.lte(
+          'due_at',
+          dueBeforeOrAt.toUtc().toIso8601String(),
+        );
+      }
+      if (orderBy != null) {
+        builder = builder.order(orderBy, ascending: ascending);
+      }
+      builder = builder.range(offset, offset + pageSize - 1);
+
+      final rows = await builder;
+      final mappedRows = List<Map<String, dynamic>>.from(
+        (rows as List).map((row) => Map<String, dynamic>.from(row as Map)),
+      );
+      allRows.addAll(mappedRows);
+
+      if (mappedRows.length < pageSize) {
+        break;
+      }
+
+      offset += mappedRows.length;
     }
-    if (dueBeforeOrAt != null) {
-      builder = builder.lte('due_at', dueBeforeOrAt.toUtc().toIso8601String());
-    }
-    if (orderBy != null) {
-      builder = builder.order(orderBy, ascending: ascending);
-    }
-    if (limit != null) {
-      builder = builder.limit(limit);
-    }
-    final rows = await builder;
-    return List<Map<String, dynamic>>.from(
-      (rows as List).map((row) => Map<String, dynamic>.from(row as Map)),
-    );
+
+    return allRows;
   }
 
   Stream<List<Map<String, dynamic>>> _streamRows(
@@ -1015,23 +1171,197 @@ class AppRepository {
     bool ascending = true,
     int? limit,
   }) {
-    dynamic builder = _client.from(table).stream(primaryKey: ['id']);
-    builder = builder.eq('user_id', _userId);
-    for (final entry in equals.entries) {
-      builder = builder.eq(entry.key, entry.value);
-    }
-    if (orderBy != null) {
-      builder = builder.order(orderBy, ascending: ascending);
-    }
-    if (limit != null) {
-      builder = builder.limit(limit);
+    late final StreamController<List<Map<String, dynamic>>> controller;
+    RealtimeChannel? channel;
+    var isDisposed = false;
+    var wasSubscribed = false;
+    var fetchInFlight = false;
+    var fetchQueued = false;
+
+    Future<void> emitSnapshot() async {
+      if (isDisposed || controller.isClosed) {
+        return;
+      }
+      if (fetchInFlight) {
+        fetchQueued = true;
+        return;
+      }
+
+      fetchInFlight = true;
+      try {
+        do {
+          fetchQueued = false;
+          final rows = await _selectRows(
+            table,
+            equals: equals,
+            orderBy: orderBy,
+            ascending: ascending,
+            limit: limit,
+          );
+          if (isDisposed || controller.isClosed) {
+            return;
+          }
+          controller.add(rows);
+        } while (fetchQueued && !isDisposed && !controller.isClosed);
+      } catch (error, stackTrace) {
+        if (!isDisposed && !controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      } finally {
+        fetchInFlight = false;
+      }
     }
 
-    return (builder as Stream<List<dynamic>>).map(
-      (rows) => rows
-          .map((row) => Map<String, dynamic>.from(row as Map))
-          .toList(growable: false),
+    controller = StreamController<List<Map<String, dynamic>>>(
+      onListen: () {
+        channel = _client.channel('memflow:$table:${_uuid.v4()}')
+          ..onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: table,
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'user_id',
+              value: _userId,
+            ),
+            callback: (_) {
+              unawaited(emitSnapshot());
+            },
+          )
+          ..subscribe((status, [error]) {
+            switch (status) {
+              case RealtimeSubscribeStatus.subscribed:
+                if (wasSubscribed) {
+                  unawaited(emitSnapshot());
+                }
+                wasSubscribed = true;
+                break;
+              case RealtimeSubscribeStatus.closed:
+                if (!controller.isClosed) {
+                  controller.close();
+                }
+                break;
+              case RealtimeSubscribeStatus.timedOut:
+              case RealtimeSubscribeStatus.channelError:
+                if (!controller.isClosed) {
+                  controller.addError(
+                    StateError(
+                      'Realtime Supabase indisponible pour la table $table: '
+                      '${error ?? status.name}',
+                    ),
+                  );
+                }
+                break;
+            }
+          });
+
+        // Keep realtime while always reloading the full paginated snapshot.
+        // This avoids silent truncation when a table grows past the API row cap.
+        unawaited(emitSnapshot());
+      },
+      onCancel: () async {
+        isDisposed = true;
+        final activeChannel = channel;
+        channel = null;
+        if (activeChannel != null) {
+          await _client.removeChannel(activeChannel);
+        }
+      },
     );
+
+    return controller.stream;
+  }
+
+  Stream<int> _watchTableEvents(
+    String table, {
+    String? filterColumn,
+    Object? filterValue,
+  }) {
+    late final StreamController<int> controller;
+    RealtimeChannel? channel;
+    var tick = 0;
+
+    controller = StreamController<int>(
+      onListen: () {
+        channel = _client.channel('memflow-events:$table:${_uuid.v4()}')
+          ..onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: table,
+            filter: filterColumn == null
+                ? null
+                : PostgresChangeFilter(
+                    type: PostgresChangeFilterType.eq,
+                    column: filterColumn,
+                    value: filterValue,
+                  ),
+            callback: (_) {
+              if (controller.isClosed) {
+                return;
+              }
+              tick += 1;
+              controller.add(tick);
+            },
+          )
+          ..subscribe((status, [error]) {
+            switch (status) {
+              case RealtimeSubscribeStatus.subscribed:
+                break;
+              case RealtimeSubscribeStatus.closed:
+                if (!controller.isClosed) {
+                  controller.close();
+                }
+                break;
+              case RealtimeSubscribeStatus.timedOut:
+              case RealtimeSubscribeStatus.channelError:
+                if (!controller.isClosed) {
+                  controller.addError(
+                    StateError(
+                      'Realtime Supabase indisponible pour la table $table: '
+                      '${error ?? status.name}',
+                    ),
+                  );
+                }
+                break;
+            }
+          });
+      },
+      onCancel: () async {
+        final activeChannel = channel;
+        channel = null;
+        if (activeChannel != null) {
+          await _client.removeChannel(activeChannel);
+        }
+      },
+    );
+
+    return controller.stream;
+  }
+
+  Stream<int> _mergeEventStreams(List<Stream<int>> streams) {
+    late final StreamController<int> controller;
+    final subscriptions = <StreamSubscription<int>>[];
+    var tick = 0;
+
+    controller = StreamController<int>(
+      onListen: () {
+        for (final stream in streams) {
+          subscriptions.add(
+            stream.listen((_) {
+              tick += 1;
+              controller.add(tick);
+            }, onError: controller.addError),
+          );
+        }
+      },
+      onCancel: () async {
+        for (final subscription in subscriptions) {
+          await subscription.cancel();
+        }
+      },
+    );
+
+    return controller.stream;
   }
 
   CollectionRecord _mapCollection(Map<String, dynamic> row) {

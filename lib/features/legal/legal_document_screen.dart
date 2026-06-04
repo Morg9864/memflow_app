@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../app/app_version.dart';
+
 /// The legal documents shown from the profile screen. Bodies are placeholders
 /// to be replaced with the final, reviewed legal text.
 enum LegalDocument {
@@ -15,16 +17,16 @@ enum LegalDocument {
   }
 
   String get slug => switch (this) {
-        LegalDocument.privacy => 'privacy',
-        LegalDocument.terms => 'terms',
-        LegalDocument.notices => 'notices',
-      };
+    LegalDocument.privacy => 'privacy',
+    LegalDocument.terms => 'terms',
+    LegalDocument.notices => 'notices',
+  };
 
   String get title => switch (this) {
-        LegalDocument.privacy => 'Politique de confidentialité',
-        LegalDocument.terms => "Conditions d'utilisation",
-        LegalDocument.notices => 'Mentions légales',
-      };
+    LegalDocument.privacy => 'Politique de confidentialité',
+    LegalDocument.terms => "Conditions d'utilisation",
+    LegalDocument.notices => 'Mentions légales',
+  };
 }
 
 class LegalDocumentScreen extends StatelessWidget {
@@ -59,7 +61,9 @@ class LegalDocumentScreen extends StatelessWidget {
                         const SizedBox(height: 8),
                         Text(
                           section.$2,
-                          style: theme.textTheme.bodyMedium?.copyWith(height: 1.5),
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            height: 1.5,
+                          ),
                         ),
                       ],
                     ),
@@ -195,7 +199,7 @@ void showMemFlowLicensePage(BuildContext context) {
   showLicensePage(
     context: context,
     applicationName: 'MemFlow',
-    applicationVersion: '1.5.0',
+    applicationVersion: appVersion,
     applicationIcon: Padding(
       padding: const EdgeInsets.all(8),
       child: ClipRRect(

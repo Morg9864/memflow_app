@@ -6,13 +6,7 @@ import 'package:intl/intl.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
-
-final _collectionDueCardsProvider =
-    StreamProvider.family<List<FlashcardDueItem>, String>((ref, collectionId) {
-      return ref
-          .watch(appRepositoryProvider)
-          .watchDueCardsForCollection(collectionId);
-    });
+import 'paginated_list_controller.dart';
 
 class CollectionDueCardsScreen extends ConsumerStatefulWidget {
   const CollectionDueCardsScreen({
@@ -31,7 +25,60 @@ class CollectionDueCardsScreen extends ConsumerStatefulWidget {
 
 class _CollectionDueCardsScreenState
     extends ConsumerState<CollectionDueCardsScreen> {
+  static const _pageSize = 40;
+
+  late final PaginatedListController<FlashcardDueItem> _controller;
+  final ScrollController _scrollController = ScrollController();
   String? _busyCardId;
+
+  @override
+  void initState() {
+    super.initState();
+    final repository = ref.read(appRepositoryProvider);
+    _controller = PaginatedListController<FlashcardDueItem>(
+      pageSize: _pageSize,
+      loadSlice: ({required offset, required limit}) {
+        return repository.fetchDueCardsForCollectionPage(
+          collectionId: widget.collectionId,
+          offset: offset,
+          limit: limit,
+        );
+      },
+      refreshStream: repository.watchDueCardsForCollectionRevision(
+        widget.collectionId,
+      ),
+    )..addListener(_handleControllerChange);
+    _scrollController.addListener(_handleScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _controller.start();
+    });
+  }
+
+  @override
+  void dispose() {
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    _controller
+      ..removeListener(_handleControllerChange)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _handleControllerChange() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _handleScroll() {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    if (_scrollController.position.extentAfter < 280) {
+      _controller.loadMore();
+    }
+  }
 
   Future<void> _setDueAt(FlashcardDueItem card, DateTime dueAt) async {
     setState(() => _busyCardId = card.id);
@@ -39,15 +86,20 @@ class _CollectionDueCardsScreenState
       await ref
           .read(appRepositoryProvider)
           .updateFlashcardDueAt(cardId: card.id, dueAt: dueAt);
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       final label = dueAt.isAfter(DateTime.now())
           ? DateFormat('dd/MM/yyyy HH:mm').format(dueAt.toLocal())
           : 'now';
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(SnackBar(content: Text('Prochaine révision: $label')));
+      await _controller.refresh();
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Impossible de modifier la date: $error')),
       );
@@ -66,13 +118,17 @@ class _CollectionDueCardsScreenState
       firstDate: DateTime(2020),
       lastDate: DateTime(2100),
     );
-    if (date == null || !mounted) return;
+    if (date == null || !mounted) {
+      return;
+    }
 
     final time = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(localDueAt),
     );
-    if (time == null || !mounted) return;
+    if (time == null || !mounted) {
+      return;
+    }
 
     final nextDueAt = DateTime(
       date.year,
@@ -86,9 +142,7 @@ class _CollectionDueCardsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final cardsAsync = ref.watch(
-      _collectionDueCardsProvider(widget.collectionId),
-    );
+    final state = _controller.state;
     final theme = Theme.of(context);
 
     return AppScaffold(
@@ -115,45 +169,59 @@ class _CollectionDueCardsScreenState
             ),
           ),
           const SizedBox(height: 6),
-          cardsAsync.when(
-            data: (cards) => Text(
-              '${cards.length} carte${cards.length == 1 ? '' : 's'}',
+          if (!state.isInitialLoading)
+            Text(
+              '${state.totalCount} carte${state.totalCount == 1 ? '' : 's'}',
               style: theme.textTheme.bodyMedium,
             ),
-            loading: () => const SizedBox.shrink(),
-            error: (error, stackTrace) => const SizedBox.shrink(),
-          ),
           const SizedBox(height: 20),
-          Expanded(
-            child: cardsAsync.when(
-              data: (cards) {
-                if (cards.isEmpty) {
-                  return const EmptyState(
-                    title: 'Aucune carte',
-                    message: 'Cette collection ne contient aucune carte.',
-                  );
-                }
-
-                return ListView.separated(
-                  itemCount: cards.length,
-                  separatorBuilder: (context, index) =>
-                      const SizedBox(height: 10),
-                  itemBuilder: (context, index) {
-                    final card = cards[index];
-                    return _DueCardTile(
-                      card: card,
-                      busy: _busyCardId == card.id,
-                      onEdit: () => _editDueAt(card),
-                      onSetNow: () => _setDueAt(card, DateTime.now()),
-                    );
-                  },
-                );
-              },
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (error, stackTrace) => Text(error.toString()),
-            ),
-          ),
+          Expanded(child: _buildBody(context, state)),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBody(
+    BuildContext context,
+    PaginatedListState<FlashcardDueItem> state,
+  ) {
+    if (state.isInitialLoading && state.items.isEmpty) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (state.error != null && state.items.isEmpty) {
+      return _PaginatedErrorState(
+        message: 'Impossible de charger les échéances.',
+        onRetry: _controller.refresh,
+      );
+    }
+
+    if (state.items.isEmpty) {
+      return const EmptyState(
+        title: 'Aucune carte',
+        message: 'Cette collection ne contient aucune carte active.',
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: _controller.refresh,
+      child: ListView.separated(
+        controller: _scrollController,
+        itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
+        separatorBuilder: (context, index) => const SizedBox(height: 10),
+        itemBuilder: (context, index) {
+          if (index >= state.items.length) {
+            return const _PaginationFooter();
+          }
+
+          final card = state.items[index];
+          return _DueCardTile(
+            card: card,
+            busy: _busyCardId == card.id,
+            onEdit: () => _editDueAt(card),
+            onSetNow: () => _setDueAt(card, DateTime.now()),
+          );
+        },
       ),
     );
   }
@@ -259,9 +327,9 @@ class _DueCardTile extends StatelessWidget {
                         value: _DueCardAction.edit,
                         child: Row(
                           children: [
-                            Icon(Icons.edit_calendar_rounded, size: 20),
-                            SizedBox(width: 12),
-                            Text('Modifier la date'),
+                            Icon(Icons.edit_calendar_rounded, size: 18),
+                            SizedBox(width: 10),
+                            Text('Choisir une date'),
                           ],
                         ),
                       ),
@@ -269,17 +337,14 @@ class _DueCardTile extends StatelessWidget {
                         value: _DueCardAction.now,
                         child: Row(
                           children: [
-                            Icon(Icons.schedule_rounded, size: 20),
-                            SizedBox(width: 12),
-                            Text('Mettre à maintenant'),
+                            Icon(Icons.bolt_rounded, size: 18),
+                            SizedBox(width: 10),
+                            Text('Remettre à now'),
                           ],
                         ),
                       ),
                     ],
-                    child: const Padding(
-                      padding: EdgeInsets.all(4),
-                      child: Icon(Icons.more_horiz_rounded),
-                    ),
+                    child: const Icon(Icons.more_horiz_rounded),
                   ),
               ],
             ),
@@ -291,3 +356,39 @@ class _DueCardTile extends StatelessWidget {
 }
 
 enum _DueCardAction { edit, now }
+
+class _PaginationFooter extends StatelessWidget {
+  const _PaginationFooter();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Padding(
+      padding: EdgeInsets.symmetric(vertical: 14),
+      child: Center(child: CircularProgressIndicator()),
+    );
+  }
+}
+
+class _PaginatedErrorState extends StatelessWidget {
+  const _PaginatedErrorState({required this.message, required this.onRetry});
+
+  final String message;
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message, textAlign: TextAlign.center),
+          const SizedBox(height: 12),
+          FilledButton(
+            onPressed: () => onRetry(),
+            child: const Text('Réessayer'),
+          ),
+        ],
+      ),
+    );
+  }
+}
