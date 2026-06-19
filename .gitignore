@@ -107,6 +107,24 @@ migrate_working_dir/
 .claude
 .local/
 
+# -----------------------------
+# HyperFrames / agent tooling
+# -----------------------------
+# Skills installed locally by `npx skills add`
+/.agents/
+/skills-lock.json
+
+# HyperFrames caches and generated renders
+**/.thumbnails/
+**/.waveform-cache/
+**/.hyperframes/
+/memflow-video/renders/
+
+# Reproducible website captures and local source media
+/memflow-video/capture/
+/footages/
+/memflow-video/footages
+
 # metadata
 .metadata
 nYWL4ki14lKZJfoo

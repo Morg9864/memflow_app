@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>MemFlow — Launch Film 45s</title>
+<style>
+  @font-face {
+    font-family: "Lora";
+    src: url("capture/assets/fonts/0086f8992871c45b-s.woff2") format("woff2");
+    font-weight: 400 700;
+    font-style: normal;
+  }
+  @font-face {
+    font-family: "Plus Jakarta Sans";
+    src: url("capture/assets/fonts/636a5ac981f94f8b-s.p.woff2") format("woff2");
+    font-weight: 200 800;
+    font-style: normal;
+  }
+
+  html, body { margin: 0; padding: 0; background: #000; }
+
+  [data-composition-id="main"] {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    color: #2B241D;
+  }
+
+  /* ---------- Fonds ---------- */
+  .bg { position: absolute; inset: 0; }
+  #bg-cream { background: #FAF6EF; z-index: 0; }
+  #bg-cream .halo {
+    position: absolute; left: 460px; top: 40px;
+    width: 1000px; height: 1000px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(217,123,63,0.07) 0%, rgba(217,123,63,0) 70%);
+  }
+  #bg-outro { background: #2B241D; z-index: 6; }
+  #bg-outro .outro-glow {
+    position: absolute; left: 510px; top: 90px;
+    width: 900px; height: 900px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(217,123,63,0.14) 0%, rgba(217,123,63,0) 70%);
+  }
+
+  /* ---------- Grain ---------- */
+  #grain {
+    position: absolute; inset: 0; z-index: 9;
+    pointer-events: none;
+    opacity: 0.05;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' seed='7' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)' opacity='0.6'/%3E%3C/svg%3E");
+  }
+
+  /* ---------- Device frame ---------- */
+  /* écran 500×755 (ratio footage 1080×1630), bezel 12px → frame 524×779 */
+  .device-frame {
+    position: absolute;
+    width: 524px; height: 779px;
+    border-radius: 46px;
+    background: #1A140E;
+    box-shadow: 0 40px 90px rgba(43,36,29,0.28), 0 6px 18px rgba(43,36,29,0.14);
+    z-index: 2;
+  }
+  .device-frame::after {
+    content: "";
+    position: absolute; inset: 0;
+    border-radius: 46px;
+    border: 1px solid rgba(250,246,239,0.18);
+    pointer-events: none;
+  }
+  #frame-a { left: 698px; top: 150px; }
+  #frame-b { left: 698px; top: 150px; }
+
+  video.screen {
+    position: absolute;
+    width: 500px; height: 755px;
+    object-fit: cover;
+    border-radius: 34px;
+    z-index: 3;
+  }
+  /* écran centré dans le frame : frame +12px */
+  #v-dashboard, #v-import { left: 710px; top: 162px; }
+  /* position S3 : device décalé à droite de 330px */
+  #v-qcm, #v-flash, #v-saisie { left: 1040px; top: 162px; }
+
+  /* ---------- Scènes texte ---------- */
+  .scene { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+
+  .statement {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    text-align: center;
+    font-family: "Lora", serif; font-weight: 600;
+    font-size: 100px; line-height: 1.18; color: #2B241D;
+  }
+  .statement > span { display: block; max-width: 1400px; }
+  #open-3 { font-size: 96px; font-style: italic; }
+
+  /* S2 — logo + caption */
+  #reveal-logo {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Lora", serif; font-weight: 700; font-size: 130px; color: #2B241D;
+  }
+  #reveal-logo .flow { color: #CC6F33; }
+  #reveal-caption {
+    position: absolute; left: 0; right: 0; top: 968px;
+    text-align: center;
+    font-size: 24px; font-weight: 500; color: #6B6258; letter-spacing: 0.04em;
+  }
+
+  /* S3 — mot géant à gauche */
+  .word-zone {
+    position: absolute; left: 120px; top: 0; width: 800px; height: 1080px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 26px; text-align: center;
+  }
+  .big-word {
+    position: absolute; left: 0; right: 0;
+    font-family: "Lora", serif; font-weight: 700; font-size: 120px; color: #2B241D;
+  }
+  .word-sub {
+    position: absolute; left: 0; right: 0; top: 640px;
+    font-size: 23px; font-weight: 500; color: #6B6258; letter-spacing: 0.05em;
+  }
+  .word-block { position: absolute; left: 120px; top: 0; width: 800px; height: 1080px; }
+  .word-block .big-word { top: 455px; }
+
+  /* S4 — pill IA */
+  #ai-pill {
+    position: absolute; left: 1290px; top: 490px;
+    background: rgba(217,123,63,0.12);
+    border: 1.5px solid #D97B3F; border-radius: 100px;
+    padding: 16px 34px;
+    font-size: 24px; font-weight: 600; color: #B45A23;
+    letter-spacing: 0.02em;
+  }
+  #import-caption {
+    position: absolute; left: 0; right: 0; top: 968px;
+    text-align: center;
+    font-size: 24px; font-weight: 500; color: #6B6258; letter-spacing: 0.04em;
+  }
+
+  /* S5 — preuve chiffrée */
+  #stats-row {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    gap: 150px;
+  }
+  .proof { text-align: center; }
+  .proof .num {
+    font-family: "Lora", serif; font-weight: 700; font-size: 160px; color: #B45A23;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .proof .lbl {
+    margin-top: 18px;
+    font-size: 22px; font-weight: 500; color: #6B6258; letter-spacing: 0.06em;
+  }
+
+  /* S6 — outro */
+  #beat-outro {
+    z-index: 7;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 30px;
+  }
+  #outro-logo { font-family: "Lora", serif; font-weight: 700; font-size: 110px; color: #FAF6EF; }
+  #outro-logo .flow { color: #CC6F33; }
+  #outro-tagline { font-size: 28px; font-weight: 400; color: rgba(250,246,239,0.65); }
+  #outro-cta {
+    background: #D97B3F; color: #FFFFFF;
+    font-family: "Lora", serif; font-weight: 600; font-size: 24px;
+    border-radius: 100px; padding: 17px 50px; margin-top: 10px;
+  }
+  #outro-url {
+    font-size: 18px; font-weight: 500; color: rgba(250,246,239,0.4);
+    letter-spacing: 0.08em;
+  }
+</style>
+</head>
+<body>
+<div data-hf-id="hf-n3u1" data-composition-id="main" data-start="0" data-duration="45" data-width="1920" data-height="1080">
+
+  <!-- ============ Fonds & grain ============ -->
+  <div data-hf-id="hf-zfhz" id="bg-cream" class="clip bg" data-start="0" data-duration="38.3" data-track-index="0">
+    <div data-hf-id="hf-d1uq" class="halo"></div>
+  </div>
+  <div data-hf-id="hf-z6em" id="bg-outro" class="clip bg" data-start="37.5" data-duration="7.5" data-track-index="1">
+    <div data-hf-id="hf-g9eq" class="outro-glow" id="outro-glow"></div>
+  </div>
+  <div data-hf-id="hf-6kvo" id="grain" class="clip" data-start="0" data-duration="45" data-track-index="2"></div>
+
+  <!-- ============ Musique ============ -->
+  <audio data-hf-id="hf-aj6w" id="music" class="clip" data-start="0" data-duration="45" data-track-index="8" src="product_launch.mp3" data-volume="0.9"></audio>
+
+  <!-- ============ Device frames ============ -->
+  <div data-hf-id="hf-c8lq" id="frame-a" class="clip device-frame" data-start="5.8" data-duration="17.6" data-track-index="6"></div>
+  <div data-hf-id="hf-ftr1" id="frame-b" class="clip device-frame" data-start="25.4" data-duration="6" data-track-index="6"></div>
+
+  <!-- ============ Footage (écrans) ============ -->
+  <video data-hf-id="hf-nh9d" id="v-dashboard" class="clip screen" data-start="6" data-duration="5.15" data-track-index="3" src="footages/Screen_Recording_20260611_162657_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-cok5" id="v-qcm" class="clip screen" data-start="10.9" data-duration="4.4" data-media-start="15" data-track-index="4" src="footages/Screen_Recording_20260611_162806_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-40c9" id="v-flash" class="clip screen" data-start="14.9" data-duration="4.4" data-media-start="1" data-track-index="5" src="footages/Screen_Recording_20260611_163127_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-d9wc" id="v-saisie" class="clip screen" data-start="18.9" data-duration="4.5" data-media-start="13" data-track-index="4" src="footages/Screen_Recording_20260611_163431_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-qmxv" id="v-import" class="clip screen" data-start="25.5" data-duration="5.8" data-track-index="3" src="footages/Screen_Recording_20260611_172022_Chrome.mp4" muted playsinline></video>
+
+  <!-- ============ S1 — Ouverture (0–5.8s) ============ -->
+  <div data-hf-id="hf-vs0n" id="scene-open" class="clip scene" data-start="0" data-duration="5.8" data-track-index="10">
+    <div data-hf-id="hf-z3kn" id="open-1" class="statement"><span data-hf-id="hf-1c6g">Trop de notes.</span></div>
+    <div data-hf-id="hf-qfos" id="open-2" class="statement"><span data-hf-id="hf-8xq8">Trop peu de temps.</span></div>
+    <div data-hf-id="hf-r7cl" id="open-3" class="statement"><span data-hf-id="hf-ooc7">Et si réviser devenait simple&#160;?</span></div>
+  </div>
+
+  <!-- ============ S2 — Révélation (5.5–11.2s) ============ -->
+  <div data-hf-id="hf-6tce" id="scene-reveal" class="clip scene" data-start="5.5" data-duration="5.7" data-track-index="11">
+    <div data-hf-id="hf-h2a3" id="reveal-logo">Mem<span data-hf-id="hf-lxtt" class="flow">Flow</span></div>
+    <div data-hf-id="hf-sp0f" id="reveal-caption">Ton espace de révision.</div>
+  </div>
+
+  <!-- ============ S3 — Trois modes (10.9–23.4s) ============ -->
+  <div data-hf-id="hf-eevw" id="scene-modes" class="clip scene" data-start="10.9" data-duration="12.5" data-track-index="10">
+    <div data-hf-id="hf-pe3s" class="word-block">
+      <div data-hf-id="hf-x408" id="word-1" class="big-word">Teste.</div>
+      <div data-hf-id="hf-j354" id="word-2" class="big-word">Retiens.</div>
+      <div data-hf-id="hf-mxd1" id="word-3" class="big-word">Écris.</div>
+      <div data-hf-id="hf-r4w0" id="sub-1" class="word-sub">Rappel actif.</div>
+      <div data-hf-id="hf-ku65" id="sub-2" class="word-sub">Mémorisation espacée.</div>
+      <div data-hf-id="hf-hgtw" id="sub-3" class="word-sub">De mémoire pure.</div>
+    </div>
+  </div>
+
+  <!-- ============ S4a — Statement IA (23.2–25.9s) ============ -->
+  <div data-hf-id="hf-ndyv" id="scene-ai-statement" class="clip scene" data-start="23.2" data-duration="2.7" data-track-index="11">
+    <div data-hf-id="hf-ct59" id="ai-line" class="statement" style="font-size: 96px;"><span data-hf-id="hf-nllk">Tes notes deviennent des cartes.</span></div>
+  </div>
+
+  <!-- ============ S4b — Import (25.4–31.4s) ============ -->
+  <div data-hf-id="hf-5e4u" id="scene-import" class="clip scene" data-start="25.4" data-duration="6" data-track-index="10">
+    <div data-hf-id="hf-gq9y" id="ai-pill">✦ Générées par IA</div>
+    <div data-hf-id="hf-wvrl" id="import-caption">Importe. Prévisualise. Révise.</div>
+  </div>
+
+  <!-- ============ S5 — Preuve (31.5–38.2s) ============ -->
+  <div data-hf-id="hf-n5h4" id="scene-stats" class="clip scene" data-start="31.5" data-duration="6.7" data-track-index="11">
+    <div data-hf-id="hf-4io1" id="stats-row">
+      <div data-hf-id="hf-jm71" class="proof" id="proof-streak">
+        <div data-hf-id="hf-guhn" class="num" id="num-streak">0</div>
+        <div data-hf-id="hf-v4ke" class="lbl">jours de série</div>
+      </div>
+      <div data-hf-id="hf-mh38" class="proof" id="proof-success">
+        <div data-hf-id="hf-c65z" class="num" id="num-success">0&#160;%</div>
+        <div data-hf-id="hf-4te5" class="lbl">de réussite</div>
+      </div>
+      <div data-hf-id="hf-py5k" class="proof" id="proof-cards">
+        <div data-hf-id="hf-vtcc" class="num" id="num-cards">0</div>
+        <div data-hf-id="hf-19qx" class="lbl">cartes vues</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ S6 — Outro (37.8–45s) ============ -->
+  <div data-hf-id="hf-g4ug" id="beat-outro" class="clip scene" data-start="37.8" data-duration="7.2" data-track-index="12">
+    <div data-hf-id="hf-ttqr" id="outro-logo">Mem<span data-hf-id="hf-s3v9" class="flow">Flow</span></div>
+    <div data-hf-id="hf-dhcb" id="outro-tagline">Étudie plus malin. Retiens plus longtemps.</div>
+    <div data-hf-id="hf-o9w4" id="outro-cta">Essaie maintenant →</div>
+    <div data-hf-id="hf-t1rh" id="outro-url">memflow.one</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+
+    /* ===== S1 — Ouverture : trois statements, crossfade lent + drift ===== */
+    tl.from('#open-1', { opacity: 0, y: 26, duration: 0.6, ease: 'power2.out' }, 0.3);
+    tl.fromTo('#open-1', { scale: 1 }, { scale: 1.04, duration: 1.7, ease: 'none' }, 0.3);
+    tl.to('#open-1', { opacity: 0, duration: 0.4, ease: 'power1.inOut' }, 1.7);
+
+    tl.set('#open-2', { opacity: 0 }, 0);
+    tl.fromTo('#open-2', { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.5, ease: 'power2.out' }, 1.95);
+    tl.fromTo('#open-2', { scale: 1 }, { scale: 1.04, duration: 1.6, ease: 'none' }, 1.95);
+    tl.to('#open-2', { opacity: 0, duration: 0.4, ease: 'power1.inOut' }, 3.4);
+
+    tl.set('#open-3', { opacity: 0 }, 0);
+    tl.fromTo('#open-3', { opacity: 0, y: 26 }, { opacity: 1, y: 0, duration: 0.6, ease: 'power2.out' }, 3.65);
+    tl.fromTo('#open-3', { scale: 1 }, { scale: 1.035, duration: 1.9, ease: 'none' }, 3.65);
+
+    /* Transition S1 → S2 : le statement s'efface, le logo prend la place */
+    tl.to('#scene-open', { opacity: 0, duration: 0.5, ease: 'power1.inOut' }, 5.3);
+    tl.set('#scene-open', { opacity: 0 }, 5.8);
+
+    /* ===== S2 — Révélation ===== */
+    tl.from('#reveal-logo', { opacity: 0, scale: 0.94, duration: 0.8, ease: 'power2.out' }, 5.7);
+    // le logo remonte et rétrécit pendant que le device monte
+    tl.to('#reveal-logo', { y: -330, scale: 0.45, duration: 1.1, ease: 'power3.inOut' }, 7.0);
+    // le device monte du bas (frame + écran, tweens identiques)
+    tl.from('#frame-a',     { y: 980, duration: 1.2, ease: 'expo.out' }, 7.2);
+    tl.from('#v-dashboard', { y: 980, duration: 1.2, ease: 'expo.out' }, 7.2);
+    tl.from('#reveal-caption', { opacity: 0, y: 18, duration: 0.6, ease: 'power2.out' }, 8.3);
+    // micro-flottement du device pendant la pose
+    tl.fromTo('#frame-a',     { y: 0 }, { y: -10, duration: 2.0, ease: 'sine.inOut' }, 8.5);
+    tl.fromTo('#v-dashboard', { y: 0 }, { y: -10, duration: 2.0, ease: 'sine.inOut' }, 8.5);
+
+    /* Transition S2 → S3 : le device glisse à droite, le dashboard crossfade */
+    tl.to('#scene-reveal',  { opacity: 0, duration: 0.45, ease: 'power1.inOut' }, 10.6);
+    tl.to('#frame-a',       { x: 330, y: 0, duration: 0.7, ease: 'power3.inOut' }, 10.6);
+    tl.to('#v-dashboard',   { x: 330, y: 0, opacity: 0, duration: 0.55, ease: 'power2.inOut' }, 10.6);
+    tl.from('#v-qcm',       { opacity: 0, duration: 0.45, ease: 'power1.inOut' }, 10.95);
+
+    /* ===== S3 — Trois modes : mot géant + footage qui change dans le frame ===== */
+    function wordIn(word, sub, t) {
+      tl.fromTo(word, { opacity: 0, y: 60 }, { opacity: 1, y: 0, duration: 0.55, ease: 'expo.out' }, t);
+      tl.fromTo(sub,  { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, ease: 'power2.out' }, t + 0.2);
+    }
+    function wordOut(word, sub, t) {
+      tl.to(word, { opacity: 0, y: -50, duration: 0.35, ease: 'power2.in' }, t);
+      tl.to(sub,  { opacity: 0, duration: 0.3, ease: 'power1.in' }, t);
+    }
+    tl.set('#word-2', { opacity: 0 }, 0); tl.set('#sub-2', { opacity: 0 }, 0);
+    tl.set('#word-3', { opacity: 0 }, 0); tl.set('#sub-3', { opacity: 0 }, 0);
+
+    wordIn('#word-1', '#sub-1', 11.3);
+    wordOut('#word-1', '#sub-1', 14.55);
+    tl.to('#v-qcm',    { opacity: 0, duration: 0.35, ease: 'power1.inOut' }, 14.95);
+    tl.from('#v-flash',{ opacity: 0, duration: 0.35, ease: 'power1.inOut' }, 14.95);
+    wordIn('#word-2', '#sub-2', 15.1);
+    wordOut('#word-2', '#sub-2', 18.55);
+    tl.to('#v-flash',   { opacity: 0, duration: 0.35, ease: 'power1.inOut' }, 18.95);
+    tl.from('#v-saisie',{ opacity: 0, duration: 0.35, ease: 'power1.inOut' }, 18.95);
+    wordIn('#word-3', '#sub-3', 19.1);
+
+    /* Transition S3 → S4 : tout descend, place au statement */
+    tl.to('#word-3',  { opacity: 0, y: -50, duration: 0.35, ease: 'power2.in' }, 22.6);
+    tl.to('#sub-3',   { opacity: 0, duration: 0.3, ease: 'power1.in' }, 22.6);
+    tl.to('#frame-a', { y: 980, duration: 0.6, ease: 'power3.in' }, 22.8);
+    tl.to('#v-saisie',{ y: 980, duration: 0.6, ease: 'power3.in' }, 22.8);
+
+    /* ===== S4a — Statement IA ===== */
+    tl.from('#ai-line', { opacity: 0, y: 26, duration: 0.6, ease: 'power2.out' }, 23.5);
+    tl.fromTo('#ai-line', { scale: 1 }, { scale: 1.035, duration: 1.8, ease: 'none' }, 23.5);
+    /* Transition : le statement s'efface, le device revient */
+    tl.to('#scene-ai-statement', { opacity: 0, duration: 0.45, ease: 'power1.inOut' }, 25.3);
+
+    /* ===== S4b — Import IA ===== */
+    tl.from('#frame-b',  { y: 980, duration: 1.1, ease: 'expo.out' }, 25.5);
+    tl.from('#v-import', { y: 980, duration: 1.1, ease: 'expo.out' }, 25.5);
+    tl.from('#ai-pill',  { opacity: 0, scale: 0.8, duration: 0.5, ease: 'back.out(1.8)' }, 26.8);
+    tl.to('#ai-pill',    { y: -8, duration: 1.0, ease: 'sine.inOut', repeat: 3, yoyo: true }, 27.3);
+    tl.from('#import-caption', { opacity: 0, y: 18, duration: 0.5, ease: 'power2.out' }, 27.2);
+
+    /* Transition S4 → S5 : le device redescend */
+    tl.to('#scene-import', { opacity: 0, duration: 0.4, ease: 'power1.inOut' }, 30.8);
+    tl.to('#frame-b',  { y: 980, duration: 0.6, ease: 'power3.in' }, 30.9);
+    tl.to('#v-import', { y: 980, duration: 0.6, ease: 'power3.in' }, 30.9);
+
+    /* ===== S5 — Preuve chiffrée : compteurs déterministes ===== */
+    tl.from('#proof-streak',  { opacity: 0, y: 50, duration: 0.55, ease: 'expo.out' }, 31.8);
+    tl.from('#proof-success', { opacity: 0, y: 50, duration: 0.55, ease: 'expo.out' }, 32.1);
+    tl.from('#proof-cards',   { opacity: 0, y: 50, duration: 0.55, ease: 'expo.out' }, 32.4);
+    function counter(sel, target, suffix, t0, steps, dur) {
+      for (let i = 1; i <= steps; i++) {
+        const v = Math.round(target * i / steps);
+        tl.set(sel, { innerText: v + suffix }, t0 + dur * i / steps);
+      }
+    }
+    counter('#num-streak', 14, '', 31.8, 10, 0.9);
+    counter('#num-success', 83, ' %', 32.1, 12, 1.0);
+    counter('#num-cards', 436, '', 32.4, 14, 1.1);
+    // léger pop quand chaque compteur atteint sa cible
+    tl.fromTo('#num-streak',  { scale: 1 }, { scale: 1.06, duration: 0.18, yoyo: true, repeat: 1, ease: 'power1.inOut' }, 32.7);
+    tl.fromTo('#num-success', { scale: 1 }, { scale: 1.06, duration: 0.18, yoyo: true, repeat: 1, ease: 'power1.inOut' }, 33.1);
+    tl.fromTo('#num-cards',   { scale: 1 }, { scale: 1.06, duration: 0.18, yoyo: true, repeat: 1, ease: 'power1.inOut' }, 33.5);
+    tl.fromTo('#stats-row', { scale: 1 }, { scale: 1.03, duration: 3.6, ease: 'none' }, 33.8);
+
+    /* Transition S5 → S6 : fondu vers le brun sombre (bg-outro couvre tout) */
+    tl.from('#bg-outro', { opacity: 0, duration: 0.8, ease: 'power2.inOut' }, 37.5);
+
+    /* ===== S6 — Outro ===== */
+    tl.from('#outro-logo',    { y: 40, opacity: 0, duration: 0.7, ease: 'power3.out' }, 38.6);
+    tl.from('#outro-tagline', { y: 24, opacity: 0, duration: 0.55, ease: 'power2.out' }, 39.2);
+    tl.from('#outro-cta',     { scale: 0.85, opacity: 0, duration: 0.5, ease: 'back.out(1.8)' }, 39.8);
+    tl.from('#outro-url',     { opacity: 0, duration: 0.5, ease: 'power1.out' }, 40.5);
+    tl.fromTo('#outro-glow', { scale: 1 }, { scale: 1.1, duration: 2.4, ease: 'sine.inOut', repeat: 1, yoyo: true }, 38.6);
+    // SCÈNE FINALE — fondu au noir autorisé
+    tl.to('#beat-outro',  { opacity: 0, duration: 1.4, ease: 'power2.in' }, 43.5);
+    tl.to('#outro-glow',  { opacity: 0, duration: 1.4, ease: 'power2.in' }, 43.5);
+    tl.to('#bg-outro',    { backgroundColor: '#0E0B08', duration: 1.4, ease: 'power2.in' }, 43.5);
+
+    window.__timelines['main'] = tl;
+  </script>
+</div>
+</body>
+</html>

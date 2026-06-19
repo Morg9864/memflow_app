@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>MemFlow — Launch Trailer 60s</title>
+<style>
+  @font-face {
+    font-family: "Lora";
+    src: url("capture/assets/fonts/0086f8992871c45b-s.woff2") format("woff2");
+    font-weight: 400 700;
+    font-style: normal;
+  }
+  @font-face {
+    font-family: "Plus Jakarta Sans";
+    src: url("capture/assets/fonts/636a5ac981f94f8b-s.p.woff2") format("woff2");
+    font-weight: 200 800;
+    font-style: normal;
+  }
+
+  html, body { margin: 0; padding: 0; background: #000; }
+
+  [data-composition-id="main"] {
+    position: relative;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    font-family: "Plus Jakarta Sans", sans-serif;
+    color: #2B241D;
+  }
+
+  /* ---------- Backgrounds ---------- */
+  .bg { position: absolute; inset: 0; }
+  #bg-cream { background: #FAF6EF; z-index: 0; }
+  #bg-cream .hook-glow {
+    position: absolute; left: 560px; top: 140px;
+    width: 800px; height: 800px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(217,123,63,0.08) 0%, rgba(217,123,63,0) 70%);
+  }
+  #bg-dark  { background: #2B241D; z-index: 1; }
+  #bg-outro { background: #2B241D; z-index: 6; }
+  #bg-outro .outro-glow {
+    position: absolute; left: 510px; top: 90px;
+    width: 900px; height: 900px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(217,123,63,0.15) 0%, rgba(217,123,63,0) 70%);
+  }
+
+  /* ---------- Footage panel ---------- */
+  video.footage {
+    position: absolute; left: 602px; top: 0;
+    width: 716px; height: 1080px;
+    object-fit: cover; z-index: 2;
+  }
+  .edge-fade {
+    position: absolute; top: 0; height: 1080px;
+  }
+  #edge-fade-left  { left: 572px;  width: 80px; background: linear-gradient(to right, #FAF6EF, rgba(250,246,239,0)); z-index: 3; }
+  #edge-fade-right { left: 1268px; width: 80px; background: linear-gradient(to left,  #FAF6EF, rgba(250,246,239,0)); z-index: 3; }
+
+  /* ---------- Overlay zones ---------- */
+  .beat { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+  .overlay-panel {
+    position: absolute; left: 0; top: 0;
+    width: 562px; height: 1080px;
+    padding: 80px 40px 80px 80px;
+    box-sizing: border-box;
+    display: flex; flex-direction: column; justify-content: center;
+    gap: 20px;
+  }
+  .overlay-panel.bottom { justify-content: flex-end; padding-bottom: 140px; }
+  .eyebrow {
+    font-size: 14px; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: #D97B3F;
+  }
+  .headline {
+    font-family: "Lora", serif; font-weight: 700;
+    font-size: 52px; line-height: 1.15; color: #2B241D; margin: 0;
+  }
+  .mode-line { font-weight: 600; color: #2B241D; }
+
+  /* ---------- Beat 1 — Hook ---------- */
+  .hook-line {
+    position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Lora", serif; font-weight: 700; font-size: 96px; color: #2B241D;
+  }
+  #hook-logo-wrap {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  }
+  .logo { font-family: "Lora", serif; font-weight: 700; }
+  #hook-logo-wrap .logo { font-size: 80px; }
+  .logo .flow { color: #CC6F33; }
+  #hook-tagline { font-size: 22px; font-weight: 500; color: #6B6258; letter-spacing: 0.04em; }
+  #hook-pulse {
+    position: absolute; left: 810px; top: 390px;
+    width: 300px; height: 300px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(217,123,63,0.3) 0%, rgba(217,123,63,0) 70%);
+    z-index: -1;
+  }
+
+  /* ---------- Beat 2 — Problem ---------- */
+  #beat-problem .problem-stack {
+    position: absolute; left: 700px; top: 0; height: 1080px;
+    display: flex; flex-direction: column; justify-content: center; gap: 60px;
+  }
+  .pain-1 { font-family: "Lora", serif; font-weight: 700; font-size: 72px; color: #FAF6EF; }
+  .pain-2 { font-family: "Lora", serif; font-weight: 700; font-size: 64px; color: #FAF6EF; }
+  .pain-3 { font-weight: 600; font-size: 52px; color: rgba(250,246,239,0.75); }
+  .pain-sub { font-weight: 400; font-size: 28px; color: rgba(250,246,239,0.55); margin-top: 12px; }
+
+  /* ---------- Callout pills (beat 4) ---------- */
+  .pill-stack {
+    position: absolute; left: 1340px; top: 0; height: 1080px; width: 520px;
+    display: flex; flex-direction: column; justify-content: center; gap: 24px;
+    align-items: flex-start;
+  }
+  .pill {
+    background: rgba(217,123,63,0.12);
+    border: 1.5px solid #D97B3F; border-radius: 100px;
+    padding: 12px 28px;
+    font-size: 22px; font-weight: 600; color: #B45A23;
+    letter-spacing: 0.03em;
+  }
+
+  /* ---------- Beat 6 — Import ---------- */
+  #import-phase2 { display: flex; flex-direction: column; gap: 18px; }
+  .import-step { font-weight: 600; font-size: 32px; color: #2B241D; }
+  #import-pill {
+    position: absolute; left: 1350px; top: 500px;
+    background: rgba(217,123,63,0.12);
+    border: 1.5px solid #D97B3F; border-radius: 100px;
+    padding: 14px 30px; font-size: 22px; font-weight: 600; color: #B45A23;
+  }
+
+  /* ---------- Beat 7 — Stats ---------- */
+  .stat-stack {
+    position: absolute; left: 1360px; top: 0; height: 1080px; width: 500px;
+    display: flex; flex-direction: column; justify-content: center; gap: 56px;
+  }
+  .stat-callout .stat-num {
+    font-family: "Lora", serif; font-weight: 700; font-size: 88px; color: #B45A23;
+    font-variant-numeric: tabular-nums; line-height: 1;
+  }
+  .stat-callout .stat-label {
+    font-size: 20px; font-weight: 600; color: #6B6258; margin-top: 8px;
+    letter-spacing: 0.04em;
+  }
+
+  /* ---------- Beat 9 — Outro ---------- */
+  #beat-outro {
+    z-index: 7;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 28px;
+  }
+  #outro-logo { font-size: 96px; color: #FAF6EF; }
+  #outro-logo .flow { color: #CC6F33; }
+  #outro-tagline { font-size: 28px; font-weight: 400; color: rgba(250,246,239,0.65); }
+  #outro-cta {
+    background: #D97B3F; color: #FFFFFF;
+    font-family: "Lora", serif; font-weight: 600; font-size: 24px;
+    border-radius: 100px; padding: 16px 48px; margin-top: 12px;
+  }
+  #outro-url {
+    font-size: 18px; font-weight: 500; color: rgba(250,246,239,0.4);
+    letter-spacing: 0.08em;
+  }
+</style>
+</head>
+<body>
+<div data-hf-id="hf-e9gu" data-composition-id="main" data-start="0" data-duration="60" data-width="1920" data-height="1080">
+
+  <!-- ============ Backgrounds ============ -->
+  <div data-hf-id="hf-fefo" id="bg-cream" class="clip bg" data-start="0" data-duration="53.5" data-track-index="0">
+    <div data-hf-id="hf-mh9l" class="hook-glow"></div>
+  </div>
+  <div data-hf-id="hf-bnes" id="bg-dark" class="clip bg" data-start="2.6" data-duration="5.7" data-track-index="1"></div>
+  <div data-hf-id="hf-gwpx" id="bg-outro" class="clip bg" data-start="52.4" data-duration="7.6" data-track-index="1">
+    <div data-hf-id="hf-g9eq" class="outro-glow" id="outro-glow"></div>
+  </div>
+
+  <!-- ============ Footage ============ -->
+  <video data-hf-id="hf-i3bw" id="v-dashboard" class="clip footage" data-start="8" data-duration="5.3" data-track-index="2" src="footages/Screen_Recording_20260611_162657_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-0j02" id="v-modal" class="clip footage" data-start="12.8" data-duration="6.7" data-media-start="1" data-track-index="3" src="footages/Screen_Recording_20260611_171154_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-mjjo" id="v-qcm" class="clip footage" data-start="19" data-duration="3.3" data-media-start="15" data-track-index="4" src="footages/Screen_Recording_20260611_162806_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-w787" id="v-flashcard" class="clip footage" data-start="21.8" data-duration="3.5" data-media-start="1" data-track-index="5" src="footages/Screen_Recording_20260611_163127_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-fz69" id="v-saisie" class="clip footage" data-start="24.8" data-duration="3.6" data-media-start="13" data-track-index="4" src="footages/Screen_Recording_20260611_163431_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-4m2j" id="v-vraifaux" class="clip footage" data-start="28" data-duration="3.2" data-media-start="1" data-track-index="5" src="footages/Screen_Recording_20260611_171832_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-gbjz" id="v-import" class="clip footage" data-start="30.8" data-duration="8.4" data-track-index="2" src="footages/Screen_Recording_20260611_172022_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-03zp" id="v-stats" class="clip footage" data-start="38.8" data-duration="8" data-track-index="3" src="footages/Screen_Recording_20260611_172058_Chrome.mp4" muted playsinline></video>
+  <video data-hf-id="hf-f6y1" id="v-theme" class="clip footage" data-start="46.5" data-duration="6.7" data-media-start="2" data-track-index="4" src="footages/Screen_Recording_20260611_172312_Chrome.mp4" muted playsinline></video>
+
+  <!-- ============ Edge fades ============ -->
+  <div data-hf-id="hf-zw2d" id="edge-fade-left" class="clip edge-fade" data-start="8" data-duration="45.2" data-track-index="6"></div>
+  <div data-hf-id="hf-kmxv" id="edge-fade-right" class="clip edge-fade" data-start="8" data-duration="45.2" data-track-index="7"></div>
+
+  <!-- ============ Beat 1 — Hook (0–3.2s) ============ -->
+  <div data-hf-id="hf-2f7a" id="beat-hook" class="clip beat" data-start="0" data-duration="3.2" data-track-index="10">
+    <div data-hf-id="hf-kmd7" id="hook-line-1" class="hook-line">Étudie plus malin.</div>
+    <div data-hf-id="hf-jf0i" id="hook-line-2" class="hook-line">Révise plus vite.</div>
+    <div data-hf-id="hf-tj4l" id="hook-logo-wrap">
+      <div data-hf-id="hf-vn1c" id="hook-pulse"></div>
+      <div data-hf-id="hf-guiu" class="logo">Mem<span data-hf-id="hf-lxtt" class="flow">Flow</span></div>
+      <div data-hf-id="hf-u3k1" id="hook-tagline">Ton compagnon de révision</div>
+    </div>
+  </div>
+
+  <!-- ============ Beat 2 — Problem (2.9–8.2s) ============ -->
+  <div data-hf-id="hf-0s6d" id="beat-problem" class="clip beat" data-start="2.9" data-duration="5.3" data-track-index="11">
+    <div data-hf-id="hf-1m8q" class="problem-stack">
+      <div data-hf-id="hf-780k" id="pain-1" class="pain-1">Les notes s'accumulent.</div>
+      <div data-hf-id="hf-remy" id="pain-2" class="pain-2">Les examens approchent.</div>
+      <div data-hf-id="hf-5cjz" id="pain-3" class="pain-3">Réviser devient chaotique.</div>
+      <div data-hf-id="hf-t3ew" id="pain-sub" class="pain-sub">Le problème, c'est la méthode.</div>
+    </div>
+  </div>
+
+  <!-- ============ Beat 3 — Dashboard (8–13.2s) ============ -->
+  <div data-hf-id="hf-y5kr" id="beat-dashboard" class="clip beat" data-start="8" data-duration="5.2" data-track-index="10">
+    <div data-hf-id="hf-f399" class="overlay-panel">
+      <div data-hf-id="hf-ggze" id="b3-eyebrow" class="eyebrow">Ton espace de travail</div>
+      <h2 data-hf-id="hf-92no" id="b3-headline" class="headline">Tout ce qu'il te faut pour réviser.</h2>
+    </div>
+  </div>
+
+  <!-- ============ Beat 4 — Session modal (12.8–19.4s) ============ -->
+  <div data-hf-id="hf-qcfj" id="beat-modal" class="clip beat" data-start="12.8" data-duration="6.6" data-track-index="11">
+    <div data-hf-id="hf-or4h" class="overlay-panel">
+      <div data-hf-id="hf-sx4w" id="b4-eyebrow" class="eyebrow">Modes d'étude</div>
+      <h2 data-hf-id="hf-j6ym" id="b4-headline" class="headline">Choisis ton mode d'étude.</h2>
+    </div>
+    <div data-hf-id="hf-k4hi" class="pill-stack">
+      <div data-hf-id="hf-2aa3" id="pill-qcm" class="pill">QCM</div>
+      <div data-hf-id="hf-tokp" id="pill-flash" class="pill">Flashcard</div>
+      <div data-hf-id="hf-eayp" id="pill-saisie" class="pill">Saisie libre</div>
+      <div data-hf-id="hf-obkw" id="pill-vf" class="pill">Vrai / Faux</div>
+      <div data-hf-id="hf-v32t" id="pill-trous" class="pill">Texte à trous</div>
+    </div>
+  </div>
+
+  <!-- ============ Beat 5A — QCM (19–22.2s) ============ -->
+  <div data-hf-id="hf-q050" id="beat-qcm" class="clip beat" data-start="19" data-duration="3.2" data-track-index="10">
+    <div data-hf-id="hf-5fe6" class="overlay-panel bottom">
+      <div data-hf-id="hf-wa59" id="b5a-line" class="mode-line" style="font-size: 36px;">Rappel actif, instantané.</div>
+    </div>
+  </div>
+
+  <!-- ============ Beat 5B — Flashcard (21.8–25.2s) ============ -->
+  <div data-hf-id="hf-75lt" id="beat-flashcard" class="clip beat" data-start="21.8" data-duration="3.4" data-track-index="11">
+    <div data-hf-id="hf-py1k" class="overlay-panel">
+      <div data-hf-id="hf-3zkh" id="b5b-line" class="headline" style="font-size: 36px; font-style: italic; font-weight: 600;">Retourne. Retrouve. Retiens.</div>
+    </div>
+  </div>
+
+  <!-- ============ Beat 5C — Saisie libre (24.8–28.4s) ============ -->
+  <div data-hf-id="hf-6faf" id="beat-saisie" class="clip beat" data-start="24.8" data-duration="3.6" data-track-index="10">
+    <div data-hf-id="hf-pjqj" class="overlay-panel">
+      <div data-hf-id="hf-j0o0" id="b5c-line" class="mode-line" style="font-size: 34px;">Écris ce dont tu te souviens.</div>
+    </div>
+  </div>
+
+  <!-- ============ Beat 5D — Vrai/Faux (28–31.2s) ============ -->
+  <div data-hf-id="hf-rd5y" id="beat-vraifaux" class="clip beat" data-start="28" data-duration="3.2" data-track-index="11">
+    <div data-hf-id="hf-y3aq" class="overlay-panel bottom">
+      <div data-hf-id="hf-zfv3" id="b5d-line" class="mode-line" style="font-size: 32px; color: #6B6258;">Vrai ou faux. Rapide.</div>
+    </div>
+  </div>
+
+  <!-- ============ Beat 6 — Import / AI (30.8–39.2s) ============ -->
+  <div data-hf-id="hf-uhd4" id="beat-import" class="clip beat" data-start="30.8" data-duration="8.4" data-track-index="10">
+    <div data-hf-id="hf-nk7e" class="overlay-panel">
+      <h2 data-hf-id="hf-xyki" id="b6-headline" class="headline" style="font-size: 48px;">Transforme tes notes en cartes.</h2>
+      <div data-hf-id="hf-cvrq" id="import-phase2">
+        <div data-hf-id="hf-lslh" id="step-1" class="import-step">Importe ton CSV.</div>
+        <div data-hf-id="hf-6lr2" id="step-2" class="import-step">Prévisualise les questions IA.</div>
+        <div data-hf-id="hf-iepo" id="step-3" class="import-step">Lance ta révision.</div>
+      </div>
+    </div>
+    <div data-hf-id="hf-v2fw" id="import-pill">✦ Génération par IA</div>
+  </div>
+
+  <!-- ============ Beat 7 — Stats (38.8–46.8s) ============ -->
+  <div data-hf-id="hf-blwn" id="beat-stats" class="clip beat" data-start="38.8" data-duration="8" data-track-index="11">
+    <div data-hf-id="hf-n5wd" class="overlay-panel">
+      <h2 data-hf-id="hf-hg81" id="b7-headline" class="headline" style="font-size: 48px;">Suis ta série.</h2>
+    </div>
+    <div data-hf-id="hf-lwm5" class="stat-stack">
+      <div data-hf-id="hf-lrpc" id="stat-streak" class="stat-callout">
+        <div data-hf-id="hf-4lq4" class="stat-num">14</div>
+        <div data-hf-id="hf-nisv" class="stat-label">jours de série</div>
+      </div>
+      <div data-hf-id="hf-oms7" id="stat-success" class="stat-callout">
+        <div data-hf-id="hf-6gc7" class="stat-num">83%</div>
+        <div data-hf-id="hf-ifld" class="stat-label">réussite</div>
+      </div>
+      <div data-hf-id="hf-lznf" id="stat-cards" class="stat-callout">
+        <div data-hf-id="hf-f7py" class="stat-num">436</div>
+        <div data-hf-id="hf-x182" class="stat-label">cartes vues</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ Beat 8 — Theme (46.5–53.2s) ============ -->
+  <div data-hf-id="hf-6bmp" id="beat-theme" class="clip beat" data-start="46.5" data-duration="6.7" data-track-index="10">
+    <div data-hf-id="hf-octg" class="overlay-panel">
+      <div data-hf-id="hf-4861" id="b8-eyebrow" class="eyebrow">Personnalisation</div>
+      <h2 data-hf-id="hf-2l8x" id="b8-headline" class="headline">Pensé pour ton rythme d'étude.</h2>
+    </div>
+  </div>
+
+  <!-- ============ Beat 9 — Outro (52.6–60s) ============ -->
+  <div data-hf-id="hf-1hvj" id="beat-outro" class="clip beat" data-start="52.6" data-duration="7.4" data-track-index="12">
+    <div data-hf-id="hf-2pdl" id="outro-logo" class="logo">Mem<span data-hf-id="hf-s3v9" class="flow">Flow</span></div>
+    <div data-hf-id="hf-2du2" id="outro-tagline">Étudie plus malin. Retiens plus longtemps.</div>
+    <div data-hf-id="hf-uglr" id="outro-cta">Essaie maintenant →</div>
+    <div data-hf-id="hf-t1rh" id="outro-url">memflow.one</div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+  <script>
+    window.__timelines = window.__timelines || {};
+    const tl = gsap.timeline({ paused: true });
+
+    // Blur crossfade — the transition itself owns the exit
+    function blurOut(sel, t, d = 0.4) {
+      tl.to(sel, { opacity: 0, filter: 'blur(10px)', scale: 1.04, duration: d, ease: 'power2.inOut' }, t);
+    }
+    function blurIn(sel, t, d = 0.4, s = 0.95) {
+      tl.fromTo(sel,
+        { opacity: 0, filter: 'blur(10px)', scale: s },
+        { opacity: 1, filter: 'blur(0px)', scale: 1, duration: d, ease: 'power2.inOut' }, t);
+    }
+
+    /* ===== Beat 1 — Hook ===== */
+    tl.from('#hook-line-1', { y: 80, scale: 0.92, opacity: 0, duration: 0.45, ease: 'back.out(1.7)' }, 0.15);
+    tl.to('#hook-line-1', { y: -60, opacity: 0, duration: 0.2, ease: 'power2.in' }, 0.9);
+    tl.set('#hook-line-2', { opacity: 0 }, 0);
+    tl.fromTo('#hook-line-2', { y: 80, scale: 0.92, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: 0.4, ease: 'expo.out' }, 1.1);
+    tl.to('#hook-line-2', { y: -60, opacity: 0, duration: 0.2, ease: 'power2.in' }, 1.8);
+    tl.set('#hook-logo-wrap', { opacity: 0 }, 0);
+    tl.fromTo('#hook-logo-wrap', { scale: 0.78, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2)' }, 2.0);
+    tl.fromTo('#hook-pulse', { scale: 0, opacity: 0.9 }, { scale: 3.4, opacity: 0, duration: 1.1, ease: 'power1.out' }, 2.0);
+
+    /* Transition 1 → 2 (2.8s) */
+    blurOut('#beat-hook', 2.8, 0.3);
+    blurIn('#bg-dark', 2.9, 0.3);
+
+    /* ===== Beat 2 — Problem ===== */
+    tl.from('#pain-1', { x: -90, opacity: 0, duration: 0.4, ease: 'power4.out' }, 3.3);
+    tl.from('#pain-2', { x: -90, opacity: 0, duration: 0.35, ease: 'power3.out' }, 3.95);
+    tl.from('#pain-3', { y: 50, scale: 0.95, opacity: 0, duration: 0.45, ease: 'expo.out' }, 4.6);
+    tl.from('#pain-sub', { opacity: 0, y: 15, duration: 0.5, ease: 'power1.out' }, 5.6);
+
+    /* Transition 2 → 3 (7.8s) */
+    blurOut('#beat-problem', 7.8, 0.4);
+    tl.to('#bg-dark', { opacity: 0, duration: 0.5, ease: 'power2.inOut' }, 7.8);
+    blurIn('#v-dashboard', 8.0, 0.4, 0.92);
+    tl.from('#edge-fade-left',  { opacity: 0, duration: 0.4 }, 8.0);
+    tl.from('#edge-fade-right', { opacity: 0, duration: 0.4 }, 8.0);
+
+    /* ===== Beat 3 — Dashboard ===== */
+    tl.from('#b3-eyebrow',  { x: -60, opacity: 0, duration: 0.4, ease: 'power4.out' }, 8.5);
+    tl.from('#b3-headline', { x: -60, opacity: 0, duration: 0.55, ease: 'expo.out' }, 8.65);
+    tl.fromTo('#v-dashboard', { scale: 1 }, { scale: 1.05, duration: 4.3, ease: 'power1.inOut' }, 8.45);
+
+    /* Transition 3 → 4 (12.8s) */
+    blurOut('#beat-dashboard', 12.8, 0.3);
+    tl.to('#v-dashboard', { opacity: 0, filter: 'blur(10px)', duration: 0.3, ease: 'power2.inOut' }, 12.8);
+    blurIn('#v-modal', 12.9, 0.3, 0.93);
+
+    /* ===== Beat 4 — Session modal ===== */
+    tl.from('#b4-eyebrow',  { x: -60, opacity: 0, duration: 0.4, ease: 'power4.out' }, 13.3);
+    tl.from('#b4-headline', { x: -60, opacity: 0, duration: 0.5, ease: 'expo.out' }, 13.45);
+    tl.from('#pill-qcm',    { x: 60, scale: 0.8, opacity: 0, duration: 0.35, ease: 'back.out(1.8)' }, 14.0);
+    tl.from('#pill-flash',  { x: 60, scale: 0.8, opacity: 0, duration: 0.35, ease: 'back.out(1.8)' }, 14.6);
+    tl.from('#pill-saisie', { x: 60, scale: 0.8, opacity: 0, duration: 0.35, ease: 'back.out(1.8)' }, 15.2);
+    tl.from('#pill-vf',     { x: 60, scale: 0.8, opacity: 0, duration: 0.35, ease: 'back.out(1.8)' }, 15.8);
+    tl.from('#pill-trous',  { x: 60, scale: 0.8, opacity: 0, duration: 0.35, ease: 'back.out(1.8)' }, 16.4);
+    tl.fromTo('#v-modal', { scale: 1 }, { scale: 1.03, duration: 5.5, ease: 'power1.inOut' }, 13.3);
+
+    /* Transition 4 → 5A (19s, fast) */
+    blurOut('#beat-modal', 19.0, 0.2);
+    blurOut('#v-modal', 19.0, 0.2);
+    blurIn('#v-qcm', 19.05, 0.2, 0.92);
+
+    /* ===== Beat 5A — QCM ===== */
+    tl.from('#b5a-line', { y: 50, opacity: 0, duration: 0.35, ease: 'back.out(1.6)' }, 19.35);
+    tl.fromTo('#v-qcm', { scale: 1 }, { scale: 1.05, duration: 2.4, ease: 'power1.inOut' }, 19.3);
+
+    /* Transition 5A → 5B (21.8s) */
+    blurOut('#beat-qcm', 21.8, 0.2);
+    blurOut('#v-qcm', 21.8, 0.2);
+    blurIn('#v-flashcard', 21.9, 0.2, 0.92);
+
+    /* ===== Beat 5B — Flashcard ===== */
+    tl.from('#b5b-line', { x: -70, opacity: 0, duration: 0.4, ease: 'expo.out' }, 22.15);
+    tl.fromTo('#v-flashcard', { scale: 1 }, { scale: 1.05, duration: 2.5, ease: 'power1.inOut' }, 22.15);
+
+    /* Transition 5B → 5C (24.8s) */
+    blurOut('#beat-flashcard', 24.8, 0.2);
+    blurOut('#v-flashcard', 24.8, 0.2);
+    blurIn('#v-saisie', 24.9, 0.2, 0.92);
+
+    /* ===== Beat 5C — Saisie libre ===== */
+    tl.from('#b5c-line', { x: -70, opacity: 0, duration: 0.4, ease: 'power4.out' }, 25.15);
+    tl.fromTo('#v-saisie', { scale: 1 }, { scale: 1.05, duration: 2.6, ease: 'power1.inOut' }, 25.15);
+
+    /* Transition 5C → 5D (28s) */
+    blurOut('#beat-saisie', 28.0, 0.2);
+    blurOut('#v-saisie', 28.0, 0.2);
+    blurIn('#v-vraifaux', 28.05, 0.2, 0.92);
+
+    /* ===== Beat 5D — Vrai/Faux ===== */
+    tl.from('#b5d-line', { y: 45, opacity: 0, duration: 0.35, ease: 'back.out(1.6)' }, 28.35);
+    tl.fromTo('#v-vraifaux', { scale: 1 }, { scale: 1.05, duration: 2.3, ease: 'power1.inOut' }, 28.3);
+
+    /* Transition 5D → 6 (30.8s) */
+    blurOut('#beat-vraifaux', 30.8, 0.35);
+    blurOut('#v-vraifaux', 30.8, 0.35);
+    blurIn('#v-import', 30.9, 0.35, 0.93);
+
+    /* ===== Beat 6 — Import / AI ===== */
+    tl.from('#b6-headline', { x: -60, opacity: 0, duration: 0.5, ease: 'expo.out' }, 31.4);
+    tl.set('#step-1', { opacity: 0 }, 31.0);
+    tl.set('#step-2', { opacity: 0 }, 31.0);
+    tl.set('#step-3', { opacity: 0 }, 31.0);
+    tl.fromTo('#step-1', { x: -40, scale: 0.95, opacity: 0 }, { x: 0, scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.6)' }, 34.3);
+    tl.fromTo('#step-2', { x: -40, scale: 0.95, opacity: 0 }, { x: 0, scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.6)' }, 35.2);
+    tl.fromTo('#step-3', { x: -40, scale: 0.95, opacity: 0 }, { x: 0, scale: 1, opacity: 1, duration: 0.35, ease: 'back.out(1.6)' }, 36.1);
+    tl.set('#import-pill', { opacity: 0 }, 31.0);
+    tl.fromTo('#import-pill', { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(2)' }, 33.0);
+    tl.to('#import-pill', { scale: 1.06, duration: 0.5, ease: 'power1.inOut', repeat: 5, yoyo: true }, 33.6);
+    tl.fromTo('#v-import', { scale: 1 }, { scale: 1.04, duration: 7.3, ease: 'power1.inOut' }, 31.35);
+
+    /* Transition 6 → 7 (38.8s) */
+    blurOut('#beat-import', 38.8, 0.35);
+    blurOut('#v-import', 38.8, 0.35);
+    blurIn('#v-stats', 38.9, 0.35, 0.93);
+
+    /* ===== Beat 7 — Stats ===== */
+    tl.from('#b7-headline', { x: -60, opacity: 0, duration: 0.45, ease: 'expo.out' }, 39.3);
+    // rotating headline copy
+    tl.to('#b7-headline', { opacity: 0, y: -20, duration: 0.25, ease: 'power2.in' }, 41.2);
+    tl.set('#b7-headline', { innerText: 'Vois tes progrès.' }, 41.5);
+    tl.fromTo('#b7-headline', { opacity: 0, y: 25 }, { opacity: 1, y: 0, duration: 0.3, ease: 'back.out(1.5)' }, 41.5);
+    tl.to('#b7-headline', { opacity: 0, y: -20, duration: 0.25, ease: 'power2.in' }, 43.2);
+    tl.set('#b7-headline', { innerText: 'Reste régulier.' }, 43.5);
+    tl.fromTo('#b7-headline', { opacity: 0, y: 25 }, { opacity: 1, y: 0, duration: 0.3, ease: 'back.out(1.5)' }, 43.5);
+    // stat callouts
+    tl.from('#stat-streak',  { scale: 0.5, opacity: 0, duration: 0.45, ease: 'back.out(2)' }, 40.0);
+    tl.from('#stat-success', { scale: 0.5, opacity: 0, duration: 0.45, ease: 'back.out(2)' }, 41.5);
+    tl.from('#stat-cards',   { scale: 0.5, opacity: 0, duration: 0.45, ease: 'back.out(2)' }, 43.0);
+    // slow upward pan
+    tl.fromTo('#v-stats', { y: 0 }, { y: -30, duration: 7.2, ease: 'power1.inOut' }, 39.0);
+
+    /* Transition 7 → 8 (46.4s) */
+    blurOut('#beat-stats', 46.4, 0.35);
+    blurOut('#v-stats', 46.4, 0.35);
+    blurIn('#v-theme', 46.5, 0.35, 0.93);
+
+    /* ===== Beat 8 — Theme ===== */
+    tl.from('#b8-eyebrow',  { x: -60, opacity: 0, duration: 0.4, ease: 'power4.out' }, 46.95);
+    tl.from('#b8-headline', { x: -60, opacity: 0, duration: 0.5, ease: 'expo.out' }, 47.1);
+    tl.fromTo('#v-theme', { scale: 1 }, { scale: 1.04, duration: 5.3, ease: 'power1.inOut' }, 46.95);
+
+    /* Transition 8 → 9 (52.4s, long & cinematic) */
+    blurOut('#beat-theme', 52.4, 0.5);
+    blurOut('#v-theme', 52.4, 0.5);
+    tl.from('#bg-outro', { opacity: 0, duration: 0.6, ease: 'power2.inOut' }, 52.5);
+
+    /* ===== Beat 9 — Outro ===== */
+    tl.from('#outro-logo',    { y: 60, scale: 0.9, opacity: 0, duration: 0.55, ease: 'expo.out' }, 53.2);
+    tl.from('#outro-tagline', { y: 30, opacity: 0, duration: 0.45, ease: 'power3.out' }, 53.7);
+    tl.from('#outro-cta',     { scale: 0.7, opacity: 0, duration: 0.45, ease: 'back.out(2.2)' }, 54.2);
+    tl.from('#outro-url',     { opacity: 0, y: 15, duration: 0.45, ease: 'power1.out' }, 54.9);
+    tl.fromTo('#outro-glow', { scale: 1 }, { scale: 1.12, duration: 2.5, ease: 'sine.inOut', repeat: 1, yoyo: true }, 53.0);
+    // FINAL SCENE — exit to black allowed
+    tl.to('#beat-outro', { opacity: 0, duration: 1.5, ease: 'power2.in' }, 58.5);
+    tl.to('#outro-glow', { opacity: 0, duration: 1.5, ease: 'power2.in' }, 58.5);
+
+    window.__timelines['main'] = tl;
+  </script>
+</div>
+</body>
+</html>
