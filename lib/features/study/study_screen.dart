@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -32,6 +33,10 @@ class StudyScreen extends ConsumerStatefulWidget {
 }
 
 class _StudyScreenState extends ConsumerState<StudyScreen> {
+  static const double _desktopBreakpoint = 1100;
+  static const double _desktopMaxWidth = 1240;
+  static const double _desktopReviewPanelWidth = 340;
+
   StudySessionState? _state;
   Object? _error;
   late final StudyController _controller;
@@ -385,6 +390,61 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     return 'Impossible de démarrer cette session pour le moment.';
   }
 
+  bool _isDesktopPlatform() {
+    return switch (defaultTargetPlatform) {
+      TargetPlatform.linux ||
+      TargetPlatform.macOS ||
+      TargetPlatform.windows => true,
+      _ => false,
+    };
+  }
+
+  _ReviewFeedback _reviewFeedback({
+    required TestMode mode,
+    required StudyCard card,
+    required StudySessionState state,
+    required String clozeSolution,
+  }) {
+    return switch (mode) {
+      TestMode.multipleChoice => _ReviewFeedback(
+        label: state.currentAnswerWasCorrect == true
+            ? 'Bonne réponse'
+            : 'Réponse attendue',
+        answer: card.correctAnswer,
+        explanation: card.explanation,
+      ),
+      TestMode.cloze => _ReviewFeedback(
+        label: state.currentAnswerWasCorrect == true
+            ? 'Bien joué'
+            : 'Texte complété',
+        answer: clozeSolution,
+        explanation: card.explanation,
+        resultIsCorrect: state.currentAnswerWasCorrect,
+      ),
+      TestMode.freeText => _ReviewFeedback(
+        label: state.currentAnswerWasCorrect == true ? 'Bien joué' : 'Réponse',
+        answer: card.correctAnswer,
+        explanation: card.explanation,
+        resultIsCorrect: state.currentAnswerWasCorrect,
+      ),
+      TestMode.trueFalse => _ReviewFeedback(
+        label: 'Réponse correcte',
+        answer: card.correctAnswer,
+        explanation: card.explanation,
+      ),
+      TestMode.reversedFlashcard => _ReviewFeedback(
+        label: 'Concept visé',
+        answer: card.question,
+        explanation: card.explanation,
+      ),
+      _ => _ReviewFeedback(
+        label: 'Réponse',
+        answer: card.correctAnswer,
+        explanation: card.explanation,
+      ),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = _state;
@@ -442,156 +502,206 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         ? card.correctAnswer
         : storedProposition;
 
+    final showsReview = _needsReviewButtons(mode, state);
+
     return PopScope(
       canPop: _canPopStudy(),
       onPopInvokedWithResult: (didPop, _) => _handlePopInvoked(didPop),
       child: Scaffold(
         body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: AppTheme.contentMaxWidth,
-              ),
-              child: GestureDetector(
-                onVerticalDragEnd: (details) {
-                  if (details.primaryVelocity != null &&
-                      details.primaryVelocity! < -200 &&
-                      !state.revealed &&
-                      (mode == TestMode.classicFlashcard ||
-                          mode == TestMode.reversedFlashcard)) {
-                    _reveal();
-                  }
+          child: LayoutBuilder(
+            builder: (context, viewportConstraints) {
+              final isWideDesktop =
+                  _isDesktopPlatform() &&
+                  viewportConstraints.maxWidth >= _desktopBreakpoint;
+              final usesReviewPanel = isWideDesktop && showsReview;
+              final maxWidth = isWideDesktop
+                  ? _desktopMaxWidth
+                  : AppTheme.contentMaxWidth;
+
+              final modeContent = AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: switch (mode) {
+                  TestMode.multipleChoice => _McqMode(
+                    key: ValueKey('mcq-${card.id}-${state.hasValidatedAnswer}'),
+                    card: card,
+                    options: options,
+                    selectedIndex: state.selectedOptionIndex,
+                    hasValidatedAnswer: state.hasValidatedAnswer,
+                    desktopGrid: isWideDesktop,
+                    showInlineFeedback: !usesReviewPanel,
+                    onSelect: _selectOption,
+                  ),
+                  TestMode.cloze => _ClozeMode(
+                    key: ValueKey(
+                      'cloze-${card.id}-${state.hasValidatedAnswer}',
+                    ),
+                    prompt: card.question,
+                    tokens: clozeTokens,
+                    selectedWords: _clozeSelections,
+                    availableWords: availableClozeWords,
+                    activeGapIndex: _activeClozeGapIndex,
+                    hasValidated: state.hasValidatedAnswer,
+                    isCorrect: state.currentAnswerWasCorrect,
+                    validationResults: clozeResults,
+                    solutionText: clozeSolution,
+                    hint: card.hint,
+                    explanation: card.explanation,
+                    showInlineFeedback: !usesReviewPanel,
+                    onGapTap: _selectClozeGap,
+                    onWordTap: _fillClozeGap,
+                    onSubmit: () => _submitTextAnswer(isCloze: true),
+                  ),
+                  TestMode.freeText => _TextEntryMode(
+                    key: ValueKey(
+                      'free-${card.id}-${state.hasValidatedAnswer}',
+                    ),
+                    title: 'Saisie libre',
+                    prompt: card.question,
+                    hint: card.hint,
+                    controller: _freeTextController,
+                    hasValidated: state.hasValidatedAnswer,
+                    isCorrect: state.currentAnswerWasCorrect,
+                    answerLabel: 'Réponse',
+                    answerText: card.correctAnswer,
+                    explanation: card.explanation,
+                    showInlineFeedback: !usesReviewPanel,
+                    actionLabel: 'Vérifier',
+                    onSubmit: () => _submitTextAnswer(isCloze: false),
+                  ),
+                  TestMode.trueFalse => _TrueFalseMode(
+                    key: ValueKey('tf-${card.id}-${state.hasValidatedAnswer}'),
+                    card: card,
+                    proposition: trueFalseProposition,
+                    propositionIsCorrect: _controller
+                        .isTrueFalsePropositionCorrect(
+                          card,
+                          trueFalseProposition,
+                        ),
+                    selectedIndex: state.selectedOptionIndex,
+                    hasValidatedAnswer: state.hasValidatedAnswer,
+                    showInlineFeedback: !usesReviewPanel,
+                    onSelect: (index) {
+                      final correct = _controller.evaluateTrueFalse(
+                        card,
+                        trueFalseProposition,
+                        answeredTrue: index == 0,
+                      );
+                      setState(() {
+                        _state = state.copyWith(
+                          selectedOptionIndex: index,
+                          hasValidatedAnswer: true,
+                          currentAnswerWasCorrect: correct,
+                        );
+                      });
+                    },
+                  ),
+                  _ => _FlashcardMode(
+                    key: ValueKey('flash-${card.id}-${state.revealed}'),
+                    card: card,
+                    revealed: state.revealed,
+                    reversed: mode == TestMode.reversedFlashcard,
+                    showInlineAnswer: !usesReviewPanel,
+                    onReveal: _reveal,
+                  ),
                 },
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      StudyProgressHeader(
-                        title: state.deckTitle,
-                        currentIndex: state.currentIndex,
-                        total: state.cards.length,
-                        level: card.level,
-                        progressDots: card.progressDots,
-                        onClose: _exitStudy,
-                      ),
-                      const SizedBox(height: 24),
-                      Expanded(
-                        child: AnimatedSwitcher(
-                          duration: const Duration(milliseconds: 220),
-                          child: switch (mode) {
-                            TestMode.multipleChoice => _McqMode(
-                              key: ValueKey(
-                                'mcq-${card.id}-${state.hasValidatedAnswer}',
-                              ),
-                              card: card,
-                              options: options,
-                              selectedIndex: state.selectedOptionIndex,
-                              hasValidatedAnswer: state.hasValidatedAnswer,
-                              onSelect: _selectOption,
-                            ),
-                            TestMode.cloze => _ClozeMode(
-                              key: ValueKey(
-                                'cloze-${card.id}-${state.hasValidatedAnswer}',
-                              ),
-                              prompt: card.question,
-                              tokens: clozeTokens,
-                              selectedWords: _clozeSelections,
-                              availableWords: availableClozeWords,
-                              activeGapIndex: _activeClozeGapIndex,
-                              hasValidated: state.hasValidatedAnswer,
-                              isCorrect: state.currentAnswerWasCorrect,
-                              validationResults: clozeResults,
-                              solutionText: clozeSolution,
-                              hint: card.hint,
-                              explanation: card.explanation,
-                              onGapTap: _selectClozeGap,
-                              onWordTap: _fillClozeGap,
-                              onSubmit: () => _submitTextAnswer(isCloze: true),
-                            ),
-                            TestMode.freeText => _TextEntryMode(
-                              key: ValueKey(
-                                'free-${card.id}-${state.hasValidatedAnswer}',
-                              ),
-                              title: 'Saisie libre',
-                              prompt: card.question,
-                              hint: card.hint,
-                              controller: _freeTextController,
-                              hasValidated: state.hasValidatedAnswer,
-                              isCorrect: state.currentAnswerWasCorrect,
-                              answerLabel: 'Réponse',
-                              answerText: card.correctAnswer,
-                              explanation: card.explanation,
-                              actionLabel: 'Vérifier',
-                              onSubmit: () => _submitTextAnswer(isCloze: false),
-                            ),
-                            TestMode.trueFalse => _TrueFalseMode(
-                              key: ValueKey(
-                                'tf-${card.id}-${state.hasValidatedAnswer}',
-                              ),
-                              card: card,
-                              proposition: trueFalseProposition,
-                              propositionIsCorrect: _controller
-                                  .isTrueFalsePropositionCorrect(
-                                    card,
-                                    trueFalseProposition,
+              );
+
+              return Center(
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(maxWidth: maxWidth),
+                  child: GestureDetector(
+                    onVerticalDragEnd: (details) {
+                      if (details.primaryVelocity != null &&
+                          details.primaryVelocity! < -200 &&
+                          !state.revealed &&
+                          (mode == TestMode.classicFlashcard ||
+                              mode == TestMode.reversedFlashcard)) {
+                        _reveal();
+                      }
+                    },
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          StudyProgressHeader(
+                            title: state.deckTitle,
+                            currentIndex: state.currentIndex,
+                            total: state.cards.length,
+                            level: card.level,
+                            progressDots: card.progressDots,
+                            onClose: _exitStudy,
+                          ),
+                          const SizedBox(height: 24),
+                          Expanded(
+                            child: usesReviewPanel
+                                ? Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        key: const Key('desktop-study-content'),
+                                        child: modeContent,
+                                      ),
+                                      const SizedBox(width: 24),
+                                      SizedBox(
+                                        width: _desktopReviewPanelWidth,
+                                        child: _DesktopReviewPanel(
+                                          feedback: _reviewFeedback(
+                                            mode: mode,
+                                            card: card,
+                                            state: state,
+                                            clozeSolution: clozeSolution,
+                                          ),
+                                          suggested: suggested,
+                                          onReview: _applyReview,
+                                        ),
+                                      ),
+                                    ],
+                                  )
+                                : Align(
+                                    alignment: Alignment.topCenter,
+                                    child: ConstrainedBox(
+                                      constraints: const BoxConstraints(
+                                        maxWidth: AppTheme.contentMaxWidth,
+                                      ),
+                                      child: modeContent,
+                                    ),
                                   ),
-                              selectedIndex: state.selectedOptionIndex,
-                              hasValidatedAnswer: state.hasValidatedAnswer,
-                              onSelect: (index) {
-                                final correct = _controller.evaluateTrueFalse(
-                                  card,
-                                  trueFalseProposition,
-                                  answeredTrue: index == 0,
-                                );
-                                setState(() {
-                                  _state = state.copyWith(
-                                    selectedOptionIndex: index,
-                                    hasValidatedAnswer: true,
-                                    currentAnswerWasCorrect: correct,
-                                  );
-                                });
-                              },
+                          ),
+                          if (showsReview && !usesReviewPanel) ...[
+                            const SizedBox(height: 18),
+                            const SectionLabel('Comment tu t’en es sorti ?'),
+                            const SizedBox(height: 12),
+                            GridView.count(
+                              key: const Key('inline-review-controls'),
+                              crossAxisCount:
+                                  MediaQuery.of(context).size.width > 700
+                                  ? 4
+                                  : 2,
+                              shrinkWrap: true,
+                              physics: const NeverScrollableScrollPhysics(),
+                              crossAxisSpacing: 12,
+                              mainAxisSpacing: 12,
+                              childAspectRatio: 1.55,
+                              children: [
+                                for (final result in ReviewResult.values)
+                                  ReviewButton(
+                                    result: result,
+                                    isSuggested: result == suggested,
+                                    onPressed: () => _applyReview(result),
+                                  ),
+                              ],
                             ),
-                            _ => _FlashcardMode(
-                              key: ValueKey(
-                                'flash-${card.id}-${state.revealed}',
-                              ),
-                              card: card,
-                              revealed: state.revealed,
-                              reversed: mode == TestMode.reversedFlashcard,
-                              onReveal: _reveal,
-                            ),
-                          },
-                        ),
-                      ),
-                      if (_needsReviewButtons(mode, state)) ...[
-                        const SizedBox(height: 18),
-                        const SectionLabel('Comment tu t’en es sorti ?'),
-                        const SizedBox(height: 12),
-                        GridView.count(
-                          crossAxisCount:
-                              MediaQuery.of(context).size.width > 700 ? 4 : 2,
-                          shrinkWrap: true,
-                          physics: const NeverScrollableScrollPhysics(),
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 1.55,
-                          children: [
-                            for (final result in ReviewResult.values)
-                              ReviewButton(
-                                result: result,
-                                isSuggested: result == suggested,
-                                onPressed: () => _applyReview(result),
-                              ),
                           ],
-                        ),
-                      ],
-                    ],
+                        ],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
           ),
         ),
       ),
@@ -621,18 +731,133 @@ class _PendingReviewSubmission {
   final bool wasCorrect;
 }
 
+class _ReviewFeedback {
+  const _ReviewFeedback({
+    required this.label,
+    required this.answer,
+    required this.explanation,
+    this.resultIsCorrect,
+  });
+
+  final String label;
+  final String answer;
+  final String? explanation;
+  final bool? resultIsCorrect;
+}
+
+class _DesktopReviewPanel extends StatelessWidget {
+  const _DesktopReviewPanel({
+    required this.feedback,
+    required this.suggested,
+    required this.onReview,
+  });
+
+  final _ReviewFeedback feedback;
+  final ReviewResult suggested;
+  final ValueChanged<ReviewResult> onReview;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final resultIsCorrect = feedback.resultIsCorrect;
+    final tone = switch (resultIsCorrect) {
+      true => const Color(0xFF245433),
+      false => const Color(0xFF8E2F24),
+      null => theme.colorScheme.onSurface,
+    };
+    final background = switch (resultIsCorrect) {
+      true => const Color(0xFFEAF3E7),
+      false => const Color(0xFFFBE7E4),
+      null => theme.colorScheme.surface,
+    };
+
+    return Card(
+      key: const Key('desktop-review-panel'),
+      margin: EdgeInsets.zero,
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: ColoredBox(
+              color: background,
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(22),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      feedback.label.toUpperCase(),
+                      style: theme.textTheme.labelMedium?.copyWith(color: tone),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      feedback.answer,
+                      style: theme.textTheme.titleLarge?.copyWith(color: tone),
+                    ),
+                    if (feedback.explanation != null) ...[
+                      const SizedBox(height: 16),
+                      Text(
+                        feedback.explanation!,
+                        style: theme.textTheme.bodyLarge?.copyWith(color: tone),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const Divider(height: 1),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionLabel('Comment tu t’en es sorti ?'),
+                const SizedBox(height: 12),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: ReviewResult.values.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    crossAxisSpacing: 10,
+                    mainAxisSpacing: 10,
+                    mainAxisExtent: 90,
+                  ),
+                  itemBuilder: (context, index) {
+                    final result = ReviewResult.values[index];
+                    return ReviewButton(
+                      result: result,
+                      isSuggested: result == suggested,
+                      compact: true,
+                      onPressed: () => onReview(result),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _FlashcardMode extends StatelessWidget {
   const _FlashcardMode({
     super.key,
     required this.card,
     required this.revealed,
     required this.reversed,
+    required this.showInlineAnswer,
     required this.onReveal,
   });
 
   final StudyCard card;
   final bool revealed;
   final bool reversed;
+  final bool showInlineAnswer;
   final VoidCallback onReveal;
 
   @override
@@ -674,37 +899,43 @@ class _FlashcardMode extends StatelessWidget {
       );
     }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SectionLabel('Question'),
-            const SizedBox(height: 12),
-            Text(
-              reversed ? card.correctAnswer : card.question,
-              style: Theme.of(context).textTheme.titleLarge,
+    return ListView(
+      children: [
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SectionLabel('Question'),
+                const SizedBox(height: 12),
+                Text(
+                  reversed ? card.correctAnswer : card.question,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
+                if (showInlineAnswer) ...[
+                  const SizedBox(height: 18),
+                  const Divider(),
+                  const SizedBox(height: 18),
+                  SectionLabel(reversed ? 'Concept visé' : 'Réponse'),
+                  const SizedBox(height: 12),
+                  Text(
+                    reversed ? card.question : card.correctAnswer,
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  if (card.explanation != null) ...[
+                    const SizedBox(height: 18),
+                    Text(
+                      card.explanation!,
+                      style: Theme.of(context).textTheme.bodyLarge,
+                    ),
+                  ],
+                ],
+              ],
             ),
-            const SizedBox(height: 18),
-            const Divider(),
-            const SizedBox(height: 18),
-            SectionLabel(reversed ? 'Concept visé' : 'Réponse'),
-            const SizedBox(height: 12),
-            Text(
-              reversed ? card.question : card.correctAnswer,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            if (card.explanation != null) ...[
-              const SizedBox(height: 18),
-              Text(
-                card.explanation!,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-            ],
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
@@ -716,6 +947,8 @@ class _McqMode extends StatelessWidget {
     required this.options,
     required this.selectedIndex,
     required this.hasValidatedAnswer,
+    required this.desktopGrid,
+    required this.showInlineFeedback,
     required this.onSelect,
   });
 
@@ -723,6 +956,8 @@ class _McqMode extends StatelessWidget {
   final List<String> options;
   final int? selectedIndex;
   final bool hasValidatedAnswer;
+  final bool desktopGrid;
+  final bool showInlineFeedback;
   final void Function(int index, List<String> options) onSelect;
 
   @override
@@ -758,20 +993,49 @@ class _McqMode extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 16),
-        for (var index = 0; index < options.length; index++) ...[
-          _McqOptionTile(
-            text: options[index],
-            isSelected: selectedIndex == index,
-            isCorrect: hasValidatedAnswer && index == correctIndex,
-            isWrong:
-                hasValidatedAnswer &&
-                selectedIndex == index &&
-                selectedIndex != correctIndex,
-            onTap: hasValidatedAnswer ? null : () => onSelect(index, options),
-          ),
-          const SizedBox(height: 10),
-        ],
-        if (hasValidatedAnswer) ...[
+        if (desktopGrid)
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final optionWidth = (constraints.maxWidth - 10) / 2;
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (var index = 0; index < options.length; index++)
+                    SizedBox(
+                      width: optionWidth,
+                      child: _McqOptionTile(
+                        text: options[index],
+                        isSelected: selectedIndex == index,
+                        isCorrect: hasValidatedAnswer && index == correctIndex,
+                        isWrong:
+                            hasValidatedAnswer &&
+                            selectedIndex == index &&
+                            selectedIndex != correctIndex,
+                        onTap: hasValidatedAnswer
+                            ? null
+                            : () => onSelect(index, options),
+                      ),
+                    ),
+                ],
+              );
+            },
+          )
+        else
+          for (var index = 0; index < options.length; index++) ...[
+            _McqOptionTile(
+              text: options[index],
+              isSelected: selectedIndex == index,
+              isCorrect: hasValidatedAnswer && index == correctIndex,
+              isWrong:
+                  hasValidatedAnswer &&
+                  selectedIndex == index &&
+                  selectedIndex != correctIndex,
+              onTap: hasValidatedAnswer ? null : () => onSelect(index, options),
+            ),
+            const SizedBox(height: 10),
+          ],
+        if (hasValidatedAnswer && showInlineFeedback) ...[
           const SizedBox(height: 8),
           Card(
             child: Padding(
@@ -876,6 +1140,7 @@ class _ClozeMode extends StatelessWidget {
     required this.solutionText,
     required this.hint,
     required this.explanation,
+    required this.showInlineFeedback,
     required this.onGapTap,
     required this.onWordTap,
     required this.onSubmit,
@@ -892,6 +1157,7 @@ class _ClozeMode extends StatelessWidget {
   final String solutionText;
   final String? hint;
   final String? explanation;
+  final bool showInlineFeedback;
   final void Function(int gapIndex) onGapTap;
   final void Function(String word) onWordTap;
   final VoidCallback onSubmit;
@@ -1017,7 +1283,7 @@ class _ClozeMode extends StatelessWidget {
             ),
           ),
         ),
-        if (hasValidated) ...[
+        if (hasValidated && showInlineFeedback) ...[
           const SizedBox(height: 16),
           Card(
             color: feedbackBackground,
@@ -1183,6 +1449,7 @@ class _TextEntryMode extends StatelessWidget {
     required this.answerLabel,
     required this.answerText,
     required this.explanation,
+    required this.showInlineFeedback,
     required this.actionLabel,
     required this.onSubmit,
   });
@@ -1196,6 +1463,7 @@ class _TextEntryMode extends StatelessWidget {
   final String answerLabel;
   final String answerText;
   final String? explanation;
+  final bool showInlineFeedback;
   final String actionLabel;
   final VoidCallback onSubmit;
 
@@ -1243,7 +1511,7 @@ class _TextEntryMode extends StatelessWidget {
             ),
           ),
         ),
-        if (hasValidated) ...[
+        if (hasValidated && showInlineFeedback) ...[
           const SizedBox(height: 16),
           Card(
             color: feedbackBackground,
@@ -1293,6 +1561,7 @@ class _TrueFalseMode extends StatelessWidget {
     required this.propositionIsCorrect,
     required this.selectedIndex,
     required this.hasValidatedAnswer,
+    required this.showInlineFeedback,
     required this.onSelect,
   });
 
@@ -1301,6 +1570,7 @@ class _TrueFalseMode extends StatelessWidget {
   final bool propositionIsCorrect;
   final int? selectedIndex;
   final bool hasValidatedAnswer;
+  final bool showInlineFeedback;
   final void Function(int index) onSelect;
 
   @override
@@ -1365,7 +1635,7 @@ class _TrueFalseMode extends StatelessWidget {
           ),
           const SizedBox(height: 10),
         ],
-        if (hasValidatedAnswer) ...[
+        if (hasValidatedAnswer && showInlineFeedback) ...[
           const SizedBox(height: 12),
           Card(
             child: Padding(

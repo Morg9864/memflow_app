@@ -612,12 +612,14 @@ class ReviewButton extends StatelessWidget {
     required this.onPressed,
     this.isSuggested = false,
     this.enabled = true,
+    this.compact = false,
   });
 
   final ReviewResult result;
   final VoidCallback? onPressed;
   final bool isSuggested;
   final bool enabled;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
@@ -629,8 +631,8 @@ class ReviewButton extends StatelessWidget {
     return FilledButton(
       onPressed: enabled ? onPressed : null,
       style: FilledButton.styleFrom(
-        minimumSize: const Size.fromHeight(88),
-        padding: const EdgeInsets.all(16),
+        minimumSize: Size.fromHeight(compact ? 72 : 88),
+        padding: EdgeInsets.all(compact ? 12 : 16),
         backgroundColor: background,
         foregroundColor: tone,
         disabledBackgroundColor: background.withValues(alpha: 0.55),
@@ -648,14 +650,20 @@ class ReviewButton extends StatelessWidget {
         children: [
           Text(
             result.label,
-            style: Theme.of(
-              context,
-            ).textTheme.titleMedium?.copyWith(color: tone),
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontSize: compact ? 15 : null,
+              color: tone,
+            ),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: compact ? 3 : 6),
           Text(
             result.description,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: tone),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: compact ? 11 : null,
+              color: tone,
+            ),
           ),
         ],
       ),

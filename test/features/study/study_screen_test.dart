@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,7 +14,11 @@ import 'package:memflow/theme/theme_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  StudyCard buildCard(String id) {
+  StudyCard buildCard(
+    String id, {
+    TestMode mode = TestMode.multipleChoice,
+    String? explanation,
+  }) {
     return StudyCard(
       id: id,
       collectionId: 'react',
@@ -22,9 +27,9 @@ void main() {
       correctAnswer: 'Réponse $id',
       wrongAnswers: const ['A', 'B', 'C'],
       hint: null,
-      explanation: null,
-      currentTestMode: TestMode.multipleChoice,
-      allowedTestModes: const [TestMode.multipleChoice],
+      explanation: explanation,
+      currentTestMode: mode,
+      allowedTestModes: [mode],
       clozeText: null,
       clozeAnswers: const [],
       clozeWordBank: const [],
@@ -58,7 +63,12 @@ void main() {
     );
   }
 
-  StudySessionState buildState(List<StudyCard> cards) {
+  StudySessionState buildState(
+    List<StudyCard> cards, {
+    bool revealed = false,
+    bool hasValidatedAnswer = false,
+    bool? currentAnswerWasCorrect,
+  }) {
     return StudySessionState(
       deckTitle: 'React',
       collectionId: 'react',
@@ -68,9 +78,9 @@ void main() {
       seenCardIds: const <String>{},
       pendingReviewResults: const <String, ReviewResult>{},
       currentIndex: 0,
-      revealed: false,
+      revealed: revealed,
       selectedOptionIndex: null,
-      hasValidatedAnswer: false,
+      hasValidatedAnswer: hasValidatedAnswer,
       freeTextAnswer: '',
       reviewCounts: const {
         ReviewResult.again: 0,
@@ -78,7 +88,7 @@ void main() {
         ReviewResult.good: 0,
         ReviewResult.easy: 0,
       },
-      currentAnswerWasCorrect: null,
+      currentAnswerWasCorrect: currentAnswerWasCorrect,
       isCompleted: false,
     );
   }
@@ -86,12 +96,16 @@ void main() {
   Future<void> pumpStudyScreen(
     WidgetTester tester, {
     required StudyController controller,
+    Size size = const Size(1200, 1600),
+    TargetPlatform? platform,
   }) async {
     tester.view.devicePixelRatio = 1;
-    tester.view.physicalSize = const Size(1200, 1600);
+    tester.view.physicalSize = size;
+    debugDefaultTargetPlatformOverride = platform;
     addTearDown(() {
       tester.view.resetPhysicalSize();
       tester.view.resetDevicePixelRatio();
+      debugDefaultTargetPlatformOverride = null;
     });
 
     SharedPreferences.setMockInitialValues({});
@@ -237,6 +251,181 @@ void main() {
       expect(find.text('useEffect'), findsWidgets);
     },
   );
+
+  testWidgets(
+    'wide desktop moves correction and review controls into a right panel',
+    (tester) async {
+      final controller = _FakeStudyController(
+        initialState: buildState([buildCard('desktop')]),
+        submitReviewImpl:
+            ({
+              required String cardId,
+              required ReviewResult result,
+              required bool wasCorrect,
+            }) async {},
+      );
+
+      await pumpStudyScreen(
+        tester,
+        controller: controller,
+        size: const Size(1366, 768),
+        platform: TargetPlatform.linux,
+      );
+
+      expect(find.byKey(const Key('desktop-review-panel')), findsNothing);
+
+      await tester.tap(find.text('Réponse desktop'));
+      await tester.pumpAndSettle();
+
+      final panel = find.byKey(const Key('desktop-review-panel'));
+      expect(panel, findsOneWidget);
+      expect(find.byKey(const Key('inline-review-controls')), findsNothing);
+      expect(tester.getTopLeft(panel).dx, greaterThan(900));
+      expect(find.text('COMMENT TU T’EN ES SORTI ?'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  testWidgets('tablet layout keeps the existing inline review controls', (
+    tester,
+  ) async {
+    final controller = _FakeStudyController(
+      initialState: buildState([buildCard('tablet')]),
+      submitReviewImpl:
+          ({
+            required String cardId,
+            required ReviewResult result,
+            required bool wasCorrect,
+          }) async {},
+    );
+
+    await pumpStudyScreen(
+      tester,
+      controller: controller,
+      size: const Size(1200, 900),
+      platform: TargetPlatform.android,
+    );
+
+    await tester.tap(find.text('Réponse tablet'));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const Key('desktop-review-panel')), findsNothing);
+    expect(find.byKey(const Key('inline-review-controls')), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  final desktopModeCases = <({TestMode mode, String expectedAnswer})>[
+    (mode: TestMode.multipleChoice, expectedAnswer: 'Réponse mode-mcq'),
+    (mode: TestMode.trueFalse, expectedAnswer: 'Réponse mode-true-false'),
+    (mode: TestMode.freeText, expectedAnswer: 'Réponse mode-free-text'),
+    (mode: TestMode.classicFlashcard, expectedAnswer: 'Réponse mode-flash'),
+    (
+      mode: TestMode.reversedFlashcard,
+      expectedAnswer: 'Question mode-reversed',
+    ),
+  ];
+
+  for (final testCase in desktopModeCases) {
+    testWidgets(
+      'desktop review panel presents feedback for ${testCase.mode.name}',
+      (tester) async {
+        final card = buildCard(
+          'mode-${switch (testCase.mode) {
+            TestMode.multipleChoice => 'mcq',
+            TestMode.trueFalse => 'true-false',
+            TestMode.freeText => 'free-text',
+            TestMode.classicFlashcard => 'flash',
+            TestMode.reversedFlashcard => 'reversed',
+            _ => 'other',
+          }}',
+          mode: testCase.mode,
+          explanation: 'Une explication suffisamment claire.',
+        );
+        final isFlashcard =
+            testCase.mode == TestMode.classicFlashcard ||
+            testCase.mode == TestMode.reversedFlashcard;
+        final controller = _FakeStudyController(
+          initialState: buildState(
+            [card],
+            revealed: isFlashcard,
+            hasValidatedAnswer: !isFlashcard,
+            currentAnswerWasCorrect: isFlashcard ? null : false,
+          ),
+          submitReviewImpl:
+              ({
+                required String cardId,
+                required ReviewResult result,
+                required bool wasCorrect,
+              }) async {},
+        );
+
+        await pumpStudyScreen(
+          tester,
+          controller: controller,
+          size: const Size(1366, 768),
+          platform: TargetPlatform.linux,
+        );
+
+        final panel = find.byKey(const Key('desktop-review-panel'));
+        expect(panel, findsOneWidget);
+        expect(
+          find.descendant(
+            of: panel,
+            matching: find.text(testCase.expectedAnswer),
+          ),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: panel,
+            matching: find.text('Une explication suffisamment claire.'),
+          ),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        debugDefaultTargetPlatformOverride = null;
+      },
+    );
+  }
+
+  testWidgets('desktop review panel presents cloze solution', (tester) async {
+    final card = buildClozeCard();
+    final controller = _FakeStudyController(
+      initialState: buildState(
+        [card],
+        hasValidatedAnswer: true,
+        currentAnswerWasCorrect: true,
+      ),
+      submitReviewImpl:
+          ({
+            required String cardId,
+            required ReviewResult result,
+            required bool wasCorrect,
+          }) async {},
+    );
+
+    await pumpStudyScreen(
+      tester,
+      controller: controller,
+      size: const Size(1366, 768),
+      platform: TargetPlatform.linux,
+    );
+
+    final panel = find.byKey(const Key('desktop-review-panel'));
+    expect(panel, findsOneWidget);
+    expect(
+      find.descendant(
+        of: panel,
+        matching: find.text(
+          'React, le hook useState retourne une valeur actuelle et une fonction pour la modifier.',
+        ),
+      ),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+    debugDefaultTargetPlatformOverride = null;
+  });
 }
 
 typedef _SubmitReviewCallback =
