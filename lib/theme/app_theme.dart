@@ -20,6 +20,14 @@ class AppColors {
   static const redSoft = Color(0xFFFBE7E4);
   static const greenSoft = Color(0xFFEAF3E7);
   static const blueSoft = Color(0xFFEAF0F3);
+  static const backgroundVivid = Color(0xFFF5FBFF);
+  static const borderVivid = Color(0xFFB8C6E3);
+  static const textVivid = Color(0xFF101828);
+  static const mutedVivid = Color(0xFF475467);
+  static const primaryVivid = Color(0xFF245BFF);
+  static const secondaryVivid = Color(0xFFE03F8F);
+  static const tertiaryVivid = Color(0xFF00A887);
+  static const vividSoft = Color(0xFFE8EEFF);
 }
 
 class AppTheme {
@@ -27,6 +35,24 @@ class AppTheme {
   static const BorderRadius radiusSm = BorderRadius.all(Radius.circular(14));
   static const BorderRadius radiusMd = BorderRadius.all(Radius.circular(22));
   static const BorderRadius radiusLg = BorderRadius.all(Radius.circular(30));
+  static const vividColorScheme = ColorScheme.light(
+    primary: AppColors.primaryVivid,
+    onPrimary: Colors.white,
+    secondary: AppColors.secondaryVivid,
+    onSecondary: AppColors.textVivid,
+    secondaryContainer: AppColors.secondaryVivid,
+    onSecondaryContainer: AppColors.textVivid,
+    tertiary: AppColors.tertiaryVivid,
+    onTertiary: Colors.white,
+    surface: Colors.white,
+    onSurface: AppColors.textVivid,
+    onSurfaceVariant: AppColors.mutedVivid,
+    outline: AppColors.borderVivid,
+    outlineVariant: AppColors.borderVivid,
+    surfaceContainerHighest: AppColors.vividSoft,
+    error: Color(0xFFD92D20),
+    onError: Colors.white,
+  );
 
   static ThemeData light() {
     final base = ThemeData(
@@ -39,11 +65,19 @@ class AppTheme {
         surface: AppColors.surfaceLight,
         onSurface: AppColors.textLight,
         secondary: AppColors.primary,
+        onSecondary: Colors.white,
+        secondaryContainer: AppColors.primary,
+        onSecondaryContainer: Colors.white,
+        onSurfaceVariant: AppColors.mutedLight,
+        outline: AppColors.borderLight,
+        outlineVariant: AppColors.borderLight,
+        surfaceContainerHighest: Color(0xFFF1E7DC),
         error: Color(0xFFD94A3A),
+        onError: Colors.white,
       ),
     );
 
-    return _buildTheme(base, isDark: false);
+    return _buildTheme(base);
   }
 
   static ThemeData dark() {
@@ -57,23 +91,40 @@ class AppTheme {
         surface: AppColors.surfaceDark,
         onSurface: AppColors.textDark,
         secondary: AppColors.primaryDark,
+        onSecondary: Color(0xFF1A1410),
+        secondaryContainer: AppColors.primaryDark,
+        onSecondaryContainer: Color(0xFF1A1410),
+        onSurfaceVariant: AppColors.mutedDark,
+        outline: AppColors.borderDark,
+        outlineVariant: AppColors.borderDark,
+        surfaceContainerHighest: Color(0xFF3A2A21),
         error: Color(0xFFE07B70),
+        onError: Color(0xFF1A1410),
       ),
     );
 
-    return _buildTheme(base, isDark: true);
+    return _buildTheme(base);
   }
 
-  static ThemeData _buildTheme(ThemeData base, {required bool isDark}) {
+  static ThemeData vivid() {
+    final base = ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: AppColors.backgroundVivid,
+      colorScheme: vividColorScheme,
+    );
+
+    return _buildTheme(base);
+  }
+
+  static ThemeData _buildTheme(ThemeData base) {
+    final scheme = base.colorScheme;
     final title = GoogleFonts.lora(
-      color: isDark ? AppColors.textDark : AppColors.textLight,
+      color: scheme.onSurface,
       fontWeight: FontWeight.w600,
-      letterSpacing: -0.4,
+      letterSpacing: 0,
     );
-    final body = GoogleFonts.outfit(
-      color: isDark ? AppColors.textDark : AppColors.textLight,
-      letterSpacing: 0.1,
-    );
+    final body = GoogleFonts.outfit(color: scheme.onSurface, letterSpacing: 0);
 
     return base.copyWith(
       textTheme: TextTheme(
@@ -87,59 +138,67 @@ class AppTheme {
         bodySmall: body.copyWith(
           fontSize: 13,
           height: 1.35,
-          color: isDark ? AppColors.mutedDark : AppColors.mutedLight,
+          color: scheme.onSurfaceVariant,
         ),
         labelLarge: body.copyWith(fontSize: 15, fontWeight: FontWeight.w600),
         labelMedium: body.copyWith(
           fontSize: 12,
           fontWeight: FontWeight.w600,
-          letterSpacing: 1.2,
-          color: isDark ? AppColors.mutedDark : AppColors.mutedLight,
+          letterSpacing: 0,
+          color: scheme.onSurfaceVariant,
         ),
       ),
       cardTheme: CardThemeData(
-        color: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
+        color: scheme.surface,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: radiusMd,
-          side: BorderSide(
-            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          ),
+          side: BorderSide(color: scheme.outlineVariant),
         ),
       ),
-      dividerColor: isDark ? AppColors.borderDark : AppColors.borderLight,
+      dividerColor: scheme.outlineVariant,
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? AppColors.surfaceDark : AppColors.surfaceLight,
-        hintStyle: TextStyle(
-          color: isDark ? AppColors.mutedDark : AppColors.mutedLight,
+        fillColor: scheme.surface,
+        hintStyle: TextStyle(color: scheme.onSurfaceVariant),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 18,
+          vertical: 16,
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 16),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide(
-            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          ),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(28),
-          borderSide: BorderSide(
-            color: isDark ? AppColors.borderDark : AppColors.borderLight,
-          ),
+          borderSide: BorderSide(color: scheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(28),
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.4),
+          borderSide: BorderSide(color: scheme.primary, width: 1.4),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
-          backgroundColor: isDark ? AppColors.primaryDark : AppColors.primary,
-          foregroundColor: isDark ? const Color(0xFF21160F) : Colors.white,
+          backgroundColor: scheme.primary,
+          foregroundColor: scheme.onPrimary,
           minimumSize: const Size.fromHeight(56),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
           textStyle: body.copyWith(fontSize: 16, fontWeight: FontWeight.w600),
         ),
+      ),
+      chipTheme: base.chipTheme.copyWith(
+        selectedColor: scheme.secondaryContainer,
+        checkmarkColor: scheme.onSecondaryContainer,
+        labelStyle: body.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+        secondaryLabelStyle: body.copyWith(
+          color: scheme.onSecondaryContainer,
+          fontSize: 14,
+          fontWeight: FontWeight.w600,
+        ),
+        side: BorderSide(color: scheme.outlineVariant),
       ),
     );
   }

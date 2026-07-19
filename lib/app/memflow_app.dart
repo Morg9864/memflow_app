@@ -21,7 +21,9 @@ class MemFlowApp extends ConsumerWidget {
       title: 'MemFlow',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: appScaffoldMessengerKey,
-      theme: AppTheme.light(),
+      theme: themePreference == ThemePreference.vivid
+          ? AppTheme.vivid()
+          : AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themePreference.themeMode,
       routerConfig: router,

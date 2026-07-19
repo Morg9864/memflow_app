@@ -17,7 +17,7 @@ enum DeckDifficulty { facile, moyen, avance }
 
 enum DeckStatus { nouveau, maitrise, dues }
 
-enum ThemePreference { system, light, dark }
+enum ThemePreference { system, light, dark, vivid }
 
 enum SyncEntityType { collection, deck, flashcard, reviewLog }
 
@@ -101,12 +101,14 @@ extension ThemePreferenceX on ThemePreference {
     ThemePreference.system => ThemeMode.system,
     ThemePreference.light => ThemeMode.light,
     ThemePreference.dark => ThemeMode.dark,
+    ThemePreference.vivid => ThemeMode.light,
   };
 
   String get label => switch (this) {
     ThemePreference.system => 'Système',
     ThemePreference.light => 'Clair',
     ThemePreference.dark => 'Sombre',
+    ThemePreference.vivid => 'Vivid',
   };
 }
 
@@ -137,6 +139,7 @@ class CollectionListItem {
     required this.createdAt,
     required this.updatedAt,
     required this.errorCount,
+    this.isDisabled = false,
   });
 
   final String id;
@@ -150,6 +153,7 @@ class CollectionListItem {
   final DateTime createdAt;
   final DateTime updatedAt;
   final int errorCount;
+  final bool isDisabled;
 
   double get progress => totalCards == 0 ? 0 : cardsDone / totalCards;
 }
@@ -209,6 +213,7 @@ class CollectionRecord {
     required this.color,
     required this.createdAt,
     required this.updatedAt,
+    this.isDisabled = false,
   });
 
   final String id;
@@ -218,6 +223,7 @@ class CollectionRecord {
   final int color;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isDisabled;
 }
 
 class DeckRecord {

@@ -108,13 +108,18 @@ class AppRepository {
   }
 
   Stream<HomeStats> watchHomeStats() {
-    return _combineLatest4(
+    return _combineLatest5(
+      _watchCollectionsInternal(),
       _watchDecksInternal(),
       _watchFlashcardsInternal(),
       _watchReviewLogsInternal(),
       _clockStream(),
-      (decks, flashcards, reviewLogs, now) => _buildHomeStats(
-        flashcards: _excludeDisabledDeckCards(flashcards, decks),
+      (collections, decks, flashcards, reviewLogs, now) => _buildHomeStats(
+        flashcards: _excludeUnavailableCards(
+          flashcards,
+          collections: collections,
+          decks: decks,
+        ),
         reviewLogs: reviewLogs,
         now: now,
       ),
@@ -434,28 +439,37 @@ class AppRepository {
   Stream<List<FlashcardDueItem>> watchDueCardsForCollection(
     String collectionId,
   ) {
-    return _combineLatest3(
+    return _combineLatest4(
+      _watchCollectionsInternal(),
       _watchFlashcardsInternal(collectionId: collectionId),
       _watchDecksInternal(collectionId: collectionId),
       _clockStream(),
-      (cards, decks, now) {
+      (collections, cards, decks, now) {
         final deckNames = {for (final deck in decks) deck.id: deck.name};
-        final sortedCards = [..._excludeDisabledDeckCards(cards, decks)]
-          ..sort((a, b) {
-            final byDueAt = a.dueAt.compareTo(b.dueAt);
-            if (byDueAt != 0) {
-              return byDueAt;
-            }
+        final sortedCards =
+            [
+              ..._excludeUnavailableCards(
+                cards,
+                collections: collections,
+                decks: decks,
+              ),
+            ]..sort((a, b) {
+              final byDueAt = a.dueAt.compareTo(b.dueAt);
+              if (byDueAt != 0) {
+                return byDueAt;
+              }
 
-            final byDeckName = (deckNames[a.deckId] ?? '')
-                .toLowerCase()
-                .compareTo((deckNames[b.deckId] ?? '').toLowerCase());
-            if (byDeckName != 0) {
-              return byDeckName;
-            }
+              final byDeckName = (deckNames[a.deckId] ?? '')
+                  .toLowerCase()
+                  .compareTo((deckNames[b.deckId] ?? '').toLowerCase());
+              if (byDeckName != 0) {
+                return byDeckName;
+              }
 
-            return a.question.toLowerCase().compareTo(b.question.toLowerCase());
-          });
+              return a.question.toLowerCase().compareTo(
+                b.question.toLowerCase(),
+              );
+            });
 
         return sortedCards
             .map(
@@ -478,6 +492,11 @@ class AppRepository {
     required int offset,
     required int limit,
   }) async {
+    final collection = await _fetchCollection(collectionId);
+    if (collection == null || collection.isDisabled) {
+      return const PaginatedSlice(items: [], totalCount: 0);
+    }
+
     final decks = await _fetchDecks(collectionId: collectionId);
     final activeDecks = decks.where((deck) => !deck.isDisabled).toList();
     if (activeDecks.isEmpty) {
@@ -543,6 +562,11 @@ class AppRepository {
         filterColumn: 'collection_id',
         filterValue: collectionId,
       ),
+      _watchTableEvents(
+        'collections',
+        filterColumn: 'id',
+        filterValue: collectionId,
+      ),
     ]);
   }
 
@@ -587,6 +611,21 @@ class AppRepository {
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         })
         .eq('id', deckId)
+        .eq('user_id', _userId);
+    _notifyDataChanged();
+  }
+
+  Future<void> setCollectionDisabled(
+    String collectionId,
+    bool isDisabled,
+  ) async {
+    await _client
+        .from('collections')
+        .update({
+          'is_disabled': isDisabled,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', collectionId)
         .eq('user_id', _userId);
     _notifyDataChanged();
   }
@@ -715,6 +754,14 @@ class AppRepository {
     return {for (final row in rows) row['id'] as String};
   }
 
+  Future<Set<String>> _fetchDisabledCollectionIds() async {
+    final rows = await _selectRows(
+      'collections',
+      equals: {'is_disabled': true},
+    );
+    return {for (final row in rows) row['id'] as String};
+  }
+
   Future<List<FlashcardRecord>> _fetchFlashcards({
     String? collectionId,
     String? deckId,
@@ -789,6 +836,7 @@ class AppRepository {
     required int sessionCardLimit,
   }) async {
     final disabledDeckIds = await _fetchDisabledDeckIds();
+    final disabledCollectionIds = await _fetchDisabledCollectionIds();
 
     final dueCards = await _fetchFlashcards(
       collectionId: collectionId,
@@ -796,7 +844,11 @@ class AppRepository {
       dueBeforeOrAt: now,
     );
     final dueActiveCards = dueCards
-        .where((card) => !disabledDeckIds.contains(card.deckId))
+        .where(
+          (card) =>
+              !disabledDeckIds.contains(card.deckId) &&
+              !disabledCollectionIds.contains(card.collectionId),
+        )
         .toList();
     if (dueActiveCards.isNotEmpty) {
       return _takeSessionCards(dueActiveCards, sessionCardLimit);
@@ -807,7 +859,11 @@ class AppRepository {
       deckId: deckId,
     );
     final activeCards = cards
-        .where((card) => !disabledDeckIds.contains(card.deckId))
+        .where(
+          (card) =>
+              !disabledDeckIds.contains(card.deckId) &&
+              !disabledCollectionIds.contains(card.collectionId),
+        )
         .toList();
     return _takeSessionCards(activeCards, sessionCardLimit);
   }
@@ -923,6 +979,7 @@ class AppRepository {
       createdAt: collection.createdAt,
       updatedAt: collection.updatedAt,
       errorCount: errorCount,
+      isDisabled: collection.isDisabled,
     );
   }
 
@@ -976,6 +1033,31 @@ class AppRepository {
     }
     return flashcards
         .where((card) => !disabledDeckIds.contains(card.deckId))
+        .toList();
+  }
+
+  List<FlashcardRecord> _excludeUnavailableCards(
+    List<FlashcardRecord> flashcards, {
+    required List<CollectionRecord> collections,
+    required List<DeckRecord> decks,
+  }) {
+    final disabledCollectionIds = {
+      for (final collection in collections)
+        if (collection.isDisabled) collection.id,
+    };
+    final disabledDeckIds = {
+      for (final deck in decks)
+        if (deck.isDisabled) deck.id,
+    };
+    if (disabledCollectionIds.isEmpty && disabledDeckIds.isEmpty) {
+      return flashcards;
+    }
+    return flashcards
+        .where(
+          (card) =>
+              !disabledCollectionIds.contains(card.collectionId) &&
+              !disabledDeckIds.contains(card.deckId),
+        )
         .toList();
   }
 
@@ -1373,6 +1455,7 @@ class AppRepository {
       color: (row['color'] as num).toInt(),
       createdAt: DateTime.parse(row['created_at'] as String),
       updatedAt: DateTime.parse(row['updated_at'] as String),
+      isDisabled: (row['is_disabled'] as bool?) ?? false,
     );
   }
 

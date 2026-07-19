@@ -91,23 +91,42 @@ class ThemeToggleButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = ref.watch(themeControllerProvider);
-    final isDark =
-        theme == ThemePreference.dark ||
-        (theme == ThemePreference.system &&
-            Theme.of(context).brightness == Brightness.dark);
-    return IconButton.filledTonal(
-      tooltip: 'Changer de thème',
-      onPressed: () {
-        ref
-            .read(themeControllerProvider.notifier)
-            .setPreference(
-              isDark ? ThemePreference.light : ThemePreference.dark,
-            );
-      },
-      icon: Icon(isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded),
+    final preference = ref.watch(themeControllerProvider);
+    final scheme = Theme.of(context).colorScheme;
+    return PopupMenuButton<ThemePreference>(
+      tooltip: 'Choisir le thème',
+      icon: const Icon(Icons.palette_outlined),
+      style: IconButton.styleFrom(
+        backgroundColor: scheme.secondaryContainer,
+        foregroundColor: scheme.onSecondaryContainer,
+      ),
+      onSelected: (value) =>
+          ref.read(themeControllerProvider.notifier).setPreference(value),
+      itemBuilder: (_) => ThemePreference.values
+          .map(
+            (value) => PopupMenuItem(
+              value: value,
+              child: Row(
+                children: [
+                  Icon(_themeIcon(value), size: 20),
+                  const SizedBox(width: 12),
+                  Expanded(child: Text(value.label)),
+                  if (value == preference)
+                    const Icon(Icons.check_rounded, size: 20),
+                ],
+              ),
+            ),
+          )
+          .toList(),
     );
   }
+
+  IconData _themeIcon(ThemePreference preference) => switch (preference) {
+    ThemePreference.system => Icons.brightness_auto_rounded,
+    ThemePreference.light => Icons.light_mode_rounded,
+    ThemePreference.dark => Icons.dark_mode_rounded,
+    ThemePreference.vivid => Icons.palette_rounded,
+  };
 }
 
 class SectionLabel extends StatelessWidget {
@@ -202,9 +221,7 @@ class ProgressPill extends StatelessWidget {
       child: LinearProgressIndicator(
         minHeight: height,
         value: value.clamp(0, 1),
-        backgroundColor: theme.brightness == Brightness.dark
-            ? const Color(0xFF3A2A21)
-            : const Color(0xFFF1E7DC),
+        backgroundColor: theme.colorScheme.surfaceContainerHighest,
         valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
       ),
     );
@@ -225,56 +242,82 @@ class CollectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
-      child: InkWell(
-        borderRadius: AppTheme.radiusMd,
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(18),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: Color(collection.color).withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(14),
+      child: Opacity(
+        opacity: collection.isDisabled ? 0.45 : 1,
+        child: InkWell(
+          borderRadius: AppTheme.radiusMd,
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 42,
+                      height: 42,
+                      decoration: BoxDecoration(
+                        color: Color(collection.color).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        collection.icon,
+                        style: const TextStyle(fontSize: 20),
+                      ),
                     ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      collection.icon,
-                      style: const TextStyle(fontSize: 20),
+                    const Spacer(),
+                    if (collection.isDisabled) ...[
+                      const _DisabledBadge(label: 'Désactivée'),
+                      const SizedBox(width: 8),
+                    ],
+                    Icon(
+                      Icons.arrow_outward_rounded,
+                      color: theme.colorScheme.primary,
                     ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    Icons.arrow_outward_rounded,
+                  ],
+                ),
+                const Spacer(),
+                Text(collection.name, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 6),
+                Text(
+                  '${collection.cardsDone} / ${collection.totalCards} cartes faites',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${collection.dueCards} à revoir',
+                  style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.primary,
                   ),
-                ],
-              ),
-              const Spacer(),
-              Text(collection.name, style: theme.textTheme.titleMedium),
-              const SizedBox(height: 6),
-              Text(
-                '${collection.cardsDone} / ${collection.totalCards} cartes faites',
-                style: theme.textTheme.bodySmall,
-              ),
-              const SizedBox(height: 4),
-              Text(
-                '${collection.dueCards} à revoir',
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: theme.colorScheme.primary,
                 ),
-              ),
-              const SizedBox(height: 12),
-              ProgressPill(value: collection.progress),
-            ],
+                const SizedBox(height: 12),
+                ProgressPill(value: collection.progress),
+              ],
+            ),
           ),
         ),
       ),
+    );
+  }
+}
+
+class _DisabledBadge extends StatelessWidget {
+  const _DisabledBadge({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.outline.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(label, style: theme.textTheme.labelSmall),
     );
   }
 }
@@ -290,7 +333,7 @@ class DeckCard extends StatelessWidget {
   });
 
   final DeckListItem deck;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final VoidCallback? onDelete;
   final VoidCallback? onViewCards;
   final VoidCallback? onToggleDisabled;
@@ -300,12 +343,13 @@ class DeckCard extends StatelessWidget {
     final theme = Theme.of(context);
     final hasOptions =
         onDelete != null || onViewCards != null || onToggleDisabled != null;
+    final isUnavailable = deck.isDisabled || onTap == null;
     return Card(
       child: InkWell(
-        onTap: deck.isDisabled ? null : onTap,
+        onTap: isUnavailable ? null : onTap,
         borderRadius: AppTheme.radiusMd,
         child: Opacity(
-          opacity: deck.isDisabled ? 0.45 : 1,
+          opacity: isUnavailable ? 0.45 : 1,
           child: Padding(
             padding: const EdgeInsets.all(18),
             child: Row(
@@ -335,22 +379,7 @@ class DeckCard extends StatelessWidget {
                           ),
                           if (deck.isDisabled) ...[
                             const SizedBox(width: 8),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 2,
-                              ),
-                              decoration: BoxDecoration(
-                                color: theme.colorScheme.outline.withValues(
-                                  alpha: 0.18,
-                                ),
-                                borderRadius: BorderRadius.circular(999),
-                              ),
-                              child: Text(
-                                'Désactivé',
-                                style: theme.textTheme.labelSmall,
-                              ),
-                            ),
+                            const _DisabledBadge(label: 'Désactivé'),
                           ],
                         ],
                       ),
@@ -640,8 +669,19 @@ class ActivityBarChart extends StatelessWidget {
   final List<HeatmapCell> days;
 
   static const _monthNames = [
-    '', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
-    'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc',
+    '',
+    'Jan',
+    'Fév',
+    'Mar',
+    'Avr',
+    'Mai',
+    'Juin',
+    'Juil',
+    'Août',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Déc',
   ];
 
   int _monthOf(String label) {
@@ -656,10 +696,10 @@ class ActivityBarChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final primary = Theme.of(context).colorScheme.primary;
-    final inactive = Theme.of(context).brightness == Brightness.dark
-        ? const Color(0xFF30231A)
-        : const Color(0xFFF3EADF);
-    final labelStyle = Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 10);
+    final inactive = Theme.of(context).colorScheme.surfaceContainerHighest;
+    final labelStyle = Theme.of(
+      context,
+    ).textTheme.bodySmall?.copyWith(fontSize: 10);
 
     final maxCount = days.fold(0, (m, d) => d.count > m ? d.count : m);
 
@@ -667,7 +707,8 @@ class ActivityBarChart extends StatelessWidget {
       builder: (context, constraints) {
         const gap = 5.0;
         const chartHeight = 72.0;
-        final barWidth = (constraints.maxWidth - (days.length - 1) * gap) / days.length;
+        final barWidth =
+            (constraints.maxWidth - (days.length - 1) * gap) / days.length;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -681,7 +722,10 @@ class ActivityBarChart extends StatelessWidget {
                   final day = days[i];
                   final barH = maxCount == 0
                       ? 3.0
-                      : (day.count / maxCount * chartHeight).clamp(3.0, chartHeight);
+                      : (day.count / maxCount * chartHeight).clamp(
+                          3.0,
+                          chartHeight,
+                        );
                   return Row(
                     children: [
                       if (i > 0) const SizedBox(width: gap),
@@ -690,8 +734,9 @@ class ActivityBarChart extends StatelessWidget {
                         height: barH,
                         decoration: BoxDecoration(
                           color: day.count > 0 ? primary : inactive,
-                          borderRadius:
-                              const BorderRadius.vertical(top: Radius.circular(4)),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(4),
+                          ),
                         ),
                       ),
                     ],
@@ -755,10 +800,9 @@ class ActivityBarChart extends StatelessWidget {
                               _monthNames[month],
                               textAlign: TextAlign.center,
                               style: labelStyle?.copyWith(
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onSurface
-                                    .withValues(alpha: 0.45),
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurface.withValues(alpha: 0.45),
                               ),
                               softWrap: false,
                               overflow: TextOverflow.visible,

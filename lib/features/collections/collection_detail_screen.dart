@@ -128,15 +128,41 @@ class _CollectionDetailScreenState
     }
   }
 
+  Future<void> _toggleCollectionDisabled(CollectionListItem collection) async {
+    final willDisable = !collection.isDisabled;
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(appRepositoryProvider)
+          .setCollectionDisabled(collection.id, willDisable);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              willDisable
+                  ? '"${collection.name}" désactivée'
+                  : '"${collection.name}" réactivée',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final collection = ref.watch(collectionProvider(widget.collectionId));
     final decks = ref.watch(collectionDecksProvider(widget.collectionId));
     final deckCount = decks.asData?.value.length;
+    final currentCollection = collection.asData?.value;
 
     return AppScaffold(
       floatingActionButton: FloatingActionButton(
-        onPressed: _busy ? null : () => _launchStudy(),
+        onPressed: _busy || currentCollection?.isDisabled != false
+            ? null
+            : () => _launchStudy(),
         child: const Icon(Icons.play_arrow_rounded),
       ),
       child: collection.when(
@@ -148,8 +174,7 @@ class _CollectionDetailScreenState
                   "Cette collection n'existe pas ou n'est plus disponible.",
             );
           }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          return ListView(
             children: [
               Row(
                 children: [
@@ -160,13 +185,38 @@ class _CollectionDetailScreenState
                   const Spacer(),
                   const ThemeToggleButton(),
                   PopupMenuButton<_CollectionAction>(
+                    enabled: !_busy,
                     icon: const Icon(Icons.more_vert_rounded),
                     onSelected: (action) {
-                      if (action == _CollectionAction.delete) {
-                        _deleteCollection(item);
+                      switch (action) {
+                        case _CollectionAction.toggleDisabled:
+                          _toggleCollectionDisabled(item);
+                        case _CollectionAction.delete:
+                          _deleteCollection(item);
                       }
                     },
                     itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: _CollectionAction.toggleDisabled,
+                        child: Row(
+                          children: [
+                            Icon(
+                              item.isDisabled
+                                  ? Icons.visibility_rounded
+                                  : Icons.visibility_off_rounded,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Text(
+                                item.isDisabled
+                                    ? 'Réactiver la collection'
+                                    : 'Désactiver la collection',
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                       PopupMenuItem(
                         value: _CollectionAction.delete,
                         child: Row(
@@ -177,10 +227,12 @@ class _CollectionDetailScreenState
                               size: 20,
                             ),
                             const SizedBox(width: 12),
-                            Text(
-                              'Supprimer la collection',
-                              style: TextStyle(
-                                color: Theme.of(context).colorScheme.error,
+                            Expanded(
+                              child: Text(
+                                'Supprimer la collection',
+                                style: TextStyle(
+                                  color: Theme.of(context).colorScheme.error,
+                                ),
                               ),
                             ),
                           ],
@@ -191,18 +243,41 @@ class _CollectionDetailScreenState
                 ],
               ),
               const SizedBox(height: 18),
-              Container(
-                width: 64,
-                height: 64,
-                decoration: BoxDecoration(
-                  color: Color(item.color).withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(22),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: Container(
+                  key: const ValueKey('collection-icon'),
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Color(item.color).withValues(alpha: 0.14),
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(item.icon, style: const TextStyle(fontSize: 30)),
                 ),
-                alignment: Alignment.center,
-                child: Text(item.icon, style: const TextStyle(fontSize: 30)),
               ),
               const SizedBox(height: 18),
-              Text(item.name, style: Theme.of(context).textTheme.displaySmall),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      item.name,
+                      style: Theme.of(context).textTheme.displaySmall,
+                    ),
+                  ),
+                  if (item.isDisabled) ...[
+                    const SizedBox(width: 12),
+                    Chip(
+                      avatar: const Icon(
+                        Icons.visibility_off_rounded,
+                        size: 18,
+                      ),
+                      label: const Text('Désactivée'),
+                    ),
+                  ],
+                ],
+              ),
               const SizedBox(height: 8),
               Text(
                 item.description,
@@ -238,14 +313,16 @@ class _CollectionDetailScreenState
               ),
               const SizedBox(height: 18),
               FilledButton.tonalIcon(
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute(
-                    builder: (_) => CollectionDueCardsScreen(
-                      collectionId: widget.collectionId,
-                      collectionName: item.name,
-                    ),
-                  ),
-                ),
+                onPressed: item.isDisabled
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => CollectionDueCardsScreen(
+                            collectionId: widget.collectionId,
+                            collectionName: item.name,
+                          ),
+                        ),
+                      ),
                 icon: const Icon(Icons.schedule_rounded),
                 label: const Text('Voir les échéances'),
               ),
@@ -258,36 +335,38 @@ class _CollectionDetailScreenState
                 ],
               ),
               const SizedBox(height: 12),
-              Expanded(
-                child: decks.when(
-                  data: (deckItems) => ListView(
-                    children: [
-                      for (final deck in deckItems) ...[
-                        DeckCard(
-                          deck: deck,
-                          onTap: () => _launchStudy(deckId: deck.id),
-                          onDelete: _busy ? null : () => _deleteDeck(deck),
-                          onToggleDisabled: _busy
-                              ? null
-                              : () => _toggleDeckDisabled(deck),
-                          onViewCards: () => context.push(
-                            '/deck/${deck.id}/cards?name=${Uri.encodeComponent(deck.name)}',
-                          ),
+              decks.when(
+                data: (deckItems) => Column(
+                  children: [
+                    for (final deck in deckItems) ...[
+                      DeckCard(
+                        deck: deck,
+                        onTap: item.isDisabled
+                            ? null
+                            : () => _launchStudy(deckId: deck.id),
+                        onDelete: _busy ? null : () => _deleteDeck(deck),
+                        onToggleDisabled: _busy
+                            ? null
+                            : () => _toggleDeckDisabled(deck),
+                        onViewCards: () => context.push(
+                          '/deck/${deck.id}/cards?name=${Uri.encodeComponent(deck.name)}',
                         ),
-                        const SizedBox(height: 12),
-                      ],
-                      FilledButton.tonalIcon(
-                        onPressed: () => context.push('/import'),
-                        icon: const Icon(Icons.upload_file_rounded),
-                        label: const Text('Importer un CSV'),
                       ),
-                      const SizedBox(height: 80),
+                      const SizedBox(height: 12),
                     ],
-                  ),
-                  loading: () =>
-                      const Center(child: CircularProgressIndicator()),
-                  error: (error, stackTrace) => Text(error.toString()),
+                    FilledButton.tonalIcon(
+                      onPressed: () => context.push('/import'),
+                      icon: const Icon(Icons.upload_file_rounded),
+                      label: const Text('Importer un CSV'),
+                    ),
+                    const SizedBox(height: 80),
+                  ],
                 ),
+                loading: () => const Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Center(child: CircularProgressIndicator()),
+                ),
+                error: (error, stackTrace) => Text(error.toString()),
               ),
             ],
           );
@@ -299,4 +378,4 @@ class _CollectionDetailScreenState
   }
 }
 
-enum _CollectionAction { delete }
+enum _CollectionAction { toggleDisabled, delete }
