@@ -50,6 +50,10 @@ final collectionDecksProvider =
           .watchDecksForCollection(collectionId);
     });
 
+enum _DeckSortField { importOrder, name }
+
+enum _SortDirection { ascending, descending }
+
 class CollectionDetailScreen extends ConsumerStatefulWidget {
   const CollectionDetailScreen({super.key, required this.collectionId});
 
@@ -86,6 +90,34 @@ class _CollectionDetailScreenState
   ];
 
   bool _busy = false;
+  _DeckSortField _deckSortField = _DeckSortField.importOrder;
+  _SortDirection _deckSortDirection = _SortDirection.ascending;
+
+  List<DeckListItem> _sortedDecks(List<DeckListItem> decks) {
+    final sorted = [...decks];
+    sorted.sort((a, b) {
+      final comparison = switch (_deckSortField) {
+        _DeckSortField.importOrder => a.createdAt.compareTo(b.createdAt),
+        _DeckSortField.name => a.name.toLowerCase().compareTo(
+          b.name.toLowerCase(),
+        ),
+      };
+      if (comparison != 0) {
+        return _deckSortDirection == _SortDirection.ascending
+            ? comparison
+            : -comparison;
+      }
+      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+    });
+    return sorted;
+  }
+
+  void _setDeckSort(_DeckSortField field, _SortDirection direction) {
+    setState(() {
+      _deckSortField = field;
+      _deckSortDirection = direction;
+    });
+  }
 
   Future<void> _chooseCollectionIcon(CollectionListItem collection) async {
     final selectedIcon = await showDialog<String>(
@@ -447,37 +479,76 @@ class _CollectionDetailScreenState
                 children: [
                   const SectionLabel('Decks'),
                   const Spacer(),
-                  Text(deckCount == null ? '' : '$deckCount decks'),
+                  if (deckCount != null) Text('$deckCount decks'),
+                  const SizedBox(width: 8),
+                  PopupMenuButton<(_DeckSortField, _SortDirection)>(
+                    tooltip: 'Trier les decks',
+                    icon: const Icon(Icons.sort_rounded),
+                    onSelected: (sort) => _setDeckSort(sort.$1, sort.$2),
+                    itemBuilder: (_) => [
+                      _deckSortMenuItem(
+                        context,
+                        field: _DeckSortField.importOrder,
+                        direction: _SortDirection.ascending,
+                        label: 'Importation croissant',
+                        icon: Icons.south_rounded,
+                      ),
+                      _deckSortMenuItem(
+                        context,
+                        field: _DeckSortField.importOrder,
+                        direction: _SortDirection.descending,
+                        label: 'Importation décroissant',
+                        icon: Icons.north_rounded,
+                      ),
+                      _deckSortMenuItem(
+                        context,
+                        field: _DeckSortField.name,
+                        direction: _SortDirection.ascending,
+                        label: 'Alphabet croissant',
+                        icon: Icons.sort_by_alpha_rounded,
+                      ),
+                      _deckSortMenuItem(
+                        context,
+                        field: _DeckSortField.name,
+                        direction: _SortDirection.descending,
+                        label: 'Alphabet décroissant',
+                        icon: Icons.sort_by_alpha_rounded,
+                      ),
+                    ],
+                  ),
                 ],
               ),
               const SizedBox(height: 12),
               decks.when(
-                data: (deckItems) => Column(
-                  children: [
-                    for (final deck in deckItems) ...[
-                      DeckCard(
-                        deck: deck,
-                        onTap: item.isDisabled
-                            ? null
-                            : () => _launchStudy(deckId: deck.id),
-                        onDelete: _busy ? null : () => _deleteDeck(deck),
-                        onToggleDisabled: _busy
-                            ? null
-                            : () => _toggleDeckDisabled(deck),
-                        onViewCards: () => context.push(
-                          '/deck/${deck.id}/cards?name=${Uri.encodeComponent(deck.name)}',
+                data: (deckItems) {
+                  final sortedDecks = _sortedDecks(deckItems);
+                  return Column(
+                    children: [
+                      for (final deck in sortedDecks) ...[
+                        DeckCard(
+                          deck: deck,
+                          onTap: item.isDisabled
+                              ? null
+                              : () => _launchStudy(deckId: deck.id),
+                          onDelete: _busy ? null : () => _deleteDeck(deck),
+                          onToggleDisabled: _busy
+                              ? null
+                              : () => _toggleDeckDisabled(deck),
+                          onViewCards: () => context.push(
+                            '/deck/${deck.id}/cards?name=${Uri.encodeComponent(deck.name)}',
+                          ),
                         ),
+                        const SizedBox(height: 12),
+                      ],
+                      FilledButton.tonalIcon(
+                        onPressed: () => context.push('/import'),
+                        icon: const Icon(Icons.upload_file_rounded),
+                        label: const Text('Importer un CSV'),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 80),
                     ],
-                    FilledButton.tonalIcon(
-                      onPressed: () => context.push('/import'),
-                      icon: const Icon(Icons.upload_file_rounded),
-                      label: const Text('Importer un CSV'),
-                    ),
-                    const SizedBox(height: 80),
-                  ],
-                ),
+                  );
+                },
                 loading: () => const Padding(
                   padding: EdgeInsets.all(24),
                   child: Center(child: CircularProgressIndicator()),
@@ -489,6 +560,34 @@ class _CollectionDetailScreenState
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Text(error.toString()),
+      ),
+    );
+  }
+
+  PopupMenuItem<(_DeckSortField, _SortDirection)> _deckSortMenuItem(
+    BuildContext context, {
+    required _DeckSortField field,
+    required _SortDirection direction,
+    required String label,
+    required IconData icon,
+  }) {
+    final selected = _deckSortField == field && _deckSortDirection == direction;
+    return PopupMenuItem(
+      value: (field, direction),
+      child: Row(
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 12),
+          Expanded(child: Text(label)),
+          if (selected) ...[
+            const SizedBox(width: 12),
+            Icon(
+              Icons.check_rounded,
+              size: 20,
+              color: Theme.of(context).colorScheme.primary,
+            ),
+          ],
+        ],
       ),
     );
   }

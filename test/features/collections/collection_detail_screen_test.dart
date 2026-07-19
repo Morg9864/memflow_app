@@ -93,6 +93,40 @@ void main() {
     expect(repository.updatedIconCollectionId, 'collection-1');
     expect(repository.updatedIcon, '🧠');
   });
+
+  testWidgets('decks can be sorted by import order and alphabetically', (
+    tester,
+  ) async {
+    final now = DateTime(2026, 7, 19);
+    final repository = _FakeAppRepository(
+      collection: _collection(),
+      decks: [
+        _customDeck(
+          0,
+          name: 'Beta',
+          createdAt: now.add(const Duration(minutes: 1)),
+        ),
+        _customDeck(1, name: 'Alpha', createdAt: now),
+        _customDeck(
+          2,
+          name: 'Gamma',
+          createdAt: now.add(const Duration(minutes: 2)),
+        ),
+      ],
+    );
+    await _pumpScreen(tester, repository);
+
+    expect(_visibleDeckOrder(tester), ['Alpha', 'Beta', 'Gamma']);
+
+    await _selectDeckSort(tester, 'Importation décroissant');
+    expect(_visibleDeckOrder(tester), ['Gamma', 'Beta', 'Alpha']);
+
+    await _selectDeckSort(tester, 'Alphabet croissant');
+    expect(_visibleDeckOrder(tester), ['Alpha', 'Beta', 'Gamma']);
+
+    await _selectDeckSort(tester, 'Alphabet décroissant');
+    expect(_visibleDeckOrder(tester), ['Gamma', 'Beta', 'Alpha']);
+  });
 }
 
 Future<void> _pumpScreen(
@@ -135,10 +169,22 @@ CollectionListItem _collection({bool isDisabled = false}) {
 
 DeckListItem _deck(int index) {
   final now = DateTime(2026, 7, 19);
+  return _customDeck(
+    index,
+    name: 'Deck $index',
+    createdAt: now.add(Duration(minutes: index)),
+  );
+}
+
+DeckListItem _customDeck(
+  int index, {
+  required String name,
+  required DateTime createdAt,
+}) {
   return DeckListItem(
     id: 'deck-$index',
     collectionId: 'collection-1',
-    name: 'Deck $index',
+    name: name,
     icon: 'D',
     difficulty: DeckDifficulty.facile,
     totalCards: 10,
@@ -146,9 +192,24 @@ DeckListItem _deck(int index) {
     dueCards: 3,
     progress: 0.2,
     status: DeckStatus.dues,
-    createdAt: now.add(Duration(minutes: index)),
-    updatedAt: now,
+    createdAt: createdAt,
+    updatedAt: createdAt,
   );
+}
+
+Future<void> _selectDeckSort(WidgetTester tester, String label) async {
+  await tester.tap(find.byTooltip('Trier les decks'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label));
+  await tester.pumpAndSettle();
+}
+
+List<String> _visibleDeckOrder(WidgetTester tester) {
+  final names = ['Alpha', 'Beta', 'Gamma'];
+  final positioned = [
+    for (final name in names) (name, tester.getTopLeft(find.text(name)).dy),
+  ]..sort((a, b) => a.$2.compareTo(b.$2));
+  return [for (final item in positioned) item.$1];
 }
 
 class _FakeAppRepository extends AppRepository {
