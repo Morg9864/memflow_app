@@ -70,6 +70,29 @@ void main() {
     expect(repository.updatedCollectionId, 'collection-1');
     expect(repository.updatedDisabledValue, isFalse);
   });
+
+  testWidgets('the collection icon can be selected and persisted', (
+    tester,
+  ) async {
+    final repository = _FakeAppRepository(
+      collection: _collection(),
+      decks: [_deck(0)],
+    );
+    await _pumpScreen(tester, repository);
+
+    await tester.tap(find.byKey(const ValueKey('collection-icon')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Choisir une icône'), findsOneWidget);
+    expect(find.text('🔢'), findsOneWidget);
+    expect(find.text('🛠️'), findsOneWidget);
+
+    await tester.tap(find.text('🧠'));
+    await tester.pumpAndSettle();
+
+    expect(repository.updatedIconCollectionId, 'collection-1');
+    expect(repository.updatedIcon, '🧠');
+  });
 }
 
 Future<void> _pumpScreen(
@@ -144,6 +167,8 @@ class _FakeAppRepository extends AppRepository {
   final List<DeckListItem> decks;
   String? updatedCollectionId;
   bool? updatedDisabledValue;
+  String? updatedIconCollectionId;
+  String? updatedIcon;
 
   @override
   Stream<CollectionListItem?> watchCollection(String id) {
@@ -162,5 +187,11 @@ class _FakeAppRepository extends AppRepository {
   ) async {
     updatedCollectionId = collectionId;
     updatedDisabledValue = isDisabled;
+  }
+
+  @override
+  Future<void> setCollectionIcon(String collectionId, String icon) async {
+    updatedIconCollectionId = collectionId;
+    updatedIcon = icon;
   }
 }

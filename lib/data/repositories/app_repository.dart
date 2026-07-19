@@ -630,6 +630,18 @@ class AppRepository {
     _notifyDataChanged();
   }
 
+  Future<void> setCollectionIcon(String collectionId, String icon) async {
+    await _client
+        .from('collections')
+        .update({
+          'icon': icon,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', collectionId)
+        .eq('user_id', _userId);
+    _notifyDataChanged();
+  }
+
   Future<void> deleteCollection(String collectionId) async {
     await _client
         .from('collections')

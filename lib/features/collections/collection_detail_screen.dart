@@ -62,7 +62,109 @@ class CollectionDetailScreen extends ConsumerStatefulWidget {
 
 class _CollectionDetailScreenState
     extends ConsumerState<CollectionDetailScreen> {
+  static const _collectionIcons = [
+    '🔢',
+    '🧪',
+    '🧲',
+    '🧬',
+    '💻',
+    '🌍',
+    '🏛️',
+    '⚖️',
+    '📈',
+    '🧠',
+    '💬',
+    '📚',
+    '🗣️',
+    '🎨',
+    '🎬',
+    '🎵',
+    '🩺',
+    '🏃',
+    '🌿',
+    '🛠️',
+  ];
+
   bool _busy = false;
+
+  Future<void> _chooseCollectionIcon(CollectionListItem collection) async {
+    final selectedIcon = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Choisir une icône'),
+        content: SizedBox(
+          width: 320,
+          child: GridView.count(
+            crossAxisCount: 5,
+            shrinkWrap: true,
+            mainAxisSpacing: 8,
+            crossAxisSpacing: 8,
+            children: [
+              for (final icon in _collectionIcons)
+                Semantics(
+                  button: true,
+                  selected: icon == collection.icon,
+                  label: 'Choisir $icon',
+                  child: Tooltip(
+                    message: 'Choisir $icon',
+                    child: InkWell(
+                      onTap: () => Navigator.of(dialogContext).pop(icon),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          color: icon == collection.icon
+                              ? Theme.of(
+                                  dialogContext,
+                                ).colorScheme.primaryContainer
+                              : Theme.of(dialogContext).colorScheme.surface,
+                          border: Border.all(
+                            color: icon == collection.icon
+                                ? Theme.of(dialogContext).colorScheme.primary
+                                : Theme.of(
+                                    dialogContext,
+                                  ).colorScheme.outlineVariant,
+                          ),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Center(
+                          child: Text(
+                            icon,
+                            style: const TextStyle(fontSize: 25),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Annuler'),
+          ),
+        ],
+      ),
+    );
+    if (selectedIcon == null || selectedIcon == collection.icon || !mounted) {
+      return;
+    }
+
+    setState(() => _busy = true);
+    try {
+      await ref
+          .read(appRepositoryProvider)
+          .setCollectionIcon(collection.id, selectedIcon);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Icône de "${collection.name}" mise à jour')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _launchStudy({String? deckId}) async {
     if (deckId != null) {
@@ -245,16 +347,30 @@ class _CollectionDetailScreenState
               const SizedBox(height: 18),
               Align(
                 alignment: Alignment.centerLeft,
-                child: Container(
-                  key: const ValueKey('collection-icon'),
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Color(item.color).withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(22),
+                child: Tooltip(
+                  message: "Changer l'icône",
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      key: const ValueKey('collection-icon'),
+                      onTap: _busy ? null : () => _chooseCollectionIcon(item),
+                      borderRadius: BorderRadius.circular(22),
+                      child: Ink(
+                        width: 64,
+                        height: 64,
+                        decoration: BoxDecoration(
+                          color: Color(item.color).withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(22),
+                        ),
+                        child: Center(
+                          child: Text(
+                            item.icon,
+                            style: const TextStyle(fontSize: 30),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(item.icon, style: const TextStyle(fontSize: 30)),
                 ),
               ),
               const SizedBox(height: 18),
