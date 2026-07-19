@@ -213,6 +213,7 @@ Le fichier final doit être un vrai CSV importable, sans texte avant ni après.
 - Ne pas utiliser d'informations externes.
 - Ne pas créer de doublons inutiles.
 - Ne pas faire de questions trop vagues.
+- Ne jamais créer de questions liés à des images, graphiques, schémas ou tableaux, sauf si le texte les décrit explicitement.
 - Ne pas laisser de champ vide.
 - Respecter exactement le format CSV décrit.
 - Générer le plus grand nombre possible de questions utiles.
