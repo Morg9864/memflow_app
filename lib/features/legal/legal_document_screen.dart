@@ -83,7 +83,7 @@ class LegalDocumentScreen extends StatelessWidget {
         return const [
           (
             'Responsable du traitement',
-            'Morgan Phemba, particulier — Belgique\nmorgan.phemba@gmail.com',
+            'Morgan Phemba, particulier — Belgique\ncontact@morganphemba.be',
           ),
           (
             'Données collectées',
@@ -122,7 +122,7 @@ class LegalDocumentScreen extends StatelessWidget {
           ),
           (
             'Contact',
-            'Pour toute question relative à vos données personnelles :\nmorgan.phemba@gmail.com',
+            'Pour toute question relative à vos données personnelles :\ncontact@morganphemba.be',
           ),
         ];
 
@@ -173,7 +173,7 @@ class LegalDocumentScreen extends StatelessWidget {
         return const [
           (
             'Éditeur',
-            'Morgan Phemba\nParticulier — Belgique\nmorgan.phemba@gmail.com',
+            'Morgan Phemba\nParticulier — Belgique\ncontact@morganphemba.be',
           ),
           (
             'Hébergement des données',
@@ -186,7 +186,7 @@ class LegalDocumentScreen extends StatelessWidget {
           ),
           (
             'Contact',
-            'Pour toute question ou réclamation :\nmorgan.phemba@gmail.com',
+            'Pour toute question ou réclamation :\ncontact@morganphemba.be',
           ),
         ];
     }

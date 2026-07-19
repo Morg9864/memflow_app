@@ -22,7 +22,7 @@ class ProfileScreen extends ConsumerStatefulWidget {
 }
 
 class _ProfileScreenState extends ConsumerState<ProfileScreen> {
-  static const _supportEmail = 'morgan.phemba@gmail.com';
+  static const _supportEmail = 'contact@morganphemba.be';
 
   bool _busy = false;
 
