@@ -162,6 +162,7 @@ class CsvImportService {
             clozeAnswers: clozeAnswers,
             clozeWordBank: clozeWordBank,
             acceptedAnswers: acceptedAnswers,
+            wrongAnswers: wrongAnswers,
           ),
         ),
       );

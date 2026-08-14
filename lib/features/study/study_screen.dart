@@ -246,6 +246,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         result: result,
         wasCorrect:
             state.currentAnswerWasCorrect ?? result != ReviewResult.again,
+        playedMode: state.currentCard.currentTestMode,
       );
       final nextState = _controller.advance(state, result);
 
@@ -290,6 +291,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
             cardId: submission.cardId,
             result: submission.result,
             wasCorrect: submission.wasCorrect,
+            playedMode: submission.playedMode,
           );
           _pendingReviewSubmissions.removeAt(0);
         } catch (_) {
@@ -725,11 +727,16 @@ class _PendingReviewSubmission {
     required this.cardId,
     required this.result,
     required this.wasCorrect,
+    required this.playedMode,
   });
 
   final String cardId;
   final ReviewResult result;
   final bool wasCorrect;
+
+  /// Mode réellement présenté : c'est lui qui est journalisé et qui fait
+  /// avancer la carte, pas le mode stocké avant la session.
+  final TestMode playedMode;
 }
 
 class _ReviewFeedback {

@@ -67,9 +67,9 @@ class _ModeSelectionBody extends StatelessWidget {
 
   static const _options = <_ModeOptionData>[
     _ModeOptionData(
-      icon: Icons.shuffle_rounded,
-      label: 'Aléatoire',
-      description: 'Tous les modes en rotation',
+      icon: Icons.auto_awesome_rounded,
+      label: 'Adaptatif',
+      description: 'Le mode suit ta progression sur chaque carte',
     ),
     _ModeOptionData(
       icon: Icons.format_list_numbered_rounded,

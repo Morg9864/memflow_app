@@ -3,12 +3,15 @@ import '../models/models.dart';
 class CardModeService {
   const CardModeService();
 
+  /// Modes jouables pour une carte, déduits uniquement de ses données. Calculé
+  /// à l'import et figé sur la carte : un mode n'est proposé que si la carte
+  /// porte de quoi le jouer correctement.
   List<TestMode> allowedModesFor({
     required String? clozeText,
     List<String> clozeAnswers = const [],
     List<String> clozeWordBank = const [],
     required List<String> acceptedAnswers,
-    bool includeOptionalModes = false,
+    List<String> wrongAnswers = const [],
   }) {
     final modes = <TestMode>[
       TestMode.multipleChoice,
@@ -28,12 +31,10 @@ class CardModeService {
       modes.add(TestMode.freeText);
     }
 
-    if (includeOptionalModes) {
-      modes.addAll(const [
-        TestMode.trueFalse,
-        TestMode.ordering,
-        TestMode.matching,
-      ]);
+    // Le vrai/faux tire au sort une affirmation parmi la bonne réponse et les
+    // mauvaises : sans mauvaise réponse, l'affirmation serait toujours vraie.
+    if (wrongAnswers.any((answer) => answer.trim().isNotEmpty)) {
+      modes.add(TestMode.trueFalse);
     }
 
     return modes;
@@ -93,12 +94,21 @@ class CardModeService {
         .trim();
   }
 
-  TestMode nextMode(FlashcardRecord card, ReviewResult result) {
+  /// Mode à présenter la prochaine fois. [playedMode] est le mode réellement
+  /// joué : il peut différer du mode stocké quand l'utilisateur impose un mode
+  /// pour toute une session, et c'est bien la réponse donnée dans ce mode-là
+  /// qui doit faire avancer la carte.
+  TestMode nextMode(
+    FlashcardRecord card,
+    ReviewResult result, {
+    TestMode? playedMode,
+  }) {
     final allowed = card.allowedTestModes;
     if (allowed.isEmpty) {
       return TestMode.multipleChoice;
     }
 
+    final current = playedMode ?? card.currentTestMode;
     int indexOf(TestMode mode) =>
         allowed.indexWhere((candidate) => candidate == mode);
     TestMode fallback(TestMode mode) =>
@@ -108,25 +118,24 @@ class CardModeService {
       case ReviewResult.again:
         return fallback(TestMode.multipleChoice);
       case ReviewResult.hard:
-        if (card.currentTestMode == TestMode.multipleChoice &&
+        if (current == TestMode.multipleChoice &&
             allowed.contains(TestMode.classicFlashcard) &&
             card.repetitions >= 1) {
           return TestMode.classicFlashcard;
         }
-        return fallback(card.currentTestMode);
+        return fallback(current);
       case ReviewResult.good:
         final classicIndex = indexOf(TestMode.classicFlashcard);
         final reversedIndex = indexOf(TestMode.reversedFlashcard);
-        if (card.currentTestMode == TestMode.multipleChoice &&
-            classicIndex >= 0) {
+        if (current == TestMode.multipleChoice && classicIndex >= 0) {
           return TestMode.classicFlashcard;
         }
-        if (card.currentTestMode == TestMode.classicFlashcard &&
+        if (current == TestMode.classicFlashcard &&
             reversedIndex >= 0 &&
             card.repetitions >= 2) {
           return TestMode.reversedFlashcard;
         }
-        return fallback(card.currentTestMode);
+        return fallback(current);
       case ReviewResult.easy:
         for (final preferred in const [
           TestMode.freeText,
@@ -142,11 +151,12 @@ class CardModeService {
     }
   }
 
-  List<TestMode> updatedModeHistory(FlashcardRecord card, TestMode nextMode) {
-    return [
-      ...card.modeHistory,
-      card.currentTestMode,
-      if (card.currentTestMode != nextMode) nextMode,
-    ];
+  List<TestMode> updatedModeHistory(
+    FlashcardRecord card,
+    TestMode nextMode, {
+    TestMode? playedMode,
+  }) {
+    final current = playedMode ?? card.currentTestMode;
+    return [...card.modeHistory, current, if (current != nextMode) nextMode];
   }
 }

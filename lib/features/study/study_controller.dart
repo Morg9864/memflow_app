@@ -174,11 +174,13 @@ class StudyController {
     required String cardId,
     required ReviewResult result,
     required bool wasCorrect,
+    required TestMode playedMode,
   }) {
     return _requiredRepository.submitReview(
       cardId: cardId,
       reviewResult: result,
       wasCorrect: wasCorrect,
+      playedMode: playedMode,
     );
   }
 

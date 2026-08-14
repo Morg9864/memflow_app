@@ -460,6 +460,7 @@ class _FakeStudyController extends StudyController {
     required String cardId,
     required ReviewResult result,
     required bool wasCorrect,
+    required TestMode playedMode,
   }) {
     submissions.add((cardId: cardId, result: result, wasCorrect: wasCorrect));
     return _submitReviewImpl(
