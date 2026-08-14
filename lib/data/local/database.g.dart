@@ -47,28 +47,6 @@ class $CollectionsTable extends Collections
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   );
-  static const VerificationMeta _totalCardsMeta = const VerificationMeta(
-    'totalCards',
-  );
-  @override
-  late final GeneratedColumn<int> totalCards = GeneratedColumn<int>(
-    'total_cards',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _masteredPercentageMeta =
-      const VerificationMeta('masteredPercentage');
-  @override
-  late final GeneratedColumn<double> masteredPercentage =
-      GeneratedColumn<double>(
-        'mastered_percentage',
-        aliasedName,
-        false,
-        type: DriftSqlType.double,
-        requiredDuringInsert: true,
-      );
   static const VerificationMeta _colorMeta = const VerificationMeta('color');
   @override
   late final GeneratedColumn<int> color = GeneratedColumn<int>(
@@ -77,6 +55,21 @@ class $CollectionsTable extends Collections
     false,
     type: DriftSqlType.int,
     requiredDuringInsert: true,
+  );
+  static const VerificationMeta _isDisabledMeta = const VerificationMeta(
+    'isDisabled',
+  );
+  @override
+  late final GeneratedColumn<bool> isDisabled = GeneratedColumn<bool>(
+    'is_disabled',
+    aliasedName,
+    false,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_disabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
   );
   @override
   late final GeneratedColumnWithTypeConverter<DateTime, int> createdAt =
@@ -102,9 +95,8 @@ class $CollectionsTable extends Collections
     name,
     description,
     icon,
-    totalCards,
-    masteredPercentage,
     color,
+    isDisabled,
     createdAt,
     updatedAt,
   ];
@@ -152,25 +144,6 @@ class $CollectionsTable extends Collections
     } else if (isInserting) {
       context.missing(_iconMeta);
     }
-    if (data.containsKey('total_cards')) {
-      context.handle(
-        _totalCardsMeta,
-        totalCards.isAcceptableOrUnknown(data['total_cards']!, _totalCardsMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_totalCardsMeta);
-    }
-    if (data.containsKey('mastered_percentage')) {
-      context.handle(
-        _masteredPercentageMeta,
-        masteredPercentage.isAcceptableOrUnknown(
-          data['mastered_percentage']!,
-          _masteredPercentageMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_masteredPercentageMeta);
-    }
     if (data.containsKey('color')) {
       context.handle(
         _colorMeta,
@@ -178,6 +151,12 @@ class $CollectionsTable extends Collections
       );
     } else if (isInserting) {
       context.missing(_colorMeta);
+    }
+    if (data.containsKey('is_disabled')) {
+      context.handle(
+        _isDisabledMeta,
+        isDisabled.isAcceptableOrUnknown(data['is_disabled']!, _isDisabledMeta),
+      );
     }
     return context;
   }
@@ -204,17 +183,13 @@ class $CollectionsTable extends Collections
         DriftSqlType.string,
         data['${effectivePrefix}icon'],
       )!,
-      totalCards: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}total_cards'],
-      )!,
-      masteredPercentage: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}mastered_percentage'],
-      )!,
       color: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}color'],
+      )!,
+      isDisabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_disabled'],
       )!,
       createdAt: $CollectionsTable.$convertercreatedAt.fromSql(
         attachedDatabase.typeMapping.read(
@@ -247,9 +222,8 @@ class Collection extends DataClass implements Insertable<Collection> {
   final String name;
   final String description;
   final String icon;
-  final int totalCards;
-  final double masteredPercentage;
   final int color;
+  final bool isDisabled;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Collection({
@@ -257,9 +231,8 @@ class Collection extends DataClass implements Insertable<Collection> {
     required this.name,
     required this.description,
     required this.icon,
-    required this.totalCards,
-    required this.masteredPercentage,
     required this.color,
+    required this.isDisabled,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -270,9 +243,8 @@ class Collection extends DataClass implements Insertable<Collection> {
     map['name'] = Variable<String>(name);
     map['description'] = Variable<String>(description);
     map['icon'] = Variable<String>(icon);
-    map['total_cards'] = Variable<int>(totalCards);
-    map['mastered_percentage'] = Variable<double>(masteredPercentage);
     map['color'] = Variable<int>(color);
+    map['is_disabled'] = Variable<bool>(isDisabled);
     {
       map['created_at'] = Variable<int>(
         $CollectionsTable.$convertercreatedAt.toSql(createdAt),
@@ -292,9 +264,8 @@ class Collection extends DataClass implements Insertable<Collection> {
       name: Value(name),
       description: Value(description),
       icon: Value(icon),
-      totalCards: Value(totalCards),
-      masteredPercentage: Value(masteredPercentage),
       color: Value(color),
+      isDisabled: Value(isDisabled),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -310,11 +281,8 @@ class Collection extends DataClass implements Insertable<Collection> {
       name: serializer.fromJson<String>(json['name']),
       description: serializer.fromJson<String>(json['description']),
       icon: serializer.fromJson<String>(json['icon']),
-      totalCards: serializer.fromJson<int>(json['totalCards']),
-      masteredPercentage: serializer.fromJson<double>(
-        json['masteredPercentage'],
-      ),
       color: serializer.fromJson<int>(json['color']),
+      isDisabled: serializer.fromJson<bool>(json['isDisabled']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -327,9 +295,8 @@ class Collection extends DataClass implements Insertable<Collection> {
       'name': serializer.toJson<String>(name),
       'description': serializer.toJson<String>(description),
       'icon': serializer.toJson<String>(icon),
-      'totalCards': serializer.toJson<int>(totalCards),
-      'masteredPercentage': serializer.toJson<double>(masteredPercentage),
       'color': serializer.toJson<int>(color),
+      'isDisabled': serializer.toJson<bool>(isDisabled),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -340,9 +307,8 @@ class Collection extends DataClass implements Insertable<Collection> {
     String? name,
     String? description,
     String? icon,
-    int? totalCards,
-    double? masteredPercentage,
     int? color,
+    bool? isDisabled,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Collection(
@@ -350,9 +316,8 @@ class Collection extends DataClass implements Insertable<Collection> {
     name: name ?? this.name,
     description: description ?? this.description,
     icon: icon ?? this.icon,
-    totalCards: totalCards ?? this.totalCards,
-    masteredPercentage: masteredPercentage ?? this.masteredPercentage,
     color: color ?? this.color,
+    isDisabled: isDisabled ?? this.isDisabled,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -364,13 +329,10 @@ class Collection extends DataClass implements Insertable<Collection> {
           ? data.description.value
           : this.description,
       icon: data.icon.present ? data.icon.value : this.icon,
-      totalCards: data.totalCards.present
-          ? data.totalCards.value
-          : this.totalCards,
-      masteredPercentage: data.masteredPercentage.present
-          ? data.masteredPercentage.value
-          : this.masteredPercentage,
       color: data.color.present ? data.color.value : this.color,
+      isDisabled: data.isDisabled.present
+          ? data.isDisabled.value
+          : this.isDisabled,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -383,9 +345,8 @@ class Collection extends DataClass implements Insertable<Collection> {
           ..write('name: $name, ')
           ..write('description: $description, ')
           ..write('icon: $icon, ')
-          ..write('totalCards: $totalCards, ')
-          ..write('masteredPercentage: $masteredPercentage, ')
           ..write('color: $color, ')
+          ..write('isDisabled: $isDisabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -398,9 +359,8 @@ class Collection extends DataClass implements Insertable<Collection> {
     name,
     description,
     icon,
-    totalCards,
-    masteredPercentage,
     color,
+    isDisabled,
     createdAt,
     updatedAt,
   );
@@ -412,9 +372,8 @@ class Collection extends DataClass implements Insertable<Collection> {
           other.name == this.name &&
           other.description == this.description &&
           other.icon == this.icon &&
-          other.totalCards == this.totalCards &&
-          other.masteredPercentage == this.masteredPercentage &&
           other.color == this.color &&
+          other.isDisabled == this.isDisabled &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -424,9 +383,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
   final Value<String> name;
   final Value<String> description;
   final Value<String> icon;
-  final Value<int> totalCards;
-  final Value<double> masteredPercentage;
   final Value<int> color;
+  final Value<bool> isDisabled;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -435,9 +393,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     this.name = const Value.absent(),
     this.description = const Value.absent(),
     this.icon = const Value.absent(),
-    this.totalCards = const Value.absent(),
-    this.masteredPercentage = const Value.absent(),
     this.color = const Value.absent(),
+    this.isDisabled = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -447,9 +404,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     required String name,
     required String description,
     required String icon,
-    required int totalCards,
-    required double masteredPercentage,
     required int color,
+    this.isDisabled = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -457,8 +413,6 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
        name = Value(name),
        description = Value(description),
        icon = Value(icon),
-       totalCards = Value(totalCards),
-       masteredPercentage = Value(masteredPercentage),
        color = Value(color),
        createdAt = Value(createdAt),
        updatedAt = Value(updatedAt);
@@ -467,9 +421,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Expression<String>? name,
     Expression<String>? description,
     Expression<String>? icon,
-    Expression<int>? totalCards,
-    Expression<double>? masteredPercentage,
     Expression<int>? color,
+    Expression<bool>? isDisabled,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -479,9 +432,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       if (name != null) 'name': name,
       if (description != null) 'description': description,
       if (icon != null) 'icon': icon,
-      if (totalCards != null) 'total_cards': totalCards,
-      if (masteredPercentage != null) 'mastered_percentage': masteredPercentage,
       if (color != null) 'color': color,
+      if (isDisabled != null) 'is_disabled': isDisabled,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -493,9 +445,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     Value<String>? name,
     Value<String>? description,
     Value<String>? icon,
-    Value<int>? totalCards,
-    Value<double>? masteredPercentage,
     Value<int>? color,
+    Value<bool>? isDisabled,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -505,9 +456,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
       name: name ?? this.name,
       description: description ?? this.description,
       icon: icon ?? this.icon,
-      totalCards: totalCards ?? this.totalCards,
-      masteredPercentage: masteredPercentage ?? this.masteredPercentage,
       color: color ?? this.color,
+      isDisabled: isDisabled ?? this.isDisabled,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -529,14 +479,11 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
     if (icon.present) {
       map['icon'] = Variable<String>(icon.value);
     }
-    if (totalCards.present) {
-      map['total_cards'] = Variable<int>(totalCards.value);
-    }
-    if (masteredPercentage.present) {
-      map['mastered_percentage'] = Variable<double>(masteredPercentage.value);
-    }
     if (color.present) {
       map['color'] = Variable<int>(color.value);
+    }
+    if (isDisabled.present) {
+      map['is_disabled'] = Variable<bool>(isDisabled.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(
@@ -561,9 +508,8 @@ class CollectionsCompanion extends UpdateCompanion<Collection> {
           ..write('name: $name, ')
           ..write('description: $description, ')
           ..write('icon: $icon, ')
-          ..write('totalCards: $totalCards, ')
-          ..write('masteredPercentage: $masteredPercentage, ')
           ..write('color: $color, ')
+          ..write('isDisabled: $isDisabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -627,48 +573,21 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
     type: DriftSqlType.string,
     requiredDuringInsert: true,
   ).withConverter<DeckDifficulty>($DecksTable.$converterdifficulty);
-  static const VerificationMeta _totalCardsMeta = const VerificationMeta(
-    'totalCards',
+  static const VerificationMeta _isDisabledMeta = const VerificationMeta(
+    'isDisabled',
   );
   @override
-  late final GeneratedColumn<int> totalCards = GeneratedColumn<int>(
-    'total_cards',
+  late final GeneratedColumn<bool> isDisabled = GeneratedColumn<bool>(
+    'is_disabled',
     aliasedName,
     false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
+    type: DriftSqlType.bool,
+    requiredDuringInsert: false,
+    defaultConstraints: GeneratedColumn.constraintIsAlways(
+      'CHECK ("is_disabled" IN (0, 1))',
+    ),
+    defaultValue: const Constant(false),
   );
-  static const VerificationMeta _dueCardsMeta = const VerificationMeta(
-    'dueCards',
-  );
-  @override
-  late final GeneratedColumn<int> dueCards = GeneratedColumn<int>(
-    'due_cards',
-    aliasedName,
-    false,
-    type: DriftSqlType.int,
-    requiredDuringInsert: true,
-  );
-  static const VerificationMeta _progressMeta = const VerificationMeta(
-    'progress',
-  );
-  @override
-  late final GeneratedColumn<double> progress = GeneratedColumn<double>(
-    'progress',
-    aliasedName,
-    false,
-    type: DriftSqlType.double,
-    requiredDuringInsert: true,
-  );
-  @override
-  late final GeneratedColumnWithTypeConverter<DeckStatus, String> status =
-      GeneratedColumn<String>(
-        'status',
-        aliasedName,
-        false,
-        type: DriftSqlType.string,
-        requiredDuringInsert: true,
-      ).withConverter<DeckStatus>($DecksTable.$converterstatus);
   @override
   late final GeneratedColumnWithTypeConverter<DateTime, int> createdAt =
       GeneratedColumn<int>(
@@ -694,10 +613,7 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
     name,
     icon,
     difficulty,
-    totalCards,
-    dueCards,
-    progress,
-    status,
+    isDisabled,
     createdAt,
     updatedAt,
   ];
@@ -745,29 +661,11 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
     } else if (isInserting) {
       context.missing(_iconMeta);
     }
-    if (data.containsKey('total_cards')) {
+    if (data.containsKey('is_disabled')) {
       context.handle(
-        _totalCardsMeta,
-        totalCards.isAcceptableOrUnknown(data['total_cards']!, _totalCardsMeta),
+        _isDisabledMeta,
+        isDisabled.isAcceptableOrUnknown(data['is_disabled']!, _isDisabledMeta),
       );
-    } else if (isInserting) {
-      context.missing(_totalCardsMeta);
-    }
-    if (data.containsKey('due_cards')) {
-      context.handle(
-        _dueCardsMeta,
-        dueCards.isAcceptableOrUnknown(data['due_cards']!, _dueCardsMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_dueCardsMeta);
-    }
-    if (data.containsKey('progress')) {
-      context.handle(
-        _progressMeta,
-        progress.isAcceptableOrUnknown(data['progress']!, _progressMeta),
-      );
-    } else if (isInserting) {
-      context.missing(_progressMeta);
     }
     return context;
   }
@@ -800,24 +698,10 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
           data['${effectivePrefix}difficulty'],
         )!,
       ),
-      totalCards: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}total_cards'],
+      isDisabled: attachedDatabase.typeMapping.read(
+        DriftSqlType.bool,
+        data['${effectivePrefix}is_disabled'],
       )!,
-      dueCards: attachedDatabase.typeMapping.read(
-        DriftSqlType.int,
-        data['${effectivePrefix}due_cards'],
-      )!,
-      progress: attachedDatabase.typeMapping.read(
-        DriftSqlType.double,
-        data['${effectivePrefix}progress'],
-      )!,
-      status: $DecksTable.$converterstatus.fromSql(
-        attachedDatabase.typeMapping.read(
-          DriftSqlType.string,
-          data['${effectivePrefix}status'],
-        )!,
-      ),
       createdAt: $DecksTable.$convertercreatedAt.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.int,
@@ -840,8 +724,6 @@ class $DecksTable extends Decks with TableInfo<$DecksTable, Deck> {
 
   static TypeConverter<DeckDifficulty, String> $converterdifficulty =
       const EnumNameConverter(DeckDifficulty.values);
-  static TypeConverter<DeckStatus, String> $converterstatus =
-      const EnumNameConverter(DeckStatus.values);
   static TypeConverter<DateTime, int> $convertercreatedAt =
       const DateTimeConverter();
   static TypeConverter<DateTime, int> $converterupdatedAt =
@@ -854,10 +736,7 @@ class Deck extends DataClass implements Insertable<Deck> {
   final String name;
   final String icon;
   final DeckDifficulty difficulty;
-  final int totalCards;
-  final int dueCards;
-  final double progress;
-  final DeckStatus status;
+  final bool isDisabled;
   final DateTime createdAt;
   final DateTime updatedAt;
   const Deck({
@@ -866,10 +745,7 @@ class Deck extends DataClass implements Insertable<Deck> {
     required this.name,
     required this.icon,
     required this.difficulty,
-    required this.totalCards,
-    required this.dueCards,
-    required this.progress,
-    required this.status,
+    required this.isDisabled,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -885,14 +761,7 @@ class Deck extends DataClass implements Insertable<Deck> {
         $DecksTable.$converterdifficulty.toSql(difficulty),
       );
     }
-    map['total_cards'] = Variable<int>(totalCards);
-    map['due_cards'] = Variable<int>(dueCards);
-    map['progress'] = Variable<double>(progress);
-    {
-      map['status'] = Variable<String>(
-        $DecksTable.$converterstatus.toSql(status),
-      );
-    }
+    map['is_disabled'] = Variable<bool>(isDisabled);
     {
       map['created_at'] = Variable<int>(
         $DecksTable.$convertercreatedAt.toSql(createdAt),
@@ -913,10 +782,7 @@ class Deck extends DataClass implements Insertable<Deck> {
       name: Value(name),
       icon: Value(icon),
       difficulty: Value(difficulty),
-      totalCards: Value(totalCards),
-      dueCards: Value(dueCards),
-      progress: Value(progress),
-      status: Value(status),
+      isDisabled: Value(isDisabled),
       createdAt: Value(createdAt),
       updatedAt: Value(updatedAt),
     );
@@ -933,10 +799,7 @@ class Deck extends DataClass implements Insertable<Deck> {
       name: serializer.fromJson<String>(json['name']),
       icon: serializer.fromJson<String>(json['icon']),
       difficulty: serializer.fromJson<DeckDifficulty>(json['difficulty']),
-      totalCards: serializer.fromJson<int>(json['totalCards']),
-      dueCards: serializer.fromJson<int>(json['dueCards']),
-      progress: serializer.fromJson<double>(json['progress']),
-      status: serializer.fromJson<DeckStatus>(json['status']),
+      isDisabled: serializer.fromJson<bool>(json['isDisabled']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -950,10 +813,7 @@ class Deck extends DataClass implements Insertable<Deck> {
       'name': serializer.toJson<String>(name),
       'icon': serializer.toJson<String>(icon),
       'difficulty': serializer.toJson<DeckDifficulty>(difficulty),
-      'totalCards': serializer.toJson<int>(totalCards),
-      'dueCards': serializer.toJson<int>(dueCards),
-      'progress': serializer.toJson<double>(progress),
-      'status': serializer.toJson<DeckStatus>(status),
+      'isDisabled': serializer.toJson<bool>(isDisabled),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -965,10 +825,7 @@ class Deck extends DataClass implements Insertable<Deck> {
     String? name,
     String? icon,
     DeckDifficulty? difficulty,
-    int? totalCards,
-    int? dueCards,
-    double? progress,
-    DeckStatus? status,
+    bool? isDisabled,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) => Deck(
@@ -977,10 +834,7 @@ class Deck extends DataClass implements Insertable<Deck> {
     name: name ?? this.name,
     icon: icon ?? this.icon,
     difficulty: difficulty ?? this.difficulty,
-    totalCards: totalCards ?? this.totalCards,
-    dueCards: dueCards ?? this.dueCards,
-    progress: progress ?? this.progress,
-    status: status ?? this.status,
+    isDisabled: isDisabled ?? this.isDisabled,
     createdAt: createdAt ?? this.createdAt,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -995,12 +849,9 @@ class Deck extends DataClass implements Insertable<Deck> {
       difficulty: data.difficulty.present
           ? data.difficulty.value
           : this.difficulty,
-      totalCards: data.totalCards.present
-          ? data.totalCards.value
-          : this.totalCards,
-      dueCards: data.dueCards.present ? data.dueCards.value : this.dueCards,
-      progress: data.progress.present ? data.progress.value : this.progress,
-      status: data.status.present ? data.status.value : this.status,
+      isDisabled: data.isDisabled.present
+          ? data.isDisabled.value
+          : this.isDisabled,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -1014,10 +865,7 @@ class Deck extends DataClass implements Insertable<Deck> {
           ..write('name: $name, ')
           ..write('icon: $icon, ')
           ..write('difficulty: $difficulty, ')
-          ..write('totalCards: $totalCards, ')
-          ..write('dueCards: $dueCards, ')
-          ..write('progress: $progress, ')
-          ..write('status: $status, ')
+          ..write('isDisabled: $isDisabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -1031,10 +879,7 @@ class Deck extends DataClass implements Insertable<Deck> {
     name,
     icon,
     difficulty,
-    totalCards,
-    dueCards,
-    progress,
-    status,
+    isDisabled,
     createdAt,
     updatedAt,
   );
@@ -1047,10 +892,7 @@ class Deck extends DataClass implements Insertable<Deck> {
           other.name == this.name &&
           other.icon == this.icon &&
           other.difficulty == this.difficulty &&
-          other.totalCards == this.totalCards &&
-          other.dueCards == this.dueCards &&
-          other.progress == this.progress &&
-          other.status == this.status &&
+          other.isDisabled == this.isDisabled &&
           other.createdAt == this.createdAt &&
           other.updatedAt == this.updatedAt);
 }
@@ -1061,10 +903,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
   final Value<String> name;
   final Value<String> icon;
   final Value<DeckDifficulty> difficulty;
-  final Value<int> totalCards;
-  final Value<int> dueCards;
-  final Value<double> progress;
-  final Value<DeckStatus> status;
+  final Value<bool> isDisabled;
   final Value<DateTime> createdAt;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -1074,10 +913,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
     this.name = const Value.absent(),
     this.icon = const Value.absent(),
     this.difficulty = const Value.absent(),
-    this.totalCards = const Value.absent(),
-    this.dueCards = const Value.absent(),
-    this.progress = const Value.absent(),
-    this.status = const Value.absent(),
+    this.isDisabled = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -1088,10 +924,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
     required String name,
     required String icon,
     required DeckDifficulty difficulty,
-    required int totalCards,
-    required int dueCards,
-    required double progress,
-    required DeckStatus status,
+    this.isDisabled = const Value.absent(),
     required DateTime createdAt,
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
@@ -1100,10 +933,6 @@ class DecksCompanion extends UpdateCompanion<Deck> {
        name = Value(name),
        icon = Value(icon),
        difficulty = Value(difficulty),
-       totalCards = Value(totalCards),
-       dueCards = Value(dueCards),
-       progress = Value(progress),
-       status = Value(status),
        createdAt = Value(createdAt),
        updatedAt = Value(updatedAt);
   static Insertable<Deck> custom({
@@ -1112,10 +941,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
     Expression<String>? name,
     Expression<String>? icon,
     Expression<String>? difficulty,
-    Expression<int>? totalCards,
-    Expression<int>? dueCards,
-    Expression<double>? progress,
-    Expression<String>? status,
+    Expression<bool>? isDisabled,
     Expression<int>? createdAt,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -1126,10 +952,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
       if (name != null) 'name': name,
       if (icon != null) 'icon': icon,
       if (difficulty != null) 'difficulty': difficulty,
-      if (totalCards != null) 'total_cards': totalCards,
-      if (dueCards != null) 'due_cards': dueCards,
-      if (progress != null) 'progress': progress,
-      if (status != null) 'status': status,
+      if (isDisabled != null) 'is_disabled': isDisabled,
       if (createdAt != null) 'created_at': createdAt,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -1142,10 +965,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
     Value<String>? name,
     Value<String>? icon,
     Value<DeckDifficulty>? difficulty,
-    Value<int>? totalCards,
-    Value<int>? dueCards,
-    Value<double>? progress,
-    Value<DeckStatus>? status,
+    Value<bool>? isDisabled,
     Value<DateTime>? createdAt,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -1156,10 +976,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
       name: name ?? this.name,
       icon: icon ?? this.icon,
       difficulty: difficulty ?? this.difficulty,
-      totalCards: totalCards ?? this.totalCards,
-      dueCards: dueCards ?? this.dueCards,
-      progress: progress ?? this.progress,
-      status: status ?? this.status,
+      isDisabled: isDisabled ?? this.isDisabled,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -1186,19 +1003,8 @@ class DecksCompanion extends UpdateCompanion<Deck> {
         $DecksTable.$converterdifficulty.toSql(difficulty.value),
       );
     }
-    if (totalCards.present) {
-      map['total_cards'] = Variable<int>(totalCards.value);
-    }
-    if (dueCards.present) {
-      map['due_cards'] = Variable<int>(dueCards.value);
-    }
-    if (progress.present) {
-      map['progress'] = Variable<double>(progress.value);
-    }
-    if (status.present) {
-      map['status'] = Variable<String>(
-        $DecksTable.$converterstatus.toSql(status.value),
-      );
+    if (isDisabled.present) {
+      map['is_disabled'] = Variable<bool>(isDisabled.value);
     }
     if (createdAt.present) {
       map['created_at'] = Variable<int>(
@@ -1224,10 +1030,7 @@ class DecksCompanion extends UpdateCompanion<Deck> {
           ..write('name: $name, ')
           ..write('icon: $icon, ')
           ..write('difficulty: $difficulty, ')
-          ..write('totalCards: $totalCards, ')
-          ..write('dueCards: $dueCards, ')
-          ..write('progress: $progress, ')
-          ..write('status: $status, ')
+          ..write('isDisabled: $isDisabled, ')
           ..write('createdAt: $createdAt, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -1386,6 +1189,24 @@ class $FlashcardsTable extends Flashcards
   );
   @override
   late final GeneratedColumnWithTypeConverter<List<String>, String>
+  clozeAnswers = GeneratedColumn<String>(
+    'cloze_answers',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  ).withConverter<List<String>>($FlashcardsTable.$converterclozeAnswers);
+  @override
+  late final GeneratedColumnWithTypeConverter<List<String>, String>
+  clozeWordBank = GeneratedColumn<String>(
+    'cloze_word_bank',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  ).withConverter<List<String>>($FlashcardsTable.$converterclozeWordBank);
+  @override
+  late final GeneratedColumnWithTypeConverter<List<String>, String>
   acceptedAnswers = GeneratedColumn<String>(
     'accepted_answers',
     aliasedName,
@@ -1537,6 +1358,8 @@ class $FlashcardsTable extends Flashcards
     lastTestMode,
     modeHistory,
     clozeText,
+    clozeAnswers,
+    clozeWordBank,
     acceptedAnswers,
     source,
     difficulty,
@@ -1769,6 +1592,18 @@ class $FlashcardsTable extends Flashcards
         DriftSqlType.string,
         data['${effectivePrefix}cloze_text'],
       ),
+      clozeAnswers: $FlashcardsTable.$converterclozeAnswers.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}cloze_answers'],
+        )!,
+      ),
+      clozeWordBank: $FlashcardsTable.$converterclozeWordBank.fromSql(
+        attachedDatabase.typeMapping.read(
+          DriftSqlType.string,
+          data['${effectivePrefix}cloze_word_bank'],
+        )!,
+      ),
       acceptedAnswers: $FlashcardsTable.$converteracceptedAnswers.fromSql(
         attachedDatabase.typeMapping.read(
           DriftSqlType.string,
@@ -1857,6 +1692,10 @@ class $FlashcardsTable extends Flashcards
       const NullableEnumNameConverter(TestMode.values);
   static TypeConverter<List<TestMode>, String> $convertermodeHistory =
       const TestModeListConverter();
+  static TypeConverter<List<String>, String> $converterclozeAnswers =
+      const StringListConverter();
+  static TypeConverter<List<String>, String> $converterclozeWordBank =
+      const StringListConverter();
   static TypeConverter<List<String>, String> $converteracceptedAnswers =
       const StringListConverter();
   static TypeConverter<DeckDifficulty?, String?> $converterdifficulty =
@@ -1888,6 +1727,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
   final TestMode? lastTestMode;
   final List<TestMode> modeHistory;
   final String? clozeText;
+  final List<String> clozeAnswers;
+  final List<String> clozeWordBank;
   final List<String> acceptedAnswers;
   final String? source;
   final DeckDifficulty? difficulty;
@@ -1917,6 +1758,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
     this.lastTestMode,
     required this.modeHistory,
     this.clozeText,
+    required this.clozeAnswers,
+    required this.clozeWordBank,
     required this.acceptedAnswers,
     this.source,
     this.difficulty,
@@ -1976,6 +1819,16 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
     }
     if (!nullToAbsent || clozeText != null) {
       map['cloze_text'] = Variable<String>(clozeText);
+    }
+    {
+      map['cloze_answers'] = Variable<String>(
+        $FlashcardsTable.$converterclozeAnswers.toSql(clozeAnswers),
+      );
+    }
+    {
+      map['cloze_word_bank'] = Variable<String>(
+        $FlashcardsTable.$converterclozeWordBank.toSql(clozeWordBank),
+      );
     }
     {
       map['accepted_answers'] = Variable<String>(
@@ -2048,6 +1901,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
       clozeText: clozeText == null && nullToAbsent
           ? const Value.absent()
           : Value(clozeText),
+      clozeAnswers: Value(clozeAnswers),
+      clozeWordBank: Value(clozeWordBank),
       acceptedAnswers: Value(acceptedAnswers),
       source: source == null && nullToAbsent
           ? const Value.absent()
@@ -2093,6 +1948,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
       lastTestMode: serializer.fromJson<TestMode?>(json['lastTestMode']),
       modeHistory: serializer.fromJson<List<TestMode>>(json['modeHistory']),
       clozeText: serializer.fromJson<String?>(json['clozeText']),
+      clozeAnswers: serializer.fromJson<List<String>>(json['clozeAnswers']),
+      clozeWordBank: serializer.fromJson<List<String>>(json['clozeWordBank']),
       acceptedAnswers: serializer.fromJson<List<String>>(
         json['acceptedAnswers'],
       ),
@@ -2129,6 +1986,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
       'lastTestMode': serializer.toJson<TestMode?>(lastTestMode),
       'modeHistory': serializer.toJson<List<TestMode>>(modeHistory),
       'clozeText': serializer.toJson<String?>(clozeText),
+      'clozeAnswers': serializer.toJson<List<String>>(clozeAnswers),
+      'clozeWordBank': serializer.toJson<List<String>>(clozeWordBank),
       'acceptedAnswers': serializer.toJson<List<String>>(acceptedAnswers),
       'source': serializer.toJson<String?>(source),
       'difficulty': serializer.toJson<DeckDifficulty?>(difficulty),
@@ -2161,6 +2020,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
     Value<TestMode?> lastTestMode = const Value.absent(),
     List<TestMode>? modeHistory,
     Value<String?> clozeText = const Value.absent(),
+    List<String>? clozeAnswers,
+    List<String>? clozeWordBank,
     List<String>? acceptedAnswers,
     Value<String?> source = const Value.absent(),
     Value<DeckDifficulty?> difficulty = const Value.absent(),
@@ -2190,6 +2051,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
     lastTestMode: lastTestMode.present ? lastTestMode.value : this.lastTestMode,
     modeHistory: modeHistory ?? this.modeHistory,
     clozeText: clozeText.present ? clozeText.value : this.clozeText,
+    clozeAnswers: clozeAnswers ?? this.clozeAnswers,
+    clozeWordBank: clozeWordBank ?? this.clozeWordBank,
     acceptedAnswers: acceptedAnswers ?? this.acceptedAnswers,
     source: source.present ? source.value : this.source,
     difficulty: difficulty.present ? difficulty.value : this.difficulty,
@@ -2239,6 +2102,12 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
           ? data.modeHistory.value
           : this.modeHistory,
       clozeText: data.clozeText.present ? data.clozeText.value : this.clozeText,
+      clozeAnswers: data.clozeAnswers.present
+          ? data.clozeAnswers.value
+          : this.clozeAnswers,
+      clozeWordBank: data.clozeWordBank.present
+          ? data.clozeWordBank.value
+          : this.clozeWordBank,
       acceptedAnswers: data.acceptedAnswers.present
           ? data.acceptedAnswers.value
           : this.acceptedAnswers,
@@ -2285,6 +2154,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
           ..write('lastTestMode: $lastTestMode, ')
           ..write('modeHistory: $modeHistory, ')
           ..write('clozeText: $clozeText, ')
+          ..write('clozeAnswers: $clozeAnswers, ')
+          ..write('clozeWordBank: $clozeWordBank, ')
           ..write('acceptedAnswers: $acceptedAnswers, ')
           ..write('source: $source, ')
           ..write('difficulty: $difficulty, ')
@@ -2319,6 +2190,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
     lastTestMode,
     modeHistory,
     clozeText,
+    clozeAnswers,
+    clozeWordBank,
     acceptedAnswers,
     source,
     difficulty,
@@ -2352,6 +2225,8 @@ class Flashcard extends DataClass implements Insertable<Flashcard> {
           other.lastTestMode == this.lastTestMode &&
           other.modeHistory == this.modeHistory &&
           other.clozeText == this.clozeText &&
+          other.clozeAnswers == this.clozeAnswers &&
+          other.clozeWordBank == this.clozeWordBank &&
           other.acceptedAnswers == this.acceptedAnswers &&
           other.source == this.source &&
           other.difficulty == this.difficulty &&
@@ -2383,6 +2258,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
   final Value<TestMode?> lastTestMode;
   final Value<List<TestMode>> modeHistory;
   final Value<String?> clozeText;
+  final Value<List<String>> clozeAnswers;
+  final Value<List<String>> clozeWordBank;
   final Value<List<String>> acceptedAnswers;
   final Value<String?> source;
   final Value<DeckDifficulty?> difficulty;
@@ -2413,6 +2290,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
     this.lastTestMode = const Value.absent(),
     this.modeHistory = const Value.absent(),
     this.clozeText = const Value.absent(),
+    this.clozeAnswers = const Value.absent(),
+    this.clozeWordBank = const Value.absent(),
     this.acceptedAnswers = const Value.absent(),
     this.source = const Value.absent(),
     this.difficulty = const Value.absent(),
@@ -2444,6 +2323,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
     this.lastTestMode = const Value.absent(),
     required List<TestMode> modeHistory,
     this.clozeText = const Value.absent(),
+    required List<String> clozeAnswers,
+    required List<String> clozeWordBank,
     required List<String> acceptedAnswers,
     this.source = const Value.absent(),
     this.difficulty = const Value.absent(),
@@ -2468,6 +2349,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
        currentTestMode = Value(currentTestMode),
        allowedTestModes = Value(allowedTestModes),
        modeHistory = Value(modeHistory),
+       clozeAnswers = Value(clozeAnswers),
+       clozeWordBank = Value(clozeWordBank),
        acceptedAnswers = Value(acceptedAnswers),
        level = Value(level),
        tags = Value(tags),
@@ -2494,6 +2377,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
     Expression<String>? lastTestMode,
     Expression<String>? modeHistory,
     Expression<String>? clozeText,
+    Expression<String>? clozeAnswers,
+    Expression<String>? clozeWordBank,
     Expression<String>? acceptedAnswers,
     Expression<String>? source,
     Expression<String>? difficulty,
@@ -2525,6 +2410,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
       if (lastTestMode != null) 'last_test_mode': lastTestMode,
       if (modeHistory != null) 'mode_history': modeHistory,
       if (clozeText != null) 'cloze_text': clozeText,
+      if (clozeAnswers != null) 'cloze_answers': clozeAnswers,
+      if (clozeWordBank != null) 'cloze_word_bank': clozeWordBank,
       if (acceptedAnswers != null) 'accepted_answers': acceptedAnswers,
       if (source != null) 'source': source,
       if (difficulty != null) 'difficulty': difficulty,
@@ -2558,6 +2445,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
     Value<TestMode?>? lastTestMode,
     Value<List<TestMode>>? modeHistory,
     Value<String?>? clozeText,
+    Value<List<String>>? clozeAnswers,
+    Value<List<String>>? clozeWordBank,
     Value<List<String>>? acceptedAnswers,
     Value<String?>? source,
     Value<DeckDifficulty?>? difficulty,
@@ -2589,6 +2478,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
       lastTestMode: lastTestMode ?? this.lastTestMode,
       modeHistory: modeHistory ?? this.modeHistory,
       clozeText: clozeText ?? this.clozeText,
+      clozeAnswers: clozeAnswers ?? this.clozeAnswers,
+      clozeWordBank: clozeWordBank ?? this.clozeWordBank,
       acceptedAnswers: acceptedAnswers ?? this.acceptedAnswers,
       source: source ?? this.source,
       difficulty: difficulty ?? this.difficulty,
@@ -2663,6 +2554,16 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
     }
     if (clozeText.present) {
       map['cloze_text'] = Variable<String>(clozeText.value);
+    }
+    if (clozeAnswers.present) {
+      map['cloze_answers'] = Variable<String>(
+        $FlashcardsTable.$converterclozeAnswers.toSql(clozeAnswers.value),
+      );
+    }
+    if (clozeWordBank.present) {
+      map['cloze_word_bank'] = Variable<String>(
+        $FlashcardsTable.$converterclozeWordBank.toSql(clozeWordBank.value),
+      );
     }
     if (acceptedAnswers.present) {
       map['accepted_answers'] = Variable<String>(
@@ -2743,6 +2644,8 @@ class FlashcardsCompanion extends UpdateCompanion<Flashcard> {
           ..write('lastTestMode: $lastTestMode, ')
           ..write('modeHistory: $modeHistory, ')
           ..write('clozeText: $clozeText, ')
+          ..write('clozeAnswers: $clozeAnswers, ')
+          ..write('clozeWordBank: $clozeWordBank, ')
           ..write('acceptedAnswers: $acceptedAnswers, ')
           ..write('source: $source, ')
           ..write('difficulty: $difficulty, ')
@@ -3396,17 +3299,6 @@ class $SyncQueueEntriesTable extends SyncQueueEntries
       ).withConverter<SyncOperation>(
         $SyncQueueEntriesTable.$converteroperation,
       );
-  static const VerificationMeta _payloadJsonMeta = const VerificationMeta(
-    'payloadJson',
-  );
-  @override
-  late final GeneratedColumn<String> payloadJson = GeneratedColumn<String>(
-    'payload_json',
-    aliasedName,
-    false,
-    type: DriftSqlType.string,
-    requiredDuringInsert: true,
-  );
   static const VerificationMeta _attemptsMeta = const VerificationMeta(
     'attempts',
   );
@@ -3416,7 +3308,8 @@ class $SyncQueueEntriesTable extends SyncQueueEntries
     aliasedName,
     false,
     type: DriftSqlType.int,
-    requiredDuringInsert: true,
+    requiredDuringInsert: false,
+    defaultValue: const Constant(0),
   );
   @override
   late final GeneratedColumnWithTypeConverter<DateTime, int> updatedAt =
@@ -3433,7 +3326,6 @@ class $SyncQueueEntriesTable extends SyncQueueEntries
     entityType,
     entityId,
     operation,
-    payloadJson,
     attempts,
     updatedAt,
   ];
@@ -3462,24 +3354,11 @@ class $SyncQueueEntriesTable extends SyncQueueEntries
     } else if (isInserting) {
       context.missing(_entityIdMeta);
     }
-    if (data.containsKey('payload_json')) {
-      context.handle(
-        _payloadJsonMeta,
-        payloadJson.isAcceptableOrUnknown(
-          data['payload_json']!,
-          _payloadJsonMeta,
-        ),
-      );
-    } else if (isInserting) {
-      context.missing(_payloadJsonMeta);
-    }
     if (data.containsKey('attempts')) {
       context.handle(
         _attemptsMeta,
         attempts.isAcceptableOrUnknown(data['attempts']!, _attemptsMeta),
       );
-    } else if (isInserting) {
-      context.missing(_attemptsMeta);
     }
     return context;
   }
@@ -3510,10 +3389,6 @@ class $SyncQueueEntriesTable extends SyncQueueEntries
           data['${effectivePrefix}operation'],
         )!,
       ),
-      payloadJson: attachedDatabase.typeMapping.read(
-        DriftSqlType.string,
-        data['${effectivePrefix}payload_json'],
-      )!,
       attempts: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}attempts'],
@@ -3545,7 +3420,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
   final SyncEntityType entityType;
   final String entityId;
   final SyncOperation operation;
-  final String payloadJson;
   final int attempts;
   final DateTime updatedAt;
   const SyncQueueEntry({
@@ -3553,7 +3427,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
     required this.entityType,
     required this.entityId,
     required this.operation,
-    required this.payloadJson,
     required this.attempts,
     required this.updatedAt,
   });
@@ -3572,7 +3445,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
         $SyncQueueEntriesTable.$converteroperation.toSql(operation),
       );
     }
-    map['payload_json'] = Variable<String>(payloadJson);
     map['attempts'] = Variable<int>(attempts);
     {
       map['updated_at'] = Variable<int>(
@@ -3588,7 +3460,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
       entityType: Value(entityType),
       entityId: Value(entityId),
       operation: Value(operation),
-      payloadJson: Value(payloadJson),
       attempts: Value(attempts),
       updatedAt: Value(updatedAt),
     );
@@ -3604,7 +3475,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
       entityType: serializer.fromJson<SyncEntityType>(json['entityType']),
       entityId: serializer.fromJson<String>(json['entityId']),
       operation: serializer.fromJson<SyncOperation>(json['operation']),
-      payloadJson: serializer.fromJson<String>(json['payloadJson']),
       attempts: serializer.fromJson<int>(json['attempts']),
       updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
     );
@@ -3617,7 +3487,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
       'entityType': serializer.toJson<SyncEntityType>(entityType),
       'entityId': serializer.toJson<String>(entityId),
       'operation': serializer.toJson<SyncOperation>(operation),
-      'payloadJson': serializer.toJson<String>(payloadJson),
       'attempts': serializer.toJson<int>(attempts),
       'updatedAt': serializer.toJson<DateTime>(updatedAt),
     };
@@ -3628,7 +3497,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
     SyncEntityType? entityType,
     String? entityId,
     SyncOperation? operation,
-    String? payloadJson,
     int? attempts,
     DateTime? updatedAt,
   }) => SyncQueueEntry(
@@ -3636,7 +3504,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
     entityType: entityType ?? this.entityType,
     entityId: entityId ?? this.entityId,
     operation: operation ?? this.operation,
-    payloadJson: payloadJson ?? this.payloadJson,
     attempts: attempts ?? this.attempts,
     updatedAt: updatedAt ?? this.updatedAt,
   );
@@ -3648,9 +3515,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
           : this.entityType,
       entityId: data.entityId.present ? data.entityId.value : this.entityId,
       operation: data.operation.present ? data.operation.value : this.operation,
-      payloadJson: data.payloadJson.present
-          ? data.payloadJson.value
-          : this.payloadJson,
       attempts: data.attempts.present ? data.attempts.value : this.attempts,
       updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
     );
@@ -3663,7 +3527,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
           ..write('entityType: $entityType, ')
           ..write('entityId: $entityId, ')
           ..write('operation: $operation, ')
-          ..write('payloadJson: $payloadJson, ')
           ..write('attempts: $attempts, ')
           ..write('updatedAt: $updatedAt')
           ..write(')'))
@@ -3671,15 +3534,8 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
   }
 
   @override
-  int get hashCode => Object.hash(
-    id,
-    entityType,
-    entityId,
-    operation,
-    payloadJson,
-    attempts,
-    updatedAt,
-  );
+  int get hashCode =>
+      Object.hash(id, entityType, entityId, operation, attempts, updatedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3688,7 +3544,6 @@ class SyncQueueEntry extends DataClass implements Insertable<SyncQueueEntry> {
           other.entityType == this.entityType &&
           other.entityId == this.entityId &&
           other.operation == this.operation &&
-          other.payloadJson == this.payloadJson &&
           other.attempts == this.attempts &&
           other.updatedAt == this.updatedAt);
 }
@@ -3698,7 +3553,6 @@ class SyncQueueEntriesCompanion extends UpdateCompanion<SyncQueueEntry> {
   final Value<SyncEntityType> entityType;
   final Value<String> entityId;
   final Value<SyncOperation> operation;
-  final Value<String> payloadJson;
   final Value<int> attempts;
   final Value<DateTime> updatedAt;
   final Value<int> rowid;
@@ -3707,7 +3561,6 @@ class SyncQueueEntriesCompanion extends UpdateCompanion<SyncQueueEntry> {
     this.entityType = const Value.absent(),
     this.entityId = const Value.absent(),
     this.operation = const Value.absent(),
-    this.payloadJson = const Value.absent(),
     this.attempts = const Value.absent(),
     this.updatedAt = const Value.absent(),
     this.rowid = const Value.absent(),
@@ -3717,23 +3570,19 @@ class SyncQueueEntriesCompanion extends UpdateCompanion<SyncQueueEntry> {
     required SyncEntityType entityType,
     required String entityId,
     required SyncOperation operation,
-    required String payloadJson,
-    required int attempts,
+    this.attempts = const Value.absent(),
     required DateTime updatedAt,
     this.rowid = const Value.absent(),
   }) : id = Value(id),
        entityType = Value(entityType),
        entityId = Value(entityId),
        operation = Value(operation),
-       payloadJson = Value(payloadJson),
-       attempts = Value(attempts),
        updatedAt = Value(updatedAt);
   static Insertable<SyncQueueEntry> custom({
     Expression<String>? id,
     Expression<String>? entityType,
     Expression<String>? entityId,
     Expression<String>? operation,
-    Expression<String>? payloadJson,
     Expression<int>? attempts,
     Expression<int>? updatedAt,
     Expression<int>? rowid,
@@ -3743,7 +3592,6 @@ class SyncQueueEntriesCompanion extends UpdateCompanion<SyncQueueEntry> {
       if (entityType != null) 'entity_type': entityType,
       if (entityId != null) 'entity_id': entityId,
       if (operation != null) 'operation': operation,
-      if (payloadJson != null) 'payload_json': payloadJson,
       if (attempts != null) 'attempts': attempts,
       if (updatedAt != null) 'updated_at': updatedAt,
       if (rowid != null) 'rowid': rowid,
@@ -3755,7 +3603,6 @@ class SyncQueueEntriesCompanion extends UpdateCompanion<SyncQueueEntry> {
     Value<SyncEntityType>? entityType,
     Value<String>? entityId,
     Value<SyncOperation>? operation,
-    Value<String>? payloadJson,
     Value<int>? attempts,
     Value<DateTime>? updatedAt,
     Value<int>? rowid,
@@ -3765,7 +3612,6 @@ class SyncQueueEntriesCompanion extends UpdateCompanion<SyncQueueEntry> {
       entityType: entityType ?? this.entityType,
       entityId: entityId ?? this.entityId,
       operation: operation ?? this.operation,
-      payloadJson: payloadJson ?? this.payloadJson,
       attempts: attempts ?? this.attempts,
       updatedAt: updatedAt ?? this.updatedAt,
       rowid: rowid ?? this.rowid,
@@ -3791,9 +3637,6 @@ class SyncQueueEntriesCompanion extends UpdateCompanion<SyncQueueEntry> {
         $SyncQueueEntriesTable.$converteroperation.toSql(operation.value),
       );
     }
-    if (payloadJson.present) {
-      map['payload_json'] = Variable<String>(payloadJson.value);
-    }
     if (attempts.present) {
       map['attempts'] = Variable<int>(attempts.value);
     }
@@ -3815,7 +3658,6 @@ class SyncQueueEntriesCompanion extends UpdateCompanion<SyncQueueEntry> {
           ..write('entityType: $entityType, ')
           ..write('entityId: $entityId, ')
           ..write('operation: $operation, ')
-          ..write('payloadJson: $payloadJson, ')
           ..write('attempts: $attempts, ')
           ..write('updatedAt: $updatedAt, ')
           ..write('rowid: $rowid')
@@ -4061,9 +3903,8 @@ typedef $$CollectionsTableCreateCompanionBuilder =
       required String name,
       required String description,
       required String icon,
-      required int totalCards,
-      required double masteredPercentage,
       required int color,
+      Value<bool> isDisabled,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -4074,9 +3915,8 @@ typedef $$CollectionsTableUpdateCompanionBuilder =
       Value<String> name,
       Value<String> description,
       Value<String> icon,
-      Value<int> totalCards,
-      Value<double> masteredPercentage,
       Value<int> color,
+      Value<bool> isDisabled,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -4177,18 +4017,13 @@ class $$CollectionsTableFilterComposer
     builder: (column) => ColumnFilters(column),
   );
 
-  ColumnFilters<int> get totalCards => $composableBuilder(
-    column: $table.totalCards,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get masteredPercentage => $composableBuilder(
-    column: $table.masteredPercentage,
-    builder: (column) => ColumnFilters(column),
-  );
-
   ColumnFilters<int> get color => $composableBuilder(
     column: $table.color,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<bool> get isDisabled => $composableBuilder(
+    column: $table.isDisabled,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -4309,18 +4144,13 @@ class $$CollectionsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get totalCards => $composableBuilder(
-    column: $table.totalCards,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get masteredPercentage => $composableBuilder(
-    column: $table.masteredPercentage,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<int> get color => $composableBuilder(
     column: $table.color,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<bool> get isDisabled => $composableBuilder(
+    column: $table.isDisabled,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -4358,18 +4188,13 @@ class $$CollectionsTableAnnotationComposer
   GeneratedColumn<String> get icon =>
       $composableBuilder(column: $table.icon, builder: (column) => column);
 
-  GeneratedColumn<int> get totalCards => $composableBuilder(
-    column: $table.totalCards,
-    builder: (column) => column,
-  );
-
-  GeneratedColumn<double> get masteredPercentage => $composableBuilder(
-    column: $table.masteredPercentage,
-    builder: (column) => column,
-  );
-
   GeneratedColumn<int> get color =>
       $composableBuilder(column: $table.color, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDisabled => $composableBuilder(
+    column: $table.isDisabled,
+    builder: (column) => column,
+  );
 
   GeneratedColumnWithTypeConverter<DateTime, int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -4489,9 +4314,8 @@ class $$CollectionsTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String> description = const Value.absent(),
                 Value<String> icon = const Value.absent(),
-                Value<int> totalCards = const Value.absent(),
-                Value<double> masteredPercentage = const Value.absent(),
                 Value<int> color = const Value.absent(),
+                Value<bool> isDisabled = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -4500,9 +4324,8 @@ class $$CollectionsTableTableManager
                 name: name,
                 description: description,
                 icon: icon,
-                totalCards: totalCards,
-                masteredPercentage: masteredPercentage,
                 color: color,
+                isDisabled: isDisabled,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -4513,9 +4336,8 @@ class $$CollectionsTableTableManager
                 required String name,
                 required String description,
                 required String icon,
-                required int totalCards,
-                required double masteredPercentage,
                 required int color,
+                Value<bool> isDisabled = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -4524,9 +4346,8 @@ class $$CollectionsTableTableManager
                 name: name,
                 description: description,
                 icon: icon,
-                totalCards: totalCards,
-                masteredPercentage: masteredPercentage,
                 color: color,
+                isDisabled: isDisabled,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -4651,10 +4472,7 @@ typedef $$DecksTableCreateCompanionBuilder =
       required String name,
       required String icon,
       required DeckDifficulty difficulty,
-      required int totalCards,
-      required int dueCards,
-      required double progress,
-      required DeckStatus status,
+      Value<bool> isDisabled,
       required DateTime createdAt,
       required DateTime updatedAt,
       Value<int> rowid,
@@ -4666,10 +4484,7 @@ typedef $$DecksTableUpdateCompanionBuilder =
       Value<String> name,
       Value<String> icon,
       Value<DeckDifficulty> difficulty,
-      Value<int> totalCards,
-      Value<int> dueCards,
-      Value<double> progress,
-      Value<DeckStatus> status,
+      Value<bool> isDisabled,
       Value<DateTime> createdAt,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -4764,26 +4579,10 @@ class $$DecksTableFilterComposer extends Composer<_$AppDatabase, $DecksTable> {
     builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
-  ColumnFilters<int> get totalCards => $composableBuilder(
-    column: $table.totalCards,
+  ColumnFilters<bool> get isDisabled => $composableBuilder(
+    column: $table.isDisabled,
     builder: (column) => ColumnFilters(column),
   );
-
-  ColumnFilters<int> get dueCards => $composableBuilder(
-    column: $table.dueCards,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnFilters<double> get progress => $composableBuilder(
-    column: $table.progress,
-    builder: (column) => ColumnFilters(column),
-  );
-
-  ColumnWithTypeConverterFilters<DeckStatus, DeckStatus, String> get status =>
-      $composableBuilder(
-        column: $table.status,
-        builder: (column) => ColumnWithTypeConverterFilters(column),
-      );
 
   ColumnWithTypeConverterFilters<DateTime, DateTime, int> get createdAt =>
       $composableBuilder(
@@ -4900,23 +4699,8 @@ class $$DecksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<int> get totalCards => $composableBuilder(
-    column: $table.totalCards,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<int> get dueCards => $composableBuilder(
-    column: $table.dueCards,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<double> get progress => $composableBuilder(
-    column: $table.progress,
-    builder: (column) => ColumnOrderings(column),
-  );
-
-  ColumnOrderings<String> get status => $composableBuilder(
-    column: $table.status,
+  ColumnOrderings<bool> get isDisabled => $composableBuilder(
+    column: $table.isDisabled,
     builder: (column) => ColumnOrderings(column),
   );
 
@@ -4978,19 +4762,10 @@ class $$DecksTableAnnotationComposer
         builder: (column) => column,
       );
 
-  GeneratedColumn<int> get totalCards => $composableBuilder(
-    column: $table.totalCards,
+  GeneratedColumn<bool> get isDisabled => $composableBuilder(
+    column: $table.isDisabled,
     builder: (column) => column,
   );
-
-  GeneratedColumn<int> get dueCards =>
-      $composableBuilder(column: $table.dueCards, builder: (column) => column);
-
-  GeneratedColumn<double> get progress =>
-      $composableBuilder(column: $table.progress, builder: (column) => column);
-
-  GeneratedColumnWithTypeConverter<DeckStatus, String> get status =>
-      $composableBuilder(column: $table.status, builder: (column) => column);
 
   GeneratedColumnWithTypeConverter<DateTime, int> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -5109,10 +4884,7 @@ class $$DecksTableTableManager
                 Value<String> name = const Value.absent(),
                 Value<String> icon = const Value.absent(),
                 Value<DeckDifficulty> difficulty = const Value.absent(),
-                Value<int> totalCards = const Value.absent(),
-                Value<int> dueCards = const Value.absent(),
-                Value<double> progress = const Value.absent(),
-                Value<DeckStatus> status = const Value.absent(),
+                Value<bool> isDisabled = const Value.absent(),
                 Value<DateTime> createdAt = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -5122,10 +4894,7 @@ class $$DecksTableTableManager
                 name: name,
                 icon: icon,
                 difficulty: difficulty,
-                totalCards: totalCards,
-                dueCards: dueCards,
-                progress: progress,
-                status: status,
+                isDisabled: isDisabled,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -5137,10 +4906,7 @@ class $$DecksTableTableManager
                 required String name,
                 required String icon,
                 required DeckDifficulty difficulty,
-                required int totalCards,
-                required int dueCards,
-                required double progress,
-                required DeckStatus status,
+                Value<bool> isDisabled = const Value.absent(),
                 required DateTime createdAt,
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
@@ -5150,10 +4916,7 @@ class $$DecksTableTableManager
                 name: name,
                 icon: icon,
                 difficulty: difficulty,
-                totalCards: totalCards,
-                dueCards: dueCards,
-                progress: progress,
-                status: status,
+                isDisabled: isDisabled,
                 createdAt: createdAt,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -5286,6 +5049,8 @@ typedef $$FlashcardsTableCreateCompanionBuilder =
       Value<TestMode?> lastTestMode,
       required List<TestMode> modeHistory,
       Value<String?> clozeText,
+      required List<String> clozeAnswers,
+      required List<String> clozeWordBank,
       required List<String> acceptedAnswers,
       Value<String?> source,
       Value<DeckDifficulty?> difficulty,
@@ -5318,6 +5083,8 @@ typedef $$FlashcardsTableUpdateCompanionBuilder =
       Value<TestMode?> lastTestMode,
       Value<List<TestMode>> modeHistory,
       Value<String?> clozeText,
+      Value<List<String>> clozeAnswers,
+      Value<List<String>> clozeWordBank,
       Value<List<String>> acceptedAnswers,
       Value<String?> source,
       Value<DeckDifficulty?> difficulty,
@@ -5470,6 +5237,18 @@ class $$FlashcardsTableFilterComposer
   ColumnFilters<String> get clozeText => $composableBuilder(
     column: $table.clozeText,
     builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<List<String>, List<String>, String>
+  get clozeAnswers => $composableBuilder(
+    column: $table.clozeAnswers,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
+  );
+
+  ColumnWithTypeConverterFilters<List<String>, List<String>, String>
+  get clozeWordBank => $composableBuilder(
+    column: $table.clozeWordBank,
+    builder: (column) => ColumnWithTypeConverterFilters(column),
   );
 
   ColumnWithTypeConverterFilters<List<String>, List<String>, String>
@@ -5690,6 +5469,16 @@ class $$FlashcardsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<String> get clozeAnswers => $composableBuilder(
+    column: $table.clozeAnswers,
+    builder: (column) => ColumnOrderings(column),
+  );
+
+  ColumnOrderings<String> get clozeWordBank => $composableBuilder(
+    column: $table.clozeWordBank,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<String> get acceptedAnswers => $composableBuilder(
     column: $table.acceptedAnswers,
     builder: (column) => ColumnOrderings(column),
@@ -5871,6 +5660,18 @@ class $$FlashcardsTableAnnotationComposer
   GeneratedColumn<String> get clozeText =>
       $composableBuilder(column: $table.clozeText, builder: (column) => column);
 
+  GeneratedColumnWithTypeConverter<List<String>, String> get clozeAnswers =>
+      $composableBuilder(
+        column: $table.clozeAnswers,
+        builder: (column) => column,
+      );
+
+  GeneratedColumnWithTypeConverter<List<String>, String> get clozeWordBank =>
+      $composableBuilder(
+        column: $table.clozeWordBank,
+        builder: (column) => column,
+      );
+
   GeneratedColumnWithTypeConverter<List<String>, String> get acceptedAnswers =>
       $composableBuilder(
         column: $table.acceptedAnswers,
@@ -6046,6 +5847,8 @@ class $$FlashcardsTableTableManager
                 Value<TestMode?> lastTestMode = const Value.absent(),
                 Value<List<TestMode>> modeHistory = const Value.absent(),
                 Value<String?> clozeText = const Value.absent(),
+                Value<List<String>> clozeAnswers = const Value.absent(),
+                Value<List<String>> clozeWordBank = const Value.absent(),
                 Value<List<String>> acceptedAnswers = const Value.absent(),
                 Value<String?> source = const Value.absent(),
                 Value<DeckDifficulty?> difficulty = const Value.absent(),
@@ -6076,6 +5879,8 @@ class $$FlashcardsTableTableManager
                 lastTestMode: lastTestMode,
                 modeHistory: modeHistory,
                 clozeText: clozeText,
+                clozeAnswers: clozeAnswers,
+                clozeWordBank: clozeWordBank,
                 acceptedAnswers: acceptedAnswers,
                 source: source,
                 difficulty: difficulty,
@@ -6108,6 +5913,8 @@ class $$FlashcardsTableTableManager
                 Value<TestMode?> lastTestMode = const Value.absent(),
                 required List<TestMode> modeHistory,
                 Value<String?> clozeText = const Value.absent(),
+                required List<String> clozeAnswers,
+                required List<String> clozeWordBank,
                 required List<String> acceptedAnswers,
                 Value<String?> source = const Value.absent(),
                 Value<DeckDifficulty?> difficulty = const Value.absent(),
@@ -6138,6 +5945,8 @@ class $$FlashcardsTableTableManager
                 lastTestMode: lastTestMode,
                 modeHistory: modeHistory,
                 clozeText: clozeText,
+                clozeAnswers: clozeAnswers,
+                clozeWordBank: clozeWordBank,
                 acceptedAnswers: acceptedAnswers,
                 source: source,
                 difficulty: difficulty,
@@ -6859,8 +6668,7 @@ typedef $$SyncQueueEntriesTableCreateCompanionBuilder =
       required SyncEntityType entityType,
       required String entityId,
       required SyncOperation operation,
-      required String payloadJson,
-      required int attempts,
+      Value<int> attempts,
       required DateTime updatedAt,
       Value<int> rowid,
     });
@@ -6870,7 +6678,6 @@ typedef $$SyncQueueEntriesTableUpdateCompanionBuilder =
       Value<SyncEntityType> entityType,
       Value<String> entityId,
       Value<SyncOperation> operation,
-      Value<String> payloadJson,
       Value<int> attempts,
       Value<DateTime> updatedAt,
       Value<int> rowid,
@@ -6905,11 +6712,6 @@ class $$SyncQueueEntriesTableFilterComposer
   get operation => $composableBuilder(
     column: $table.operation,
     builder: (column) => ColumnWithTypeConverterFilters(column),
-  );
-
-  ColumnFilters<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
-    builder: (column) => ColumnFilters(column),
   );
 
   ColumnFilters<int> get attempts => $composableBuilder(
@@ -6953,11 +6755,6 @@ class $$SyncQueueEntriesTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
-  ColumnOrderings<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
-    builder: (column) => ColumnOrderings(column),
-  );
-
   ColumnOrderings<int> get attempts => $composableBuilder(
     column: $table.attempts,
     builder: (column) => ColumnOrderings(column),
@@ -6992,11 +6789,6 @@ class $$SyncQueueEntriesTableAnnotationComposer
 
   GeneratedColumnWithTypeConverter<SyncOperation, String> get operation =>
       $composableBuilder(column: $table.operation, builder: (column) => column);
-
-  GeneratedColumn<String> get payloadJson => $composableBuilder(
-    column: $table.payloadJson,
-    builder: (column) => column,
-  );
 
   GeneratedColumn<int> get attempts =>
       $composableBuilder(column: $table.attempts, builder: (column) => column);
@@ -7046,7 +6838,6 @@ class $$SyncQueueEntriesTableTableManager
                 Value<SyncEntityType> entityType = const Value.absent(),
                 Value<String> entityId = const Value.absent(),
                 Value<SyncOperation> operation = const Value.absent(),
-                Value<String> payloadJson = const Value.absent(),
                 Value<int> attempts = const Value.absent(),
                 Value<DateTime> updatedAt = const Value.absent(),
                 Value<int> rowid = const Value.absent(),
@@ -7055,7 +6846,6 @@ class $$SyncQueueEntriesTableTableManager
                 entityType: entityType,
                 entityId: entityId,
                 operation: operation,
-                payloadJson: payloadJson,
                 attempts: attempts,
                 updatedAt: updatedAt,
                 rowid: rowid,
@@ -7066,8 +6856,7 @@ class $$SyncQueueEntriesTableTableManager
                 required SyncEntityType entityType,
                 required String entityId,
                 required SyncOperation operation,
-                required String payloadJson,
-                required int attempts,
+                Value<int> attempts = const Value.absent(),
                 required DateTime updatedAt,
                 Value<int> rowid = const Value.absent(),
               }) => SyncQueueEntriesCompanion.insert(
@@ -7075,7 +6864,6 @@ class $$SyncQueueEntriesTableTableManager
                 entityType: entityType,
                 entityId: entityId,
                 operation: operation,
-                payloadJson: payloadJson,
                 attempts: attempts,
                 updatedAt: updatedAt,
                 rowid: rowid,

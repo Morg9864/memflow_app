@@ -1,8 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_bootstrap.dart';
+import '../data/local/database.dart';
 import '../data/repositories/app_repository.dart';
+import '../data/sync/sync_service.dart';
 import '../domain/services/auth_service.dart';
 import '../domain/services/card_mode_service.dart';
 import '../domain/services/csv_export_service.dart';
@@ -64,34 +68,54 @@ final csvExportServiceProvider = Provider<CsvExportService>(
   (ref) => const CsvExportService(),
 );
 
-class AppDataRevisionController extends Notifier<int> {
-  @override
-  int build() => 0;
+/// Base locale : source de vérité pour tout ce qui est affiché. Elle est
+/// fournie par le bootstrap pour que son ouverture, asynchrone, soit terminée
+/// avant le premier écran.
+final appDatabaseProvider = Provider<AppDatabase>((ref) {
+  throw UnimplementedError('AppDatabase must be overridden during bootstrap.');
+});
 
-  void bump() => state++;
-}
+final syncServiceProvider = Provider<SyncService>((ref) {
+  final service = SyncService(
+    database: ref.watch(appDatabaseProvider),
+    client: ref.watch(supabaseClientProvider),
+  );
+  ref.onDispose(service.dispose);
+  return service;
+});
 
-final appDataRevisionProvider =
-    NotifierProvider<AppDataRevisionController, int>(
-      AppDataRevisionController.new,
-    );
+final syncStatusProvider = StreamProvider<SyncStatus>((ref) {
+  final service = ref.watch(syncServiceProvider);
+  return service.statusStream;
+});
 
 final appRepositoryProvider = Provider<AppRepository>((ref) {
-  ref.watch(appDataRevisionProvider);
-  final revisionNotifier = ref.read(appDataRevisionProvider.notifier);
   return AppRepository(
-    client: ref.watch(supabaseClientProvider),
+    database: ref.watch(appDatabaseProvider),
+    syncService: ref.watch(syncServiceProvider),
     spacedRepetitionService: ref.watch(spacedRepetitionServiceProvider),
     cardModeService: ref.watch(cardModeServiceProvider),
-    onDataChanged: () {
-      if (!ref.mounted) {
-        return;
-      }
-      revisionNotifier.bump();
-    },
   );
 });
 
-final appInitializationProvider = FutureProvider<void>((ref) async {
-  ref.watch(supabaseClientProvider);
+/// Rattache la base locale au compte connecté : elle est adoptée et
+/// synchronisée à la connexion, purgée à la déconnexion.
+final sessionSyncProvider = Provider<void>((ref) {
+  final service = ref.watch(syncServiceProvider);
+  String? boundUserId;
+
+  void bind(String? userId) {
+    if (userId == boundUserId) {
+      return;
+    }
+    boundUserId = userId;
+    if (userId == null) {
+      unawaited(service.stopAndClear());
+    } else {
+      unawaited(service.startFor(userId));
+    }
+  }
+
+  bind(ref.read(authServiceProvider).currentUser?.id);
+  ref.listen(currentUserProvider, (previous, next) => bind(next?.id));
 });

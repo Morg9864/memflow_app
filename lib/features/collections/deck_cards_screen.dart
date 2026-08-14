@@ -40,7 +40,7 @@ class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
           limit: limit,
         );
       },
-      refreshStream: repository.watchDeckCardsRevision(widget.deckId),
+      refreshStream: repository.watchDeckCardsRevision(),
     )..addListener(_handleControllerChange);
     _scrollController.addListener(_handleScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {

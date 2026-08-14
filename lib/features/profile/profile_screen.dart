@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/app_version.dart';
 import '../../app/daily_goal_controller.dart';
 import '../../app/providers.dart';
+import '../../data/sync/sync_service.dart';
 import '../../domain/models/models.dart';
 import '../../theme/theme_controller.dart';
 import '../../widgets/ui.dart';
@@ -247,6 +248,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     label: const Text('Exporter les cartes en CSV'),
                   ),
                   const SizedBox(height: 16),
+                  const _SyncStatusLine(),
+                  const SizedBox(height: 16),
                   Text(
                     'Version app',
                     style: Theme.of(context).textTheme.labelMedium,
@@ -344,6 +347,43 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
           ],
         ],
       ),
+    );
+  }
+}
+
+/// L'application écrit d'abord en local : elle doit dire ce qui n'est pas
+/// encore parti, sinon l'utilisateur ne peut pas savoir s'il peut changer
+/// d'appareil sans rien perdre.
+class _SyncStatusLine extends ConsumerWidget {
+  const _SyncStatusLine();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final theme = Theme.of(context);
+    final status = ref.watch(syncStatusProvider).value;
+    final pending = status?.pendingCount ?? 0;
+
+    final (icon, label) = switch (status?.state) {
+      null || SyncState.idle when pending == 0 => (
+        Icons.cloud_done_outlined,
+        'Tout est synchronisé',
+      ),
+      SyncState.syncing => (
+        Icons.cloud_sync_outlined,
+        'Synchronisation en cours…',
+      ),
+      _ => (
+        Icons.cloud_off_outlined,
+        '$pending modification${pending > 1 ? 's' : ''} en attente d\'envoi',
+      ),
+    };
+
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 10),
+        Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
+      ],
     );
   }
 }

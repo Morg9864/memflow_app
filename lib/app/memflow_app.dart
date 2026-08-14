@@ -15,7 +15,9 @@ class MemFlowApp extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final themePreference = ref.watch(themeControllerProvider);
     final router = ref.watch(routerProvider);
-    final initialization = ref.watch(appInitializationProvider);
+    // Maintient la base locale rattachée au compte connecté pendant toute la
+    // vie de l'application.
+    ref.watch(sessionSyncProvider);
 
     return MaterialApp.router(
       title: 'MemFlow',
@@ -27,18 +29,10 @@ class MemFlowApp extends ConsumerWidget {
       darkTheme: AppTheme.dark(),
       themeMode: themePreference.themeMode,
       routerConfig: router,
-      builder: (context, child) {
-        return initialization.when(
-          data: (_) => AnimatedSwitcher(
-            duration: const Duration(milliseconds: 180),
-            child: child ?? const SizedBox.shrink(),
-          ),
-          loading: () =>
-              const Scaffold(body: Center(child: CircularProgressIndicator())),
-          error: (error, stackTrace) =>
-              Scaffold(body: Center(child: Text(error.toString()))),
-        );
-      },
+      builder: (context, child) => AnimatedSwitcher(
+        duration: const Duration(milliseconds: 180),
+        child: child ?? const SizedBox.shrink(),
+      ),
     );
   }
 }

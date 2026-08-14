@@ -5,10 +5,7 @@ import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
 
 class SessionSummaryScreen extends StatelessWidget {
-  const SessionSummaryScreen({
-    super.key,
-    required this.summary,
-  });
+  const SessionSummaryScreen({super.key, required this.summary});
 
   final SessionSummary summary;
 
@@ -28,9 +25,15 @@ class SessionSummaryScreen extends StatelessWidget {
                     mainAxisSize: MainAxisSize.min,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('Session terminée', style: Theme.of(context).textTheme.displaySmall),
+                      Text(
+                        'Session terminée',
+                        style: Theme.of(context).textTheme.displaySmall,
+                      ),
                       const SizedBox(height: 10),
-                      Text(summary.deckTitle, style: Theme.of(context).textTheme.bodyLarge),
+                      Text(
+                        summary.deckTitle,
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
                       const SizedBox(height: 22),
                       Wrap(
                         spacing: 12,
@@ -42,22 +45,26 @@ class SessionSummaryScreen extends StatelessWidget {
                             icon: Icons.style_rounded,
                           ),
                           StatCard(
-                            value: '${summary.reviewCounts[ReviewResult.again] ?? 0}',
+                            value:
+                                '${summary.reviewCounts[ReviewResult.again] ?? 0}',
                             label: 'encore',
                             icon: Icons.refresh_rounded,
                           ),
                           StatCard(
-                            value: '${summary.reviewCounts[ReviewResult.hard] ?? 0}',
+                            value:
+                                '${summary.reviewCounts[ReviewResult.hard] ?? 0}',
                             label: 'difficile',
                             icon: Icons.terrain_rounded,
                           ),
                           StatCard(
-                            value: '${summary.reviewCounts[ReviewResult.good] ?? 0}',
+                            value:
+                                '${summary.reviewCounts[ReviewResult.good] ?? 0}',
                             label: 'correct',
                             icon: Icons.thumb_up_alt_rounded,
                           ),
                           StatCard(
-                            value: '${summary.reviewCounts[ReviewResult.easy] ?? 0}',
+                            value:
+                                '${summary.reviewCounts[ReviewResult.easy] ?? 0}',
                             label: 'facile',
                             icon: Icons.rocket_launch_rounded,
                           ),

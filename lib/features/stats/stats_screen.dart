@@ -18,13 +18,18 @@ class StatisticsScreen extends ConsumerWidget {
     final stats = ref.watch(statisticsOverviewProvider);
 
     return AppScaffold(
-      bottomNavigation: AppBottomNav(location: GoRouterState.of(context).uri.path),
+      bottomNavigation: AppBottomNav(
+        location: GoRouterState.of(context).uri.path,
+      ),
       child: stats.when(
         data: (data) => ListView(
           children: [
             Row(
               children: [
-                Text('Statistiques', style: Theme.of(context).textTheme.displaySmall),
+                Text(
+                  'Statistiques',
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
                 const Spacer(),
                 const ThemeToggleButton(),
               ],
@@ -64,13 +69,19 @@ class StatisticsScreen extends ConsumerWidget {
                   children: [
                     Row(
                       children: [
-                        Text('Activité', style: Theme.of(context).textTheme.titleLarge),
+                        Text(
+                          'Activité',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                         const Spacer(),
                         Text('${data.studyDays} jours d’étude'),
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Text('14 derniers jours', style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      '14 derniers jours',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 22),
                     ActivityBarChart(days: data.heatmap),
                   ],
@@ -94,17 +105,25 @@ class StatisticsScreen extends ConsumerWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text('Niv. ${item.level}, ${item.title}',
-                                  style: Theme.of(context).textTheme.titleMedium),
+                              Text(
+                                'Niv. ${item.level}, ${item.title}',
+                                style: Theme.of(context).textTheme.titleMedium,
+                              ),
                               const SizedBox(height: 6),
-                              Text(item.subtitle, style: Theme.of(context).textTheme.bodySmall),
+                              Text(
+                                item.subtitle,
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
                               const SizedBox(height: 12),
                               ProgressPill(value: item.progress),
                             ],
                           ),
                         ),
                         const SizedBox(width: 16),
-                        Text('${item.count}', style: Theme.of(context).textTheme.titleLarge),
+                        Text(
+                          '${item.count}',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
                       ],
                     ),
                   ),

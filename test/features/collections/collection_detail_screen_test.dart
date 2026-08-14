@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memflow/app/providers.dart';
+import 'package:memflow/data/local/database.dart';
 import 'package:memflow/data/repositories/app_repository.dart';
+import 'package:memflow/data/sync/sync_service.dart';
 import 'package:memflow/domain/models/models.dart';
 import 'package:memflow/domain/services/card_mode_service.dart';
 import 'package:memflow/domain/services/spaced_repetition_service.dart';
@@ -15,9 +17,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  late AppDatabase database;
+
   setUp(() {
     SharedPreferences.setMockInitialValues({});
+    database = AppDatabase.memory();
   });
+
+  tearDown(() => database.close());
 
   testWidgets('the entire collection detail uses one scroll view', (
     tester,
@@ -25,6 +32,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(900, 600));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final repository = _FakeAppRepository(
+      database: database,
       collection: _collection(),
       decks: List.generate(12, _deck),
     );
@@ -48,6 +56,7 @@ void main() {
     tester,
   ) async {
     final repository = _FakeAppRepository(
+      database: database,
       collection: _collection(isDisabled: true),
       decks: [_deck(0)],
     );
@@ -75,6 +84,7 @@ void main() {
     tester,
   ) async {
     final repository = _FakeAppRepository(
+      database: database,
       collection: _collection(),
       decks: [_deck(0)],
     );
@@ -99,6 +109,7 @@ void main() {
   ) async {
     final now = DateTime(2026, 7, 19);
     final repository = _FakeAppRepository(
+      database: database,
       collection: _collection(),
       decks: [
         _customDeck(
@@ -213,16 +224,26 @@ List<String> _visibleDeckOrder(WidgetTester tester) {
 }
 
 class _FakeAppRepository extends AppRepository {
-  _FakeAppRepository({required this.collection, required this.decks})
-    : super(
-        client: SupabaseClient(
-          'http://localhost',
-          'test-key',
-          authOptions: const AuthClientOptions(autoRefreshToken: false),
-        ),
-        spacedRepetitionService: const SpacedRepetitionService(),
-        cardModeService: const CardModeService(),
-      );
+  // `database` ne peut pas être un super paramètre : il est aussi lu dans la
+  // liste d'initialisation pour construire le service de synchronisation.
+  // ignore: use_super_parameters
+  _FakeAppRepository({
+    required this.collection,
+    required this.decks,
+    required AppDatabase database,
+  }) : super(
+         database: database,
+         syncService: SyncService(
+           database: database,
+           client: SupabaseClient(
+             'http://localhost',
+             'test-key',
+             authOptions: const AuthClientOptions(autoRefreshToken: false),
+           ),
+         ),
+         spacedRepetitionService: const SpacedRepetitionService(),
+         cardModeService: const CardModeService(),
+       );
 
   final CollectionListItem collection;
   final List<DeckListItem> decks;

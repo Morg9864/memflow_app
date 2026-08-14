@@ -2,54 +2,54 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:csv/csv.dart';
-import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:drift/drift.dart';
+import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:uuid/uuid.dart';
 
 import '../../domain/models/models.dart';
 import '../../domain/services/card_mode_service.dart';
 import '../../domain/services/spaced_repetition_service.dart';
+import '../local/database.dart';
+import '../sync/sync_service.dart';
+import 'stream_combine.dart';
 
+/// Accès unique aux données de l'application.
+///
+/// Toutes les lectures viennent de la base locale : l'interface n'attend
+/// jamais le réseau et fonctionne à l'identique hors ligne. Toutes les
+/// écritures sont appliquées localement puis déposées dans la file de
+/// synchronisation, que [SyncService] pousse dès qu'une connexion est
+/// disponible.
 class AppRepository {
-  static const int _pagedFetchSize = 500;
-
   AppRepository({
-    required SupabaseClient client,
+    required AppDatabase database,
+    required SyncService syncService,
     required SpacedRepetitionService spacedRepetitionService,
     required CardModeService cardModeService,
-    void Function()? onDataChanged,
-  }) : _client = client,
+  }) : _db = database,
+       _sync = syncService,
        _spacedRepetitionService = spacedRepetitionService,
-       _cardModeService = cardModeService,
-       _onDataChanged = onDataChanged;
+       _cardModeService = cardModeService;
 
-  final SupabaseClient _client;
+  final AppDatabase _db;
+  final SyncService _sync;
   final SpacedRepetitionService _spacedRepetitionService;
   final CardModeService _cardModeService;
-  final void Function()? _onDataChanged;
   final Uuid _uuid = const Uuid();
 
-  String get _userId {
-    final userId = _client.auth.currentUser?.id;
-    if (userId == null) {
-      throw StateError('Une session Supabase active est requise.');
-    }
-    return userId;
-  }
-
-  void _notifyDataChanged() {
-    _onDataChanged?.call();
-  }
+  // ---------------------------------------------------------------------
+  // Listes et tableaux de bord
+  // ---------------------------------------------------------------------
 
   Stream<List<CollectionListItem>> watchCollections({String search = ''}) {
     final lowered = search.trim().toLowerCase();
-    return _combineLatest5(
-      _watchCollectionsInternal(),
-      _watchDecksInternal(),
-      _watchFlashcardsInternal(),
-      _watchReviewLogsInternal(),
+    return combineLatest5(
+      _watchCollections(),
+      _watchDecks(),
+      _watchFlashcards(),
+      _watchErrorCountsByCollection(),
       _clockStream(),
-      (collections, decks, flashcards, reviewLogs, now) {
+      (collections, decks, flashcards, errorCounts, now) {
         final activeCards = _excludeDisabledDeckCards(flashcards, decks);
         final items =
             collections
@@ -59,9 +59,7 @@ class AppRepository {
                     activeCards
                         .where((card) => card.collectionId == collection.id)
                         .toList(),
-                    reviewLogs
-                        .where((log) => log.collectionId == collection.id)
-                        .toList(),
+                    errorCounts[collection.id] ?? 0,
                     now,
                   ),
                 )
@@ -86,9 +84,9 @@ class AppRepository {
   }
 
   Stream<List<DeckListItem>> watchDecksForCollection(String collectionId) {
-    return _combineLatest3(
-      _watchDecksInternal(collectionId: collectionId),
-      _watchFlashcardsInternal(collectionId: collectionId),
+    return combineLatest3(
+      _watchDecks(collectionId: collectionId),
+      _watchFlashcards(collectionId: collectionId),
       _clockStream(),
       (decks, flashcards, now) {
         final items =
@@ -108,36 +106,43 @@ class AppRepository {
   }
 
   Stream<HomeStats> watchHomeStats() {
-    return _combineLatest5(
-      _watchCollectionsInternal(),
-      _watchDecksInternal(),
-      _watchFlashcardsInternal(),
-      _watchReviewLogsInternal(),
+    return combineLatest5(
+      _watchCollections(),
+      _watchDecks(),
+      _watchFlashcards(),
+      _watchReviewTotals(),
       _clockStream(),
-      (collections, decks, flashcards, reviewLogs, now) => _buildHomeStats(
-        flashcards: _excludeUnavailableCards(
+      (collections, decks, flashcards, totals, now) {
+        final available = _excludeUnavailableCards(
           flashcards,
           collections: collections,
           decks: decks,
-        ),
-        reviewLogs: reviewLogs,
-        now: now,
-      ),
+        );
+        return HomeStats(
+          streakDays: _calculateStreak(totals.dayCounts.keys, now: now),
+          successRate: totals.successRate,
+          dueCards: available
+              .where((card) => !_isDueInFuture(card.dueAt, now))
+              .length,
+          totalCardsSeen: totals.total,
+        );
+      },
     );
   }
 
   Stream<StatisticsOverview> watchStatisticsOverview() {
-    return _combineLatest3(
-      _watchFlashcardsInternal(),
-      _watchReviewLogsInternal(),
+    return combineLatest3(
+      _watchFlashcards(),
+      _watchReviewTotals(),
       _clockStream(),
-      (flashcards, reviewLogs, now) => _buildStatisticsOverview(
-        flashcards: flashcards,
-        reviewLogs: reviewLogs,
-        now: now,
-      ),
+      (flashcards, totals, now) =>
+          _buildStatisticsOverview(flashcards, totals, now),
     );
   }
+
+  // ---------------------------------------------------------------------
+  // Session d'étude
+  // ---------------------------------------------------------------------
 
   Future<StudySessionState> startStudySession({
     String? collectionId,
@@ -195,10 +200,15 @@ class AppRepository {
     );
   }
 
+  /// Enregistre une révision. [playedMode] est le mode réellement présenté à
+  /// l'utilisateur : c'est lui qui est journalisé et qui fait avancer la carte,
+  /// pas le mode stocké, qui peut différer quand un mode est imposé pour toute
+  /// la session.
   Future<void> submitReview({
     required String cardId,
     required ReviewResult reviewResult,
     required bool wasCorrect,
+    required TestMode playedMode,
   }) async {
     final now = DateTime.now();
     final card = await _fetchFlashcard(cardId);
@@ -211,52 +221,73 @@ class AppRepository {
       reviewResult,
       now: now,
     );
-    final nextMode = _cardModeService.nextMode(card, reviewResult);
+    final nextMode = _cardModeService.nextMode(
+      card,
+      reviewResult,
+      playedMode: playedMode,
+    );
 
-    await _client
-        .from('flashcards')
-        .update({
-          'current_test_mode': nextMode.name,
-          'last_test_mode': card.currentTestMode.name,
-          'mode_history': _cardModeService
-              .updatedModeHistory(card, nextMode)
-              .map((mode) => mode.name)
-              .toList(),
-          'due_at': scheduleUpdate.dueAt.toUtc().toIso8601String(),
-          'last_reviewed_at': scheduleUpdate.lastReviewedAt
-              .toUtc()
-              .toIso8601String(),
-          'interval_days': scheduleUpdate.intervalDays,
-          'ease_factor': scheduleUpdate.easeFactor,
-          'repetitions': scheduleUpdate.repetitions,
-          'lapses': scheduleUpdate.lapses,
-          'mastered': scheduleUpdate.mastered,
-          'updated_at': now.toUtc().toIso8601String(),
-        })
-        .eq('id', card.id)
-        .eq('user_id', _userId);
+    final updatedCard = card.copyWith(
+      currentTestMode: nextMode,
+      lastTestMode: playedMode,
+      modeHistory: _cardModeService.updatedModeHistory(
+        card,
+        nextMode,
+        playedMode: playedMode,
+      ),
+      dueAt: scheduleUpdate.dueAt,
+      lastReviewedAt: scheduleUpdate.lastReviewedAt,
+      intervalDays: scheduleUpdate.intervalDays,
+      easeFactor: scheduleUpdate.easeFactor,
+      repetitions: scheduleUpdate.repetitions,
+      lapses: scheduleUpdate.lapses,
+      mastered: scheduleUpdate.mastered,
+      updatedAt: now,
+    );
 
-    await _client.from('review_logs').insert({
-      'id': _uuid.v4(),
-      'flashcard_id': card.id,
-      'collection_id': card.collectionId,
-      'deck_id': card.deckId,
-      'review_result': reviewResult.name,
-      'test_mode': card.currentTestMode.name,
-      'was_correct': wasCorrect,
-      'created_at': now.toUtc().toIso8601String(),
-      'scheduled_due_at': card.dueAt.toUtc().toIso8601String(),
+    final log = ReviewLogRecord(
+      id: _uuid.v4(),
+      flashcardId: card.id,
+      collectionId: card.collectionId,
+      deckId: card.deckId,
+      reviewResult: reviewResult,
+      testMode: playedMode,
+      wasCorrect: wasCorrect,
+      createdAt: now,
+      scheduledDueAt: card.dueAt,
+    );
+
+    await _db.transaction(() async {
+      await _db
+          .into(_db.flashcards)
+          .insertOnConflictUpdate(_flashcardCompanion(updatedCard));
+      await _db
+          .into(_db.reviewLogs)
+          .insertOnConflictUpdate(_reviewLogCompanion(log));
+      await _db.enqueueSync(
+        entityType: SyncEntityType.flashcard,
+        entityId: card.id,
+        operation: SyncOperation.upsert,
+      );
+      await _db.enqueueSync(
+        entityType: SyncEntityType.reviewLog,
+        entityId: log.id,
+        operation: SyncOperation.upsert,
+      );
     });
-
-    _notifyDataChanged();
+    _requestSync();
   }
+
+  // ---------------------------------------------------------------------
+  // Import et export
+  // ---------------------------------------------------------------------
 
   Future<void> importCards(CsvImportPreview preview) async {
     if (preview.cards.isEmpty) {
       return;
     }
 
-    final now = DateTime.now().toUtc();
+    final now = DateTime.now();
     final collections = await _fetchCollections();
     final decks = await _fetchDecks();
     final collectionsByName = {
@@ -268,115 +299,164 @@ class AppRepository {
         '${deck.collectionId}:${deck.name.toLowerCase()}': deck,
     };
 
-    for (final draft in preview.cards) {
-      final collectionKey = draft.collection.toLowerCase();
-      var collection = collectionsByName[collectionKey];
-      if (collection == null) {
-        collection = CollectionRecord(
-          id: _uuid.v4(),
-          name: draft.collection,
-          description: 'Import CSV',
-          icon: '📚',
-          color: 0xFFE8792F,
-          createdAt: now,
-          updatedAt: now,
-        );
-        await _client.from('collections').insert({
-          'id': collection.id,
-          'name': collection.name,
-          'description': collection.description,
-          'icon': collection.icon,
-          'total_cards': 0,
-          'mastered_percentage': 0,
-          'color': collection.color,
-          'created_at': collection.createdAt.toIso8601String(),
-          'updated_at': collection.updatedAt.toIso8601String(),
-        });
-        collectionsByName[collectionKey] = collection;
-      }
+    await _db.transaction(() async {
+      for (final draft in preview.cards) {
+        final collectionKey = draft.collection.toLowerCase();
+        var collection = collectionsByName[collectionKey];
+        if (collection == null) {
+          collection = CollectionRecord(
+            id: _uuid.v4(),
+            name: draft.collection,
+            description: 'Import CSV',
+            icon: '📚',
+            color: 0xFFE8792F,
+            createdAt: now,
+            updatedAt: now,
+          );
+          await _db
+              .into(_db.collections)
+              .insertOnConflictUpdate(_collectionCompanion(collection));
+          await _db.enqueueSync(
+            entityType: SyncEntityType.collection,
+            entityId: collection.id,
+            operation: SyncOperation.upsert,
+          );
+          collectionsByName[collectionKey] = collection;
+        }
 
-      final deckKey = '${collection.id}:${draft.deck.toLowerCase()}';
-      var deck = decksByKey[deckKey];
-      if (deck == null) {
-        deck = DeckRecord(
+        final deckKey = '${collection.id}:${draft.deck.toLowerCase()}';
+        var deck = decksByKey[deckKey];
+        if (deck == null) {
+          deck = DeckRecord(
+            id: _uuid.v4(),
+            collectionId: collection.id,
+            name: draft.deck,
+            icon: '🗂️',
+            difficulty: draft.difficulty,
+            createdAt: now,
+            updatedAt: now,
+          );
+          await _db
+              .into(_db.decks)
+              .insertOnConflictUpdate(_deckCompanion(deck));
+          await _db.enqueueSync(
+            entityType: SyncEntityType.deck,
+            entityId: deck.id,
+            operation: SyncOperation.upsert,
+          );
+          decksByKey[deckKey] = deck;
+        }
+
+        final card = FlashcardRecord(
           id: _uuid.v4(),
           collectionId: collection.id,
-          name: draft.deck,
-          icon: '🗂️',
+          deckId: deck.id,
+          question: draft.question,
+          correctAnswer: draft.correctAnswer,
+          answer: draft.correctAnswer,
+          wrongAnswers: draft.wrongAnswers,
+          hint: draft.hint,
+          explanation: draft.explanation,
+          currentTestMode: TestMode.multipleChoice,
+          allowedTestModes: draft.allowedTestModes,
+          lastTestMode: null,
+          modeHistory: const [TestMode.multipleChoice],
+          clozeText: draft.clozeText,
+          clozeAnswers: draft.clozeAnswers,
+          clozeWordBank: draft.clozeWordBank,
+          acceptedAnswers: draft.acceptedAnswers,
+          source: draft.source,
           difficulty: draft.difficulty,
+          level: draft.level,
+          tags: draft.tags,
+          dueAt: now,
+          lastReviewedAt: null,
+          intervalDays: 0,
+          easeFactor: 2.5,
+          repetitions: 0,
+          lapses: 0,
+          mastered: false,
           createdAt: now,
           updatedAt: now,
         );
-        await _client.from('decks').insert({
-          'id': deck.id,
-          'collection_id': deck.collectionId,
-          'name': deck.name,
-          'icon': deck.icon,
-          'difficulty': deck.difficulty.name,
-          'total_cards': 0,
-          'due_cards': 0,
-          'progress': 0,
-          'status': DeckStatus.nouveau.name,
-          'created_at': deck.createdAt.toIso8601String(),
-          'updated_at': deck.updatedAt.toIso8601String(),
-        });
-        decksByKey[deckKey] = deck;
+        await _db
+            .into(_db.flashcards)
+            .insertOnConflictUpdate(_flashcardCompanion(card));
+        await _db.enqueueSync(
+          entityType: SyncEntityType.flashcard,
+          entityId: card.id,
+          operation: SyncOperation.upsert,
+        );
       }
-
-      await _client.from('flashcards').insert({
-        'id': _uuid.v4(),
-        'collection_id': collection.id,
-        'deck_id': deck.id,
-        'question': draft.question,
-        'correct_answer': draft.correctAnswer,
-        'answer': draft.correctAnswer,
-        'wrong_answers': draft.wrongAnswers,
-        'hint': draft.hint,
-        'explanation': draft.explanation,
-        'current_test_mode': TestMode.multipleChoice.name,
-        'allowed_test_modes': draft.allowedTestModes
-            .map((mode) => mode.name)
-            .toList(),
-        'last_test_mode': null,
-        'mode_history': [TestMode.multipleChoice.name],
-        'cloze_text': draft.clozeText,
-        'cloze_answers': draft.clozeAnswers,
-        'cloze_word_bank': draft.clozeWordBank,
-        'accepted_answers': draft.acceptedAnswers,
-        'source': draft.source,
-        'difficulty': draft.difficulty.name,
-        'level': draft.level,
-        'tags': draft.tags,
-        'due_at': now.toIso8601String(),
-        'last_reviewed_at': null,
-        'interval_days': 0,
-        'ease_factor': 2.5,
-        'repetitions': 0,
-        'lapses': 0,
-        'mastered': false,
-        'created_at': now.toIso8601String(),
-        'updated_at': now.toIso8601String(),
-      });
-    }
-
-    _notifyDataChanged();
+    });
+    _requestSync();
   }
 
+  Future<String> exportAllCardsCsv() async {
+    final collections = await _fetchCollections();
+    final decks = await _fetchDecks();
+    final cards = await _fetchFlashcards();
+
+    final collectionMap = {
+      for (final collection in collections) collection.id: collection.name,
+    };
+    final deckMap = {for (final deck in decks) deck.id: deck.name};
+    final rows = <List<String>>[csvHeader];
+
+    for (final card in cards) {
+      rows.add([
+        collectionMap[card.collectionId] ?? '',
+        deckMap[card.deckId] ?? '',
+        card.question,
+        card.correctAnswer,
+        card.wrongAnswers.elementAtOrNull(0) ?? '',
+        card.wrongAnswers.elementAtOrNull(1) ?? '',
+        card.wrongAnswers.elementAtOrNull(2) ?? '',
+        card.hint ?? '',
+        card.explanation ?? '',
+        card.level.toString(),
+        card.difficulty?.name ?? '',
+        card.tags.join('|'),
+        card.source ?? '',
+        card.clozeText ?? '',
+        card.acceptedAnswers.join('|'),
+        card.clozeAnswers.join('|'),
+        card.clozeWordBank.join('|'),
+      ]);
+    }
+
+    return Csv(fieldDelimiter: ';').encode(rows);
+  }
+
+  static const csvHeader = [
+    'collection',
+    'deck',
+    'question',
+    'correct_answer',
+    'wrong_answer_1',
+    'wrong_answer_2',
+    'wrong_answer_3',
+    'hint',
+    'explanation',
+    'level',
+    'difficulty',
+    'tags',
+    'source',
+    'cloze_text',
+    'accepted_answers',
+    'cloze_answers',
+    'cloze_word_bank',
+  ];
+
+  // ---------------------------------------------------------------------
+  // Listes paginées
+  // ---------------------------------------------------------------------
+
   Stream<List<FlashcardSummary>> watchFlashcardsForDeck(String deckId) {
-    return _watchFlashcardsInternal(deckId: deckId).map((cards) {
-      final sortedCards = [...cards]
+    return _watchFlashcards(deckId: deckId).map((cards) {
+      final sorted = [...cards]
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-      return sortedCards
-          .map(
-            (card) => FlashcardSummary(
-              id: card.id,
-              deckId: card.deckId,
-              collectionId: card.collectionId,
-              question: card.question,
-              correctAnswer: card.correctAnswer,
-            ),
-          )
-          .toList();
+      return sorted.map(_toSummary).toList();
     });
   }
 
@@ -385,61 +465,41 @@ class AppRepository {
     required int offset,
     required int limit,
   }) async {
-    final totalCount = await _client
-        .from('flashcards')
-        .count(CountOption.exact)
-        .eq('user_id', _userId)
-        .eq('deck_id', deckId);
-
+    final totalCount = await _countFlashcards(
+      (table) => table.deckId.equals(deckId),
+    );
     if (totalCount == 0) {
       return const PaginatedSlice(items: [], totalCount: 0);
     }
 
-    final rows = await _client
-        .from('flashcards')
-        .select()
-        .eq('user_id', _userId)
-        .eq('deck_id', deckId)
-        .order('created_at', ascending: true)
-        .order('id', ascending: true)
-        .range(offset, offset + limit - 1);
+    final rows =
+        await (_db.select(_db.flashcards)
+              ..where((table) => table.deckId.equals(deckId))
+              ..orderBy([
+                (table) => OrderingTerm(expression: table.createdAt),
+                (table) => OrderingTerm(expression: table.id),
+              ])
+              ..limit(limit, offset: offset))
+            .get();
 
-    final items =
-        List<Map<String, dynamic>>.from(
-              (rows as List).map(
-                (row) => Map<String, dynamic>.from(row as Map),
-              ),
-            )
-            .map((row) {
-              final card = _mapFlashcard(row);
-              return FlashcardSummary(
-                id: card.id,
-                deckId: card.deckId,
-                collectionId: card.collectionId,
-                question: card.question,
-                correctAnswer: card.correctAnswer,
-              );
-            })
-            .toList(growable: false);
-
-    return PaginatedSlice(items: items, totalCount: totalCount);
-  }
-
-  Stream<int> watchDeckCardsRevision(String deckId) {
-    return _watchTableEvents(
-      'flashcards',
-      filterColumn: 'deck_id',
-      filterValue: deckId,
+    return PaginatedSlice(
+      items: rows.map(_toFlashcardRecord).map(_toSummary).toList(),
+      totalCount: totalCount,
     );
   }
+
+  /// Signale qu'une liste paginée doit se rafraîchir. Le signal n'est pas
+  /// filtré : la pagination refait de toute façon sa propre requête, elle,
+  /// bornée à sa page.
+  Stream<int> watchDeckCardsRevision() => _tableTicks({_db.flashcards});
 
   Stream<List<FlashcardDueItem>> watchDueCardsForCollection(
     String collectionId,
   ) {
-    return _combineLatest4(
-      _watchCollectionsInternal(),
-      _watchFlashcardsInternal(collectionId: collectionId),
-      _watchDecksInternal(collectionId: collectionId),
+    return combineLatest4(
+      _watchCollections(),
+      _watchFlashcards(collectionId: collectionId),
+      _watchDecks(collectionId: collectionId),
       _clockStream(),
       (collections, cards, decks, now) {
         final deckNames = {for (final deck in decks) deck.id: deck.name};
@@ -494,8 +554,9 @@ class AppRepository {
       return const PaginatedSlice(items: [], totalCount: 0);
     }
 
-    final decks = await _fetchDecks(collectionId: collectionId);
-    final activeDecks = decks.where((deck) => !deck.isDisabled).toList();
+    final activeDecks = (await _fetchDecks(
+      collectionId: collectionId,
+    )).where((deck) => !deck.isDisabled).toList();
     if (activeDecks.isEmpty) {
       return const PaginatedSlice(items: [], totalCount: 0);
     }
@@ -503,340 +564,348 @@ class AppRepository {
     final deckNames = {for (final deck in activeDecks) deck.id: deck.name};
     final activeDeckIds = activeDecks.map((deck) => deck.id).toList();
 
-    final totalCount = await _client
-        .from('flashcards')
-        .count(CountOption.exact)
-        .eq('user_id', _userId)
-        .eq('collection_id', collectionId)
-        .inFilter('deck_id', activeDeckIds);
-
+    final totalCount = await _countFlashcards(
+      (table) =>
+          table.collectionId.equals(collectionId) &
+          table.deckId.isIn(activeDeckIds),
+    );
     if (totalCount == 0) {
       return const PaginatedSlice(items: [], totalCount: 0);
     }
 
-    final rows = await _client
-        .from('flashcards')
-        .select()
-        .eq('user_id', _userId)
-        .eq('collection_id', collectionId)
-        .inFilter('deck_id', activeDeckIds)
-        .order('due_at', ascending: true)
-        .order('id', ascending: true)
-        .range(offset, offset + limit - 1);
+    final rows =
+        await (_db.select(_db.flashcards)
+              ..where(
+                (table) =>
+                    table.collectionId.equals(collectionId) &
+                    table.deckId.isIn(activeDeckIds),
+              )
+              ..orderBy([
+                (table) => OrderingTerm(expression: table.dueAt),
+                (table) => OrderingTerm(expression: table.id),
+              ])
+              ..limit(limit, offset: offset))
+            .get();
 
     final now = DateTime.now();
-    final items =
-        List<Map<String, dynamic>>.from(
-              (rows as List).map(
-                (row) => Map<String, dynamic>.from(row as Map),
-              ),
-            )
-            .map((row) {
-              final card = _mapFlashcard(row);
-              return FlashcardDueItem(
-                id: card.id,
-                deckId: card.deckId,
-                deckName: deckNames[card.deckId] ?? 'Deck',
-                question: card.question,
-                dueAt: card.dueAt,
-                isDueNow: !_isDueInFuture(card.dueAt, now),
-              );
-            })
-            .toList(growable: false);
-
-    return PaginatedSlice(items: items, totalCount: totalCount);
+    return PaginatedSlice(
+      items: rows.map(_toFlashcardRecord).map((card) {
+        return FlashcardDueItem(
+          id: card.id,
+          deckId: card.deckId,
+          deckName: deckNames[card.deckId] ?? 'Deck',
+          question: card.question,
+          dueAt: card.dueAt,
+          isDueNow: !_isDueInFuture(card.dueAt, now),
+        );
+      }).toList(),
+      totalCount: totalCount,
+    );
   }
 
-  Stream<int> watchDueCardsForCollectionRevision(String collectionId) {
-    return _mergeEventStreams([
-      _watchTableEvents(
-        'flashcards',
-        filterColumn: 'collection_id',
-        filterValue: collectionId,
-      ),
-      _watchTableEvents(
-        'decks',
-        filterColumn: 'collection_id',
-        filterValue: collectionId,
-      ),
-      _watchTableEvents(
-        'collections',
-        filterColumn: 'id',
-        filterValue: collectionId,
-      ),
-    ]);
-  }
+  Stream<int> watchDueCardsForCollectionRevision() =>
+      _tableTicks({_db.flashcards, _db.decks, _db.collections});
+
+  // ---------------------------------------------------------------------
+  // Écritures
+  // ---------------------------------------------------------------------
 
   Future<void> deleteFlashcard(String cardId) async {
-    await _client
-        .from('flashcards')
-        .delete()
-        .eq('id', cardId)
-        .eq('user_id', _userId);
-    _notifyDataChanged();
+    await _db.transaction(() async {
+      await (_db.delete(
+        _db.reviewLogs,
+      )..where((table) => table.flashcardId.equals(cardId))).go();
+      await (_db.delete(
+        _db.flashcards,
+      )..where((table) => table.id.equals(cardId))).go();
+      await _db.enqueueSync(
+        entityType: SyncEntityType.flashcard,
+        entityId: cardId,
+        operation: SyncOperation.delete,
+      );
+    });
+    _requestSync();
   }
 
   Future<void> updateFlashcardDueAt({
     required String cardId,
     required DateTime dueAt,
   }) async {
-    await _client
-        .from('flashcards')
-        .update({
-          'due_at': dueAt.toUtc().toIso8601String(),
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', cardId)
-        .eq('user_id', _userId);
-    _notifyDataChanged();
+    final card = await _fetchFlashcard(cardId);
+    if (card == null) {
+      return;
+    }
+    await _writeFlashcard(
+      card.copyWith(dueAt: dueAt, updatedAt: DateTime.now()),
+    );
   }
 
   Future<void> deleteDeck(String deckId) async {
-    await _client
-        .from('decks')
-        .delete()
-        .eq('id', deckId)
-        .eq('user_id', _userId);
-    _notifyDataChanged();
+    await _db.transaction(() async {
+      await (_db.delete(
+        _db.reviewLogs,
+      )..where((table) => table.deckId.equals(deckId))).go();
+      await (_db.delete(
+        _db.flashcards,
+      )..where((table) => table.deckId.equals(deckId))).go();
+      await (_db.delete(
+        _db.decks,
+      )..where((table) => table.id.equals(deckId))).go();
+      await _db.enqueueSync(
+        entityType: SyncEntityType.deck,
+        entityId: deckId,
+        operation: SyncOperation.delete,
+      );
+    });
+    _requestSync();
+  }
+
+  Future<void> deleteCollection(String collectionId) async {
+    await _db.transaction(() async {
+      await (_db.delete(
+        _db.reviewLogs,
+      )..where((table) => table.collectionId.equals(collectionId))).go();
+      await (_db.delete(
+        _db.flashcards,
+      )..where((table) => table.collectionId.equals(collectionId))).go();
+      await (_db.delete(
+        _db.decks,
+      )..where((table) => table.collectionId.equals(collectionId))).go();
+      await (_db.delete(
+        _db.collections,
+      )..where((table) => table.id.equals(collectionId))).go();
+      await _db.enqueueSync(
+        entityType: SyncEntityType.collection,
+        entityId: collectionId,
+        operation: SyncOperation.delete,
+      );
+    });
+    _requestSync();
   }
 
   Future<void> setDeckDisabled(String deckId, bool isDisabled) async {
-    await _client
-        .from('decks')
-        .update({
-          'is_disabled': isDisabled,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', deckId)
-        .eq('user_id', _userId);
-    _notifyDataChanged();
+    final deck = await _fetchDeck(deckId);
+    if (deck == null) {
+      return;
+    }
+    await _writeDeck(
+      DeckRecord(
+        id: deck.id,
+        collectionId: deck.collectionId,
+        name: deck.name,
+        icon: deck.icon,
+        difficulty: deck.difficulty,
+        createdAt: deck.createdAt,
+        updatedAt: DateTime.now(),
+        isDisabled: isDisabled,
+      ),
+    );
   }
 
   Future<void> setCollectionDisabled(
     String collectionId,
     bool isDisabled,
   ) async {
-    await _client
-        .from('collections')
-        .update({
-          'is_disabled': isDisabled,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', collectionId)
-        .eq('user_id', _userId);
-    _notifyDataChanged();
+    final collection = await _fetchCollection(collectionId);
+    if (collection == null) {
+      return;
+    }
+    await _writeCollection(_copyCollection(collection, isDisabled: isDisabled));
   }
 
   Future<void> setCollectionIcon(String collectionId, String icon) async {
-    await _client
-        .from('collections')
-        .update({
-          'icon': icon,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
-        .eq('id', collectionId)
-        .eq('user_id', _userId);
-    _notifyDataChanged();
-  }
-
-  Future<void> deleteCollection(String collectionId) async {
-    await _client
-        .from('collections')
-        .delete()
-        .eq('id', collectionId)
-        .eq('user_id', _userId);
-    _notifyDataChanged();
-  }
-
-  Future<String> exportAllCardsCsv() async {
-    final collections = await _fetchCollections();
-    final decks = await _fetchDecks();
-    final cards = await _fetchFlashcards();
-
-    final collectionMap = {
-      for (final collection in collections) collection.id: collection.name,
-    };
-    final deckMap = {for (final deck in decks) deck.id: deck.name};
-    final rows = <List<String>>[
-      const [
-        'collection',
-        'deck',
-        'question',
-        'correct_answer',
-        'wrong_answer_1',
-        'wrong_answer_2',
-        'wrong_answer_3',
-        'hint',
-        'explanation',
-        'level',
-        'difficulty',
-        'tags',
-        'source',
-        'cloze_text',
-        'accepted_answers',
-        'cloze_answers',
-        'cloze_word_bank',
-      ],
-    ];
-
-    for (final card in cards) {
-      rows.add([
-        collectionMap[card.collectionId] ?? '',
-        deckMap[card.deckId] ?? '',
-        card.question,
-        card.correctAnswer,
-        card.wrongAnswers.elementAtOrNull(0) ?? '',
-        card.wrongAnswers.elementAtOrNull(1) ?? '',
-        card.wrongAnswers.elementAtOrNull(2) ?? '',
-        card.hint ?? '',
-        card.explanation ?? '',
-        card.level.toString(),
-        card.difficulty?.name ?? '',
-        card.tags.join('|'),
-        card.source ?? '',
-        card.clozeText ?? '',
-        card.acceptedAnswers.join('|'),
-        card.clozeAnswers.join('|'),
-        card.clozeWordBank.join('|'),
-      ]);
+    final collection = await _fetchCollection(collectionId);
+    if (collection == null) {
+      return;
     }
+    await _writeCollection(_copyCollection(collection, icon: icon));
+  }
 
-    return Csv(fieldDelimiter: ';').encode(rows);
+  Future<void> _writeCollection(CollectionRecord collection) async {
+    await _db.transaction(() async {
+      await _db
+          .into(_db.collections)
+          .insertOnConflictUpdate(_collectionCompanion(collection));
+      await _db.enqueueSync(
+        entityType: SyncEntityType.collection,
+        entityId: collection.id,
+        operation: SyncOperation.upsert,
+      );
+    });
+    _requestSync();
+  }
+
+  Future<void> _writeDeck(DeckRecord deck) async {
+    await _db.transaction(() async {
+      await _db.into(_db.decks).insertOnConflictUpdate(_deckCompanion(deck));
+      await _db.enqueueSync(
+        entityType: SyncEntityType.deck,
+        entityId: deck.id,
+        operation: SyncOperation.upsert,
+      );
+    });
+    _requestSync();
+  }
+
+  Future<void> _writeFlashcard(FlashcardRecord card) async {
+    await _db.transaction(() async {
+      await _db
+          .into(_db.flashcards)
+          .insertOnConflictUpdate(_flashcardCompanion(card));
+      await _db.enqueueSync(
+        entityType: SyncEntityType.flashcard,
+        entityId: card.id,
+        operation: SyncOperation.upsert,
+      );
+    });
+    _requestSync();
+  }
+
+  /// La synchronisation ne bloque jamais une écriture : l'utilisateur voit sa
+  /// modification tout de suite, le réseau suit quand il peut.
+  void _requestSync() => unawaited(_sync.syncNow());
+
+  // ---------------------------------------------------------------------
+  // Lectures locales
+  // ---------------------------------------------------------------------
+
+  Stream<List<CollectionRecord>> _watchCollections() {
+    return _db
+        .select(_db.collections)
+        .watch()
+        .map((rows) => rows.map(_toCollectionRecord).toList());
+  }
+
+  Stream<List<DeckRecord>> _watchDecks({String? collectionId}) {
+    final query = _db.select(_db.decks);
+    if (collectionId != null) {
+      query.where((table) => table.collectionId.equals(collectionId));
+    }
+    return query.watch().map((rows) => rows.map(_toDeckRecord).toList());
+  }
+
+  Stream<List<FlashcardRecord>> _watchFlashcards({
+    String? collectionId,
+    String? deckId,
+  }) {
+    final query = _db.select(_db.flashcards);
+    if (collectionId != null) {
+      query.where((table) => table.collectionId.equals(collectionId));
+    }
+    if (deckId != null) {
+      query.where((table) => table.deckId.equals(deckId));
+    }
+    return query.watch().map((rows) => rows.map(_toFlashcardRecord).toList());
+  }
+
+  /// Les journaux de révision ne cessent de grossir : on n'en matérialise
+  /// jamais les lignes, seulement les agrégats dont les écrans ont besoin.
+  Stream<_ReviewTotals> _watchReviewTotals() {
+    return _db
+        .customSelect(
+          'SELECT COUNT(*) AS total, '
+          'SUM(CASE WHEN was_correct THEN 1 ELSE 0 END) AS correct, '
+          'created_at AS day FROM review_logs GROUP BY created_at',
+          readsFrom: {_db.reviewLogs},
+        )
+        .watch()
+        .map(_toReviewTotals);
+  }
+
+  Stream<Map<String, int>> _watchErrorCountsByCollection() {
+    return _db
+        .customSelect(
+          'SELECT collection_id, COUNT(*) AS errors FROM review_logs '
+          'WHERE was_correct = 0 GROUP BY collection_id',
+          readsFrom: {_db.reviewLogs},
+        )
+        .watch()
+        .map(
+          (rows) => {
+            for (final row in rows)
+              row.read<String>('collection_id'): row.read<int>('errors'),
+          },
+        );
+  }
+
+  Stream<int> _tableTicks(Set<TableInfo<Table, dynamic>> tables) {
+    var tick = 0;
+    return _db
+        .tableUpdates(TableUpdateQuery.onAllTables(tables))
+        .map((_) => ++tick);
   }
 
   Future<CollectionRecord?> _fetchCollection(String id) async {
-    final rows = await _selectRows(
-      'collections',
-      equals: {'id': id},
-      orderBy: 'created_at',
-    );
-    if (rows.isEmpty) {
-      return null;
-    }
-    return _mapCollection(rows.first);
+    final row = await (_db.select(
+      _db.collections,
+    )..where((table) => table.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _toCollectionRecord(row);
   }
 
   Future<DeckRecord?> _fetchDeck(String id) async {
-    final rows = await _selectRows(
-      'decks',
-      equals: {'id': id},
-      orderBy: 'created_at',
-    );
-    if (rows.isEmpty) {
-      return null;
-    }
-    return _mapDeck(rows.first);
+    final row = await (_db.select(
+      _db.decks,
+    )..where((table) => table.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _toDeckRecord(row);
   }
 
   Future<FlashcardRecord?> _fetchFlashcard(String id) async {
-    final rows = await _selectRows(
-      'flashcards',
-      equals: {'id': id},
-      orderBy: 'created_at',
-    );
-    if (rows.isEmpty) {
-      return null;
-    }
-    return _mapFlashcard(rows.first);
+    final row = await (_db.select(
+      _db.flashcards,
+    )..where((table) => table.id.equals(id))).getSingleOrNull();
+    return row == null ? null : _toFlashcardRecord(row);
   }
 
   Future<List<CollectionRecord>> _fetchCollections() async {
-    final rows = await _selectRows('collections', orderBy: 'name');
-    return rows.map(_mapCollection).toList();
+    final rows = await _db.select(_db.collections).get();
+    return rows.map(_toCollectionRecord).toList();
   }
 
   Future<List<DeckRecord>> _fetchDecks({String? collectionId}) async {
-    final equals = <String, Object?>{};
+    final query = _db.select(_db.decks);
     if (collectionId != null) {
-      equals['collection_id'] = collectionId;
+      query.where((table) => table.collectionId.equals(collectionId));
     }
-    final rows = await _selectRows(
-      'decks',
-      equals: equals,
-      orderBy: 'created_at',
-    );
-    return rows.map(_mapDeck).toList();
-  }
-
-  Future<Set<String>> _fetchDisabledDeckIds() async {
-    final rows = await _selectRows('decks', equals: {'is_disabled': true});
-    return {for (final row in rows) row['id'] as String};
-  }
-
-  Future<Set<String>> _fetchDisabledCollectionIds() async {
-    final rows = await _selectRows(
-      'collections',
-      equals: {'is_disabled': true},
-    );
-    return {for (final row in rows) row['id'] as String};
+    return (await query.get()).map(_toDeckRecord).toList();
   }
 
   Future<List<FlashcardRecord>> _fetchFlashcards({
     String? collectionId,
     String? deckId,
     DateTime? dueBeforeOrAt,
-    int? limit,
   }) async {
-    final equals = <String, Object?>{};
+    final query = _db.select(_db.flashcards);
     if (collectionId != null) {
-      equals['collection_id'] = collectionId;
+      query.where((table) => table.collectionId.equals(collectionId));
     }
     if (deckId != null) {
-      equals['deck_id'] = deckId;
+      query.where((table) => table.deckId.equals(deckId));
     }
-    final rows = await _selectRows(
-      'flashcards',
-      equals: equals,
-      dueBeforeOrAt: dueBeforeOrAt,
-      orderBy: 'due_at',
-      limit: limit,
-    );
-    return rows.map(_mapFlashcard).toList();
+    if (dueBeforeOrAt != null) {
+      // La colonne est stockée en millisecondes : la comparaison porte sur la
+      // valeur SQL, pas sur le DateTime converti.
+      query.where(
+        (table) => table.dueAt.isSmallerOrEqualValue(
+          dueBeforeOrAt.millisecondsSinceEpoch,
+        ),
+      );
+    }
+    return (await query.get()).map(_toFlashcardRecord).toList();
   }
 
-  Stream<List<CollectionRecord>> _watchCollectionsInternal() {
-    return _streamRows(
-      'collections',
-      orderBy: 'name',
-    ).map((rows) => rows.map(_mapCollection).toList());
+  Future<int> _countFlashcards(
+    Expression<bool> Function($FlashcardsTable table) filter,
+  ) async {
+    final count = _db.flashcards.id.count();
+    final query = _db.selectOnly(_db.flashcards)
+      ..addColumns([count])
+      ..where(filter(_db.flashcards));
+    return (await query.getSingle()).read(count) ?? 0;
   }
 
-  Stream<List<DeckRecord>> _watchDecksInternal({String? collectionId}) {
-    final equals = <String, Object?>{};
-    if (collectionId != null) {
-      equals['collection_id'] = collectionId;
-    }
-    return _streamRows(
-      'decks',
-      equals: equals,
-      orderBy: 'created_at',
-    ).map((rows) => rows.map(_mapDeck).toList());
-  }
-
-  Stream<List<FlashcardRecord>> _watchFlashcardsInternal({
-    String? collectionId,
-    String? deckId,
-  }) {
-    final equals = <String, Object?>{};
-    if (collectionId != null) {
-      equals['collection_id'] = collectionId;
-    }
-    if (deckId != null) {
-      equals['deck_id'] = deckId;
-    }
-    return _streamRows(
-      'flashcards',
-      equals: equals,
-      orderBy: 'due_at',
-    ).map((rows) => rows.map(_mapFlashcard).toList());
-  }
-
-  Stream<List<ReviewLogRecord>> _watchReviewLogsInternal() {
-    return _streamRows(
-      'review_logs',
-      orderBy: 'created_at',
-    ).map((rows) => rows.map(_mapReviewLog).toList());
-  }
+  // ---------------------------------------------------------------------
+  // Composition de session
+  // ---------------------------------------------------------------------
 
   Future<List<FlashcardRecord>> _loadSessionCards({
     required String? collectionId,
@@ -844,8 +913,14 @@ class AppRepository {
     required DateTime now,
     required int sessionCardLimit,
   }) async {
-    final disabledDeckIds = await _fetchDisabledDeckIds();
-    final disabledCollectionIds = await _fetchDisabledCollectionIds();
+    final disabledDeckIds = {
+      for (final deck in await _fetchDecks())
+        if (deck.isDisabled) deck.id,
+    };
+    final disabledCollectionIds = {
+      for (final collection in await _fetchCollections())
+        if (collection.isDisabled) collection.id,
+    };
     bool isActive(FlashcardRecord card) =>
         !disabledDeckIds.contains(card.deckId) &&
         !disabledCollectionIds.contains(card.collectionId);
@@ -879,20 +954,18 @@ class AppRepository {
     String? collectionId,
     String? deckId,
   }) async {
-    final equals = <String, Object?>{'repetitions': 0};
+    final query = _db.select(_db.flashcards)
+      ..where(
+        (table) =>
+            table.repetitions.equals(0) & table.lapses.isBiggerThanValue(0),
+      );
     if (collectionId != null) {
-      equals['collection_id'] = collectionId;
+      query.where((table) => table.collectionId.equals(collectionId));
     }
     if (deckId != null) {
-      equals['deck_id'] = deckId;
+      query.where((table) => table.deckId.equals(deckId));
     }
-    final rows = await _selectRows(
-      'flashcards',
-      equals: equals,
-      greaterThan: {'lapses': 0},
-      orderBy: 'last_reviewed_at',
-    );
-    return rows.map(_mapFlashcard).toList();
+    return (await query.get()).map(_toFlashcardRecord).toList();
   }
 
   /// Compose la session : les cartes ratées à la session précédente d'abord,
@@ -983,71 +1056,46 @@ class AppRepository {
     );
   }
 
+  /// Sans mode imposé, la carte est présentée dans le mode que sa progression
+  /// lui a attribué : le QCM au début, des modes de rappel de plus en plus
+  /// exigeants à mesure qu'elle est réussie.
   TestMode _resolveMode(FlashcardRecord card, TestMode? forcedMode) {
-    final resolved = _selectMode(card, forcedMode);
-    // Le mode vrai/faux a besoin d'au moins une mauvaise réponse pour pouvoir
-    // afficher une proposition incorrecte. Sans cela, on bascule sur la
-    // flashcard classique plutôt que de présenter un mode dégradé.
-    final hasWrongAnswer = card.wrongAnswers.any(
-      (answer) => answer.trim().isNotEmpty,
-    );
-    if (resolved == TestMode.trueFalse && !hasWrongAnswer) {
-      return TestMode.classicFlashcard;
+    final allowed = card.allowedTestModes;
+    final requested = forcedMode ?? card.currentTestMode;
+    if (allowed.contains(requested)) {
+      return requested;
     }
-    return resolved;
-  }
-
-  TestMode _selectMode(FlashcardRecord card, TestMode? forcedMode) {
-    if (forcedMode == null) {
-      final allowed = card.allowedTestModes
-          .where(
-            (mode) => mode != TestMode.ordering && mode != TestMode.matching,
-          )
-          .toList();
-      if (allowed.isEmpty) {
-        return TestMode.classicFlashcard;
-      }
-      return allowed[math.Random().nextInt(allowed.length)];
-    }
-    if (forcedMode == TestMode.ordering || forcedMode == TestMode.matching) {
-      return TestMode.classicFlashcard;
-    }
-    if (card.allowedTestModes.contains(forcedMode)) {
-      return forcedMode;
-    }
-    if (forcedMode == TestMode.cloze &&
-        card.allowedTestModes.contains(TestMode.freeText)) {
+    // Un mode indisponible ne dégrade pas la session : on retombe sur le mode
+    // le plus proche que la carte sait jouer.
+    if (requested == TestMode.cloze && allowed.contains(TestMode.freeText)) {
       return TestMode.freeText;
     }
-    if (card.allowedTestModes.contains(TestMode.classicFlashcard)) {
+    if (allowed.contains(TestMode.classicFlashcard)) {
       return TestMode.classicFlashcard;
     }
-    if (card.allowedTestModes.isNotEmpty) {
-      return card.allowedTestModes.first;
-    }
-    return TestMode.classicFlashcard;
+    return allowed.isNotEmpty ? allowed.first : TestMode.classicFlashcard;
   }
+
+  // ---------------------------------------------------------------------
+  // Agrégats métier
+  // ---------------------------------------------------------------------
 
   CollectionListItem _buildCollectionListItem(
     CollectionRecord collection,
     List<FlashcardRecord> flashcards,
-    List<ReviewLogRecord> reviewLogs,
+    int errorCount,
     DateTime now,
   ) {
-    final cardsDone = flashcards.where((card) => card.repetitions > 0).length;
-    final dueCards = flashcards
-        .where((card) => !_isDueInFuture(card.dueAt, now))
-        .length;
-    final errorCount = reviewLogs.where((log) => !log.wasCorrect).length;
-
     return CollectionListItem(
       id: collection.id,
       name: collection.name,
       description: collection.description,
       icon: collection.icon,
       totalCards: flashcards.length,
-      cardsDone: cardsDone,
-      dueCards: dueCards,
+      cardsDone: flashcards.where((card) => card.repetitions > 0).length,
+      dueCards: flashcards
+          .where((card) => !_isDueInFuture(card.dueAt, now))
+          .length,
       color: collection.color,
       createdAt: collection.createdAt,
       updatedAt: collection.updatedAt,
@@ -1090,9 +1138,9 @@ class AppRepository {
     );
   }
 
-  /// Removes cards that belong to a disabled deck so they no longer count
-  /// towards study sessions or due-card totals. Historical review logs are
-  /// never filtered this way.
+  /// Retire les cartes d'un deck désactivé pour qu'elles ne comptent plus dans
+  /// les sessions ni dans les totaux « à revoir ». Les journaux de révision ne
+  /// sont jamais filtrés ainsi.
   List<FlashcardRecord> _excludeDisabledDeckCards(
     List<FlashcardRecord> flashcards,
     List<DeckRecord> decks,
@@ -1134,58 +1182,21 @@ class AppRepository {
         .toList();
   }
 
-  HomeStats _buildHomeStats({
-    required List<FlashcardRecord> flashcards,
-    required List<ReviewLogRecord> reviewLogs,
-    required DateTime now,
-  }) {
-    final dueCards = flashcards
-        .where((card) => !_isDueInFuture(card.dueAt, now))
-        .length;
-    final successCount = reviewLogs.where((log) => log.wasCorrect).length;
-    final successRate = reviewLogs.isEmpty
-        ? 0.0
-        : successCount / reviewLogs.length;
-
-    return HomeStats(
-      streakDays: _calculateStreak(
-        reviewLogs.map((log) => log.createdAt).toList(),
-        now: now,
-      ),
-      successRate: successRate,
-      dueCards: dueCards,
-      totalCardsSeen: reviewLogs.length,
-    );
-  }
-
-  StatisticsOverview _buildStatisticsOverview({
-    required List<FlashcardRecord> flashcards,
-    required List<ReviewLogRecord> reviewLogs,
-    required DateTime now,
-  }) {
-    final successCount = reviewLogs.where((log) => log.wasCorrect).length;
-    final successRate = reviewLogs.isEmpty
-        ? 0.0
-        : successCount / reviewLogs.length;
-    final studyDayMap = <DateTime, int>{};
-
-    for (final review in reviewLogs) {
-      final localDate = review.createdAt.toLocal();
-      final key = DateTime(localDate.year, localDate.month, localDate.day);
-      studyDayMap.update(key, (value) => value + 1, ifAbsent: () => 1);
-    }
-
+  StatisticsOverview _buildStatisticsOverview(
+    List<FlashcardRecord> flashcards,
+    _ReviewTotals totals,
+    DateTime now,
+  ) {
     final localNow = now.toLocal();
-    final heatmap = List.generate(14, (i) {
+    final heatmap = List.generate(14, (index) {
       final date = DateTime(
         localNow.year,
         localNow.month,
         localNow.day,
-      ).subtract(Duration(days: 13 - i));
-      final key = DateTime(date.year, date.month, date.day);
-      final count = studyDayMap[key] ?? 0;
+      ).subtract(Duration(days: 13 - index));
+      final count = totals.dayCounts[date] ?? 0;
       return HeatmapCell(
-        label: '${key.day}/${key.month}',
+        label: '${date.day}/${date.month}',
         count: count,
         isActive: count > 0,
       );
@@ -1197,57 +1208,49 @@ class AppRepository {
     }
     final maxLevel = levelCounts.values.fold<int>(1, math.max);
 
+    LevelProgress level(
+      int value,
+      String title,
+      String subtitle,
+      IconData icon,
+    ) {
+      return LevelProgress(
+        level: value,
+        title: title,
+        subtitle: subtitle,
+        count: levelCounts[value] ?? 0,
+        progress: (levelCounts[value] ?? 0) / maxLevel,
+        icon: icon,
+      );
+    }
+
     return StatisticsOverview(
-      streakDays: _calculateStreak(
-        reviewLogs.map((log) => log.createdAt).toList(),
-        now: now,
-      ),
-      totalReviews: reviewLogs.length,
-      successRate: successRate,
-      studyDays: studyDayMap.length,
+      streakDays: _calculateStreak(totals.dayCounts.keys, now: now),
+      totalReviews: totals.total,
+      successRate: totals.successRate,
+      studyDays: totals.dayCounts.length,
       heatmap: heatmap,
       levelProgress: [
-        LevelProgress(
-          level: 1,
-          title: 'Basique',
-          subtitle: 'Fondations et reconnaissance',
-          count: levelCounts[1] ?? 0,
-          progress: (levelCounts[1] ?? 0) / maxLevel,
-          icon: Icons.visibility_rounded,
+        level(
+          1,
+          'Basique',
+          'Fondations et reconnaissance',
+          Icons.visibility_rounded,
         ),
-        LevelProgress(
-          level: 2,
-          title: 'Intermédiaire',
-          subtitle: 'Compréhension guidée',
-          count: levelCounts[2] ?? 0,
-          progress: (levelCounts[2] ?? 0) / maxLevel,
-          icon: Icons.tune_rounded,
-        ),
-        LevelProgress(
-          level: 3,
-          title: 'Actif',
-          subtitle: 'Rappel actif et reformulation',
-          count: levelCounts[3] ?? 0,
-          progress: (levelCounts[3] ?? 0) / maxLevel,
-          icon: Icons.bolt_rounded,
-        ),
-        LevelProgress(
-          level: 4,
-          title: 'Avancé',
-          subtitle: 'Maîtrise contextuelle',
-          count: levelCounts[4] ?? 0,
-          progress: (levelCounts[4] ?? 0) / maxLevel,
-          icon: Icons.psychology_alt_rounded,
+        level(2, 'Intermédiaire', 'Compréhension guidée', Icons.tune_rounded),
+        level(3, 'Actif', 'Rappel actif et reformulation', Icons.bolt_rounded),
+        level(
+          4,
+          'Avancé',
+          'Maîtrise contextuelle',
+          Icons.psychology_alt_rounded,
         ),
       ],
     );
   }
 
-  int _calculateStreak(List<DateTime> timestamps, {required DateTime now}) {
-    final daySet = timestamps
-        .map((date) => date.toLocal())
-        .map((date) => DateTime(date.year, date.month, date.day))
-        .toSet();
+  int _calculateStreak(Iterable<DateTime> studyDays, {required DateTime now}) {
+    final daySet = studyDays.toSet();
     if (daySet.isEmpty) {
       return 0;
     }
@@ -1262,373 +1265,196 @@ class AppRepository {
     return streak;
   }
 
-  bool _isDueInFuture(DateTime dueAt, DateTime now) {
-    return dueAt.isAfter(now);
-  }
+  bool _isDueInFuture(DateTime dueAt, DateTime now) => dueAt.isAfter(now);
 
-  Future<List<Map<String, dynamic>>> _selectRows(
-    String table, {
-    Map<String, Object?> equals = const {},
-    Map<String, Object?> greaterThan = const {},
-    DateTime? dueBeforeOrAt,
-    String? orderBy,
-    bool ascending = true,
-    int? limit,
-  }) async {
-    final allRows = <Map<String, dynamic>>[];
-    var offset = 0;
+  // ---------------------------------------------------------------------
+  // Conversions base locale ↔ domaine
+  // ---------------------------------------------------------------------
 
-    while (true) {
-      final remaining = limit == null ? null : limit - allRows.length;
-      if (remaining != null && remaining <= 0) {
-        break;
-      }
-
-      final pageSize = remaining == null
-          ? _pagedFetchSize
-          : math.min(_pagedFetchSize, remaining);
-
-      dynamic builder = _client.from(table).select();
-      builder = builder.eq('user_id', _userId);
-      for (final entry in equals.entries) {
-        builder = builder.eq(entry.key, entry.value);
-      }
-      for (final entry in greaterThan.entries) {
-        builder = builder.gt(entry.key, entry.value);
-      }
-      if (dueBeforeOrAt != null) {
-        builder = builder.lte(
-          'due_at',
-          dueBeforeOrAt.toUtc().toIso8601String(),
-        );
-      }
-      if (orderBy != null) {
-        builder = builder.order(orderBy, ascending: ascending);
-      }
-      builder = builder.range(offset, offset + pageSize - 1);
-
-      final rows = await builder;
-      final mappedRows = List<Map<String, dynamic>>.from(
-        (rows as List).map((row) => Map<String, dynamic>.from(row as Map)),
-      );
-      allRows.addAll(mappedRows);
-
-      if (mappedRows.length < pageSize) {
-        break;
-      }
-
-      offset += mappedRows.length;
-    }
-
-    return allRows;
-  }
-
-  Stream<List<Map<String, dynamic>>> _streamRows(
-    String table, {
-    Map<String, Object?> equals = const {},
-    String? orderBy,
-    bool ascending = true,
-    int? limit,
-  }) {
-    late final StreamController<List<Map<String, dynamic>>> controller;
-    RealtimeChannel? channel;
-    var isDisposed = false;
-    var wasSubscribed = false;
-    var fetchInFlight = false;
-    var fetchQueued = false;
-
-    Future<void> emitSnapshot() async {
-      if (isDisposed || controller.isClosed) {
-        return;
-      }
-      if (fetchInFlight) {
-        fetchQueued = true;
-        return;
-      }
-
-      fetchInFlight = true;
-      try {
-        do {
-          fetchQueued = false;
-          final rows = await _selectRows(
-            table,
-            equals: equals,
-            orderBy: orderBy,
-            ascending: ascending,
-            limit: limit,
-          );
-          if (isDisposed || controller.isClosed) {
-            return;
-          }
-          controller.add(rows);
-        } while (fetchQueued && !isDisposed && !controller.isClosed);
-      } catch (error, stackTrace) {
-        if (!isDisposed && !controller.isClosed) {
-          controller.addError(error, stackTrace);
-        }
-      } finally {
-        fetchInFlight = false;
-      }
-    }
-
-    controller = StreamController<List<Map<String, dynamic>>>(
-      onListen: () {
-        channel = _client.channel('memflow:$table:${_uuid.v4()}')
-          ..onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: table,
-            filter: PostgresChangeFilter(
-              type: PostgresChangeFilterType.eq,
-              column: 'user_id',
-              value: _userId,
-            ),
-            callback: (_) {
-              unawaited(emitSnapshot());
-            },
-          )
-          ..subscribe((status, [error]) {
-            switch (status) {
-              case RealtimeSubscribeStatus.subscribed:
-                if (wasSubscribed) {
-                  unawaited(emitSnapshot());
-                }
-                wasSubscribed = true;
-                break;
-              case RealtimeSubscribeStatus.closed:
-                if (!controller.isClosed) {
-                  controller.close();
-                }
-                break;
-              case RealtimeSubscribeStatus.timedOut:
-              case RealtimeSubscribeStatus.channelError:
-                if (!controller.isClosed) {
-                  controller.addError(
-                    StateError(
-                      'Realtime Supabase indisponible pour la table $table: '
-                      '${error ?? status.name}',
-                    ),
-                  );
-                }
-                break;
-            }
-          });
-
-        // Keep realtime while always reloading the full paginated snapshot.
-        // This avoids silent truncation when a table grows past the API row cap.
-        unawaited(emitSnapshot());
-      },
-      onCancel: () async {
-        isDisposed = true;
-        final activeChannel = channel;
-        channel = null;
-        if (activeChannel != null) {
-          await _client.removeChannel(activeChannel);
-        }
-      },
-    );
-
-    return controller.stream;
-  }
-
-  Stream<int> _watchTableEvents(
-    String table, {
-    String? filterColumn,
-    Object? filterValue,
-  }) {
-    late final StreamController<int> controller;
-    RealtimeChannel? channel;
-    var tick = 0;
-
-    controller = StreamController<int>(
-      onListen: () {
-        channel = _client.channel('memflow-events:$table:${_uuid.v4()}')
-          ..onPostgresChanges(
-            event: PostgresChangeEvent.all,
-            schema: 'public',
-            table: table,
-            filter: filterColumn == null
-                ? null
-                : PostgresChangeFilter(
-                    type: PostgresChangeFilterType.eq,
-                    column: filterColumn,
-                    value: filterValue,
-                  ),
-            callback: (_) {
-              if (controller.isClosed) {
-                return;
-              }
-              tick += 1;
-              controller.add(tick);
-            },
-          )
-          ..subscribe((status, [error]) {
-            switch (status) {
-              case RealtimeSubscribeStatus.subscribed:
-                break;
-              case RealtimeSubscribeStatus.closed:
-                if (!controller.isClosed) {
-                  controller.close();
-                }
-                break;
-              case RealtimeSubscribeStatus.timedOut:
-              case RealtimeSubscribeStatus.channelError:
-                if (!controller.isClosed) {
-                  controller.addError(
-                    StateError(
-                      'Realtime Supabase indisponible pour la table $table: '
-                      '${error ?? status.name}',
-                    ),
-                  );
-                }
-                break;
-            }
-          });
-      },
-      onCancel: () async {
-        final activeChannel = channel;
-        channel = null;
-        if (activeChannel != null) {
-          await _client.removeChannel(activeChannel);
-        }
-      },
-    );
-
-    return controller.stream;
-  }
-
-  Stream<int> _mergeEventStreams(List<Stream<int>> streams) {
-    late final StreamController<int> controller;
-    final subscriptions = <StreamSubscription<int>>[];
-    var tick = 0;
-
-    controller = StreamController<int>(
-      onListen: () {
-        for (final stream in streams) {
-          subscriptions.add(
-            stream.listen((_) {
-              tick += 1;
-              controller.add(tick);
-            }, onError: controller.addError),
-          );
-        }
-      },
-      onCancel: () async {
-        for (final subscription in subscriptions) {
-          await subscription.cancel();
-        }
-      },
-    );
-
-    return controller.stream;
-  }
-
-  CollectionRecord _mapCollection(Map<String, dynamic> row) {
+  CollectionRecord _toCollectionRecord(Collection row) {
     return CollectionRecord(
-      id: row['id'] as String,
-      name: row['name'] as String,
-      description: row['description'] as String,
-      icon: row['icon'] as String,
-      color: (row['color'] as num).toInt(),
-      createdAt: DateTime.parse(row['created_at'] as String),
-      updatedAt: DateTime.parse(row['updated_at'] as String),
-      isDisabled: (row['is_disabled'] as bool?) ?? false,
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      icon: row.icon,
+      color: row.color,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      isDisabled: row.isDisabled,
     );
   }
 
-  DeckRecord _mapDeck(Map<String, dynamic> row) {
+  DeckRecord _toDeckRecord(Deck row) {
     return DeckRecord(
-      id: row['id'] as String,
-      collectionId: row['collection_id'] as String,
-      name: row['name'] as String,
-      icon: row['icon'] as String,
-      difficulty: DeckDifficulty.values.firstWhere(
-        (value) => value.name == row['difficulty'],
-      ),
-      createdAt: DateTime.parse(row['created_at'] as String),
-      updatedAt: DateTime.parse(row['updated_at'] as String),
-      isDisabled: (row['is_disabled'] as bool?) ?? false,
+      id: row.id,
+      collectionId: row.collectionId,
+      name: row.name,
+      icon: row.icon,
+      difficulty: row.difficulty,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      isDisabled: row.isDisabled,
     );
   }
 
-  FlashcardRecord _mapFlashcard(Map<String, dynamic> row) {
+  FlashcardRecord _toFlashcardRecord(Flashcard row) {
     return FlashcardRecord(
-      id: row['id'] as String,
-      collectionId: row['collection_id'] as String,
-      deckId: row['deck_id'] as String,
-      question: row['question'] as String,
-      correctAnswer: row['correct_answer'] as String,
-      answer: row['answer'] as String?,
-      wrongAnswers: _toStringList(row['wrong_answers']),
-      hint: row['hint'] as String?,
-      explanation: row['explanation'] as String?,
-      currentTestMode: TestMode.values.firstWhere(
-        (value) => value.name == row['current_test_mode'],
-      ),
-      allowedTestModes: _toStringList(row['allowed_test_modes'])
-          .map(
-            (item) => TestMode.values.firstWhere((mode) => mode.name == item),
-          )
-          .toList(),
-      lastTestMode: row['last_test_mode'] == null
-          ? null
-          : TestMode.values.firstWhere(
-              (value) => value.name == row['last_test_mode'],
-            ),
-      modeHistory: _toStringList(row['mode_history'])
-          .map(
-            (item) => TestMode.values.firstWhere((mode) => mode.name == item),
-          )
-          .toList(),
-      clozeText: row['cloze_text'] as String?,
-      clozeAnswers: _toStringList(row['cloze_answers']),
-      clozeWordBank: _toStringList(row['cloze_word_bank']),
-      acceptedAnswers: _toStringList(row['accepted_answers']),
-      source: row['source'] as String?,
-      difficulty: row['difficulty'] == null
-          ? null
-          : DeckDifficulty.values.firstWhere(
-              (value) => value.name == row['difficulty'],
-            ),
-      level: (row['level'] as num).toInt(),
-      tags: _toStringList(row['tags']),
-      dueAt: DateTime.parse(row['due_at'] as String),
-      lastReviewedAt: row['last_reviewed_at'] == null
-          ? null
-          : DateTime.parse(row['last_reviewed_at'] as String),
-      intervalDays: (row['interval_days'] as num).toDouble(),
-      easeFactor: (row['ease_factor'] as num).toDouble(),
-      repetitions: (row['repetitions'] as num).toInt(),
-      lapses: (row['lapses'] as num).toInt(),
-      mastered: row['mastered'] as bool,
-      createdAt: DateTime.parse(row['created_at'] as String),
-      updatedAt: DateTime.parse(row['updated_at'] as String),
+      id: row.id,
+      collectionId: row.collectionId,
+      deckId: row.deckId,
+      question: row.question,
+      correctAnswer: row.correctAnswer,
+      answer: row.answer,
+      wrongAnswers: row.wrongAnswers,
+      hint: row.hint,
+      explanation: row.explanation,
+      currentTestMode: row.currentTestMode,
+      allowedTestModes: row.allowedTestModes,
+      lastTestMode: row.lastTestMode,
+      modeHistory: row.modeHistory,
+      clozeText: row.clozeText,
+      clozeAnswers: row.clozeAnswers,
+      clozeWordBank: row.clozeWordBank,
+      acceptedAnswers: row.acceptedAnswers,
+      source: row.source,
+      difficulty: row.difficulty,
+      level: row.level,
+      tags: row.tags,
+      dueAt: row.dueAt,
+      lastReviewedAt: row.lastReviewedAt,
+      intervalDays: row.intervalDays,
+      easeFactor: row.easeFactor,
+      repetitions: row.repetitions,
+      lapses: row.lapses,
+      mastered: row.mastered,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
     );
   }
 
-  ReviewLogRecord _mapReviewLog(Map<String, dynamic> row) {
-    return ReviewLogRecord(
-      id: row['id'] as String,
-      flashcardId: row['flashcard_id'] as String,
-      collectionId: row['collection_id'] as String,
-      deckId: row['deck_id'] as String,
-      reviewResult: ReviewResult.values.firstWhere(
-        (value) => value.name == row['review_result'],
-      ),
-      testMode: TestMode.values.firstWhere(
-        (value) => value.name == row['test_mode'],
-      ),
-      wasCorrect: row['was_correct'] as bool,
-      createdAt: DateTime.parse(row['created_at'] as String),
-      scheduledDueAt: DateTime.parse(row['scheduled_due_at'] as String),
+  FlashcardSummary _toSummary(FlashcardRecord card) {
+    return FlashcardSummary(
+      id: card.id,
+      deckId: card.deckId,
+      collectionId: card.collectionId,
+      question: card.question,
+      correctAnswer: card.correctAnswer,
     );
   }
 
-  List<String> _toStringList(dynamic value) {
-    if (value == null) {
-      return const [];
+  CollectionsCompanion _collectionCompanion(CollectionRecord collection) {
+    return CollectionsCompanion.insert(
+      id: collection.id,
+      name: collection.name,
+      description: collection.description,
+      icon: collection.icon,
+      color: collection.color,
+      isDisabled: Value(collection.isDisabled),
+      createdAt: collection.createdAt,
+      updatedAt: collection.updatedAt,
+    );
+  }
+
+  DecksCompanion _deckCompanion(DeckRecord deck) {
+    return DecksCompanion.insert(
+      id: deck.id,
+      collectionId: deck.collectionId,
+      name: deck.name,
+      icon: deck.icon,
+      difficulty: deck.difficulty,
+      isDisabled: Value(deck.isDisabled),
+      createdAt: deck.createdAt,
+      updatedAt: deck.updatedAt,
+    );
+  }
+
+  FlashcardsCompanion _flashcardCompanion(FlashcardRecord card) {
+    return FlashcardsCompanion.insert(
+      id: card.id,
+      collectionId: card.collectionId,
+      deckId: card.deckId,
+      question: card.question,
+      correctAnswer: card.correctAnswer,
+      answer: Value(card.answer),
+      wrongAnswers: card.wrongAnswers,
+      hint: Value(card.hint),
+      explanation: Value(card.explanation),
+      currentTestMode: card.currentTestMode,
+      allowedTestModes: card.allowedTestModes,
+      lastTestMode: Value(card.lastTestMode),
+      modeHistory: card.modeHistory,
+      clozeText: Value(card.clozeText),
+      clozeAnswers: card.clozeAnswers,
+      clozeWordBank: card.clozeWordBank,
+      acceptedAnswers: card.acceptedAnswers,
+      source: Value(card.source),
+      difficulty: Value(card.difficulty),
+      level: card.level,
+      tags: card.tags,
+      dueAt: card.dueAt,
+      lastReviewedAt: Value(card.lastReviewedAt),
+      intervalDays: card.intervalDays,
+      easeFactor: card.easeFactor,
+      repetitions: card.repetitions,
+      lapses: card.lapses,
+      mastered: card.mastered,
+      createdAt: card.createdAt,
+      updatedAt: card.updatedAt,
+    );
+  }
+
+  ReviewLogsCompanion _reviewLogCompanion(ReviewLogRecord log) {
+    return ReviewLogsCompanion.insert(
+      id: log.id,
+      flashcardId: log.flashcardId,
+      collectionId: log.collectionId,
+      deckId: log.deckId,
+      reviewResult: log.reviewResult,
+      testMode: log.testMode,
+      wasCorrect: log.wasCorrect,
+      createdAt: log.createdAt,
+      scheduledDueAt: log.scheduledDueAt,
+    );
+  }
+
+  CollectionRecord _copyCollection(
+    CollectionRecord collection, {
+    String? icon,
+    bool? isDisabled,
+  }) {
+    return CollectionRecord(
+      id: collection.id,
+      name: collection.name,
+      description: collection.description,
+      icon: icon ?? collection.icon,
+      color: collection.color,
+      createdAt: collection.createdAt,
+      updatedAt: DateTime.now(),
+      isDisabled: isDisabled ?? collection.isDisabled,
+    );
+  }
+
+  static _ReviewTotals _toReviewTotals(List<QueryRow> rows) {
+    var total = 0;
+    var correct = 0;
+    final dayCounts = <DateTime, int>{};
+
+    for (final row in rows) {
+      final rowTotal = row.read<int>('total');
+      total += rowTotal;
+      correct += row.read<int?>('correct') ?? 0;
+      final createdAt = DateTime.fromMillisecondsSinceEpoch(
+        row.read<int>('day'),
+      ).toLocal();
+      final day = DateTime(createdAt.year, createdAt.month, createdAt.day);
+      dayCounts.update(
+        day,
+        (value) => value + rowTotal,
+        ifAbsent: () => rowTotal,
+      );
     }
-    return List<String>.from((value as List).map((item) => item.toString()));
+
+    return _ReviewTotals(total: total, correct: correct, dayCounts: dayCounts);
   }
 
   T? _firstWhereOrNull<T>(Iterable<T> items, bool Function(T item) predicate) {
@@ -1640,6 +1466,8 @@ class AppRepository {
     return null;
   }
 
+  /// Les compteurs « à revoir » basculent quand une échéance est franchie,
+  /// sans qu'aucune donnée n'ait changé : il faut donc une horloge.
   Stream<DateTime> _clockStream({
     Duration interval = const Duration(minutes: 1),
   }) async* {
@@ -1648,195 +1476,16 @@ class AppRepository {
   }
 }
 
-Stream<R> _combineLatest3<A, B, C, R>(
-  Stream<A> streamA,
-  Stream<B> streamB,
-  Stream<C> streamC,
-  R Function(A a, B b, C c) combine,
-) {
-  late final StreamController<R> controller;
-  StreamSubscription<A>? subA;
-  StreamSubscription<B>? subB;
-  StreamSubscription<C>? subC;
-  A? latestA;
-  B? latestB;
-  C? latestC;
-  var hasA = false;
-  var hasB = false;
-  var hasC = false;
+class _ReviewTotals {
+  const _ReviewTotals({
+    required this.total,
+    required this.correct,
+    required this.dayCounts,
+  });
 
-  void emit() {
-    if (hasA && hasB && hasC) {
-      controller.add(combine(latestA as A, latestB as B, latestC as C));
-    }
-  }
+  final int total;
+  final int correct;
+  final Map<DateTime, int> dayCounts;
 
-  controller = StreamController<R>(
-    onListen: () {
-      subA = streamA.listen((value) {
-        latestA = value;
-        hasA = true;
-        emit();
-      }, onError: controller.addError);
-      subB = streamB.listen((value) {
-        latestB = value;
-        hasB = true;
-        emit();
-      }, onError: controller.addError);
-      subC = streamC.listen((value) {
-        latestC = value;
-        hasC = true;
-        emit();
-      }, onError: controller.addError);
-    },
-    onCancel: () async {
-      await subA?.cancel();
-      await subB?.cancel();
-      await subC?.cancel();
-    },
-  );
-
-  return controller.stream;
-}
-
-Stream<R> _combineLatest4<A, B, C, D, R>(
-  Stream<A> streamA,
-  Stream<B> streamB,
-  Stream<C> streamC,
-  Stream<D> streamD,
-  R Function(A a, B b, C c, D d) combine,
-) {
-  late final StreamController<R> controller;
-  StreamSubscription<A>? subA;
-  StreamSubscription<B>? subB;
-  StreamSubscription<C>? subC;
-  StreamSubscription<D>? subD;
-  A? latestA;
-  B? latestB;
-  C? latestC;
-  D? latestD;
-  var hasA = false;
-  var hasB = false;
-  var hasC = false;
-  var hasD = false;
-
-  void emit() {
-    if (hasA && hasB && hasC && hasD) {
-      controller.add(
-        combine(latestA as A, latestB as B, latestC as C, latestD as D),
-      );
-    }
-  }
-
-  controller = StreamController<R>(
-    onListen: () {
-      subA = streamA.listen((value) {
-        latestA = value;
-        hasA = true;
-        emit();
-      }, onError: controller.addError);
-      subB = streamB.listen((value) {
-        latestB = value;
-        hasB = true;
-        emit();
-      }, onError: controller.addError);
-      subC = streamC.listen((value) {
-        latestC = value;
-        hasC = true;
-        emit();
-      }, onError: controller.addError);
-      subD = streamD.listen((value) {
-        latestD = value;
-        hasD = true;
-        emit();
-      }, onError: controller.addError);
-    },
-    onCancel: () async {
-      await subA?.cancel();
-      await subB?.cancel();
-      await subC?.cancel();
-      await subD?.cancel();
-    },
-  );
-
-  return controller.stream;
-}
-
-Stream<R> _combineLatest5<A, B, C, D, E, R>(
-  Stream<A> streamA,
-  Stream<B> streamB,
-  Stream<C> streamC,
-  Stream<D> streamD,
-  Stream<E> streamE,
-  R Function(A a, B b, C c, D d, E e) combine,
-) {
-  late final StreamController<R> controller;
-  StreamSubscription<A>? subA;
-  StreamSubscription<B>? subB;
-  StreamSubscription<C>? subC;
-  StreamSubscription<D>? subD;
-  StreamSubscription<E>? subE;
-  A? latestA;
-  B? latestB;
-  C? latestC;
-  D? latestD;
-  E? latestE;
-  var hasA = false;
-  var hasB = false;
-  var hasC = false;
-  var hasD = false;
-  var hasE = false;
-
-  void emit() {
-    if (hasA && hasB && hasC && hasD && hasE) {
-      controller.add(
-        combine(
-          latestA as A,
-          latestB as B,
-          latestC as C,
-          latestD as D,
-          latestE as E,
-        ),
-      );
-    }
-  }
-
-  controller = StreamController<R>(
-    onListen: () {
-      subA = streamA.listen((value) {
-        latestA = value;
-        hasA = true;
-        emit();
-      }, onError: controller.addError);
-      subB = streamB.listen((value) {
-        latestB = value;
-        hasB = true;
-        emit();
-      }, onError: controller.addError);
-      subC = streamC.listen((value) {
-        latestC = value;
-        hasC = true;
-        emit();
-      }, onError: controller.addError);
-      subD = streamD.listen((value) {
-        latestD = value;
-        hasD = true;
-        emit();
-      }, onError: controller.addError);
-      subE = streamE.listen((value) {
-        latestE = value;
-        hasE = true;
-        emit();
-      }, onError: controller.addError);
-    },
-    onCancel: () async {
-      await subA?.cancel();
-      await subB?.cancel();
-      await subC?.cancel();
-      await subD?.cancel();
-      await subE?.cancel();
-    },
-  );
-
-  return controller.stream;
+  double get successRate => total == 0 ? 0 : correct / total;
 }

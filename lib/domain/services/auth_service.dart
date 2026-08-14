@@ -37,9 +37,7 @@ class AuthService {
   Future<void> signOut() => _auth.signOut();
 
   Future<void> updateDisplayName(String name) {
-    return _auth.updateUser(
-      UserAttributes(data: {'display_name': name}),
-    );
+    return _auth.updateUser(UserAttributes(data: {'display_name': name}));
   }
 
   Future<void> updateEmail(String email) {

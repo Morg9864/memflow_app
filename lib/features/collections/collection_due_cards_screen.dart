@@ -44,9 +44,7 @@ class _CollectionDueCardsScreenState
           limit: limit,
         );
       },
-      refreshStream: repository.watchDueCardsForCollectionRevision(
-        widget.collectionId,
-      ),
+      refreshStream: repository.watchDueCardsForCollectionRevision(),
     )..addListener(_handleControllerChange);
     _scrollController.addListener(_handleScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {

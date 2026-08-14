@@ -12,5 +12,7 @@ QueryExecutor openMemFlowConnection() {
 }
 
 QueryExecutor openMemoryConnection() {
-  throw UnsupportedError('In-memory drift connections are not available on the web.');
+  throw UnsupportedError(
+    'In-memory drift connections are not available on the web.',
+  );
 }

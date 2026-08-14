@@ -38,13 +38,15 @@ class EnumNameConverter<T extends Enum> extends TypeConverter<T, String> {
   final List<T> values;
 
   @override
-  T fromSql(String fromDb) => values.firstWhere((value) => value.name == fromDb);
+  T fromSql(String fromDb) =>
+      values.firstWhere((value) => value.name == fromDb);
 
   @override
   String toSql(T value) => value.name;
 }
 
-class NullableEnumNameConverter<T extends Enum> extends TypeConverter<T?, String?> {
+class NullableEnumNameConverter<T extends Enum>
+    extends TypeConverter<T?, String?> {
   const NullableEnumNameConverter(this.values);
 
   final List<T> values;
@@ -86,7 +88,8 @@ class TestModeListConverter extends TypeConverter<List<TestMode>, String> {
   }
 
   @override
-  String toSql(List<TestMode> value) => jsonEncode(value.map((mode) => mode.name).toList());
+  String toSql(List<TestMode> value) =>
+      jsonEncode(value.map((mode) => mode.name).toList());
 }
 
 @DataClassName('Collection')
@@ -99,11 +102,9 @@ class Collections extends Table {
 
   TextColumn get icon => text()();
 
-  IntColumn get totalCards => integer()();
-
-  RealColumn get masteredPercentage => real()();
-
   IntColumn get color => integer()();
+
+  BoolColumn get isDisabled => boolean().withDefault(const Constant(false))();
 
   IntColumn get createdAt => integer().map(const DateTimeConverter())();
 
@@ -126,13 +127,7 @@ class Decks extends Table {
   TextColumn get difficulty =>
       text().map(const EnumNameConverter(DeckDifficulty.values))();
 
-  IntColumn get totalCards => integer()();
-
-  IntColumn get dueCards => integer()();
-
-  RealColumn get progress => real()();
-
-  TextColumn get status => text().map(const EnumNameConverter(DeckStatus.values))();
+  BoolColumn get isDisabled => boolean().withDefault(const Constant(false))();
 
   IntColumn get createdAt => integer().map(const DateTimeConverter())();
 
@@ -165,7 +160,8 @@ class Flashcards extends Table {
   TextColumn get currentTestMode =>
       text().map(const EnumNameConverter(TestMode.values))();
 
-  TextColumn get allowedTestModes => text().map(const TestModeListConverter())();
+  TextColumn get allowedTestModes =>
+      text().map(const TestModeListConverter())();
 
   TextColumn get lastTestMode =>
       text().nullable().map(const NullableEnumNameConverter(TestMode.values))();
@@ -174,12 +170,17 @@ class Flashcards extends Table {
 
   TextColumn get clozeText => text().nullable()();
 
+  TextColumn get clozeAnswers => text().map(const StringListConverter())();
+
+  TextColumn get clozeWordBank => text().map(const StringListConverter())();
+
   TextColumn get acceptedAnswers => text().map(const StringListConverter())();
 
   TextColumn get source => text().nullable()();
 
-  TextColumn get difficulty =>
-      text().nullable().map(const NullableEnumNameConverter(DeckDifficulty.values))();
+  TextColumn get difficulty => text().nullable().map(
+    const NullableEnumNameConverter(DeckDifficulty.values),
+  )();
 
   IntColumn get level => integer()();
 
@@ -187,7 +188,8 @@ class Flashcards extends Table {
 
   IntColumn get dueAt => integer().map(const DateTimeConverter())();
 
-  IntColumn get lastReviewedAt => integer().nullable().map(const NullableDateTimeConverter())();
+  IntColumn get lastReviewedAt =>
+      integer().nullable().map(const NullableDateTimeConverter())();
 
   RealColumn get intervalDays => real()();
 
@@ -220,7 +222,8 @@ class ReviewLogs extends Table {
   TextColumn get reviewResult =>
       text().map(const EnumNameConverter(ReviewResult.values))();
 
-  TextColumn get testMode => text().map(const EnumNameConverter(TestMode.values))();
+  TextColumn get testMode =>
+      text().map(const EnumNameConverter(TestMode.values))();
 
   BoolColumn get wasCorrect => boolean()();
 
@@ -232,6 +235,9 @@ class ReviewLogs extends Table {
   Set<Column<Object>> get primaryKey => {id};
 }
 
+/// Intention d'écriture locale pas encore poussée. Elle ne porte pas de copie
+/// de la ligne : au moment du push, l'état local fait foi et est sérialisé à
+/// la volée. Une copie ici divergerait de la ligne à la première réécriture.
 @DataClassName('SyncQueueEntry')
 class SyncQueueEntries extends Table {
   TextColumn get id => text()();
@@ -244,9 +250,7 @@ class SyncQueueEntries extends Table {
   TextColumn get operation =>
       text().map(const EnumNameConverter(SyncOperation.values))();
 
-  TextColumn get payloadJson => text()();
-
-  IntColumn get attempts => integer()();
+  IntColumn get attempts => integer().withDefault(const Constant(0))();
 
   IntColumn get updatedAt => integer().map(const DateTimeConverter())();
 
@@ -275,7 +279,8 @@ class AppMetaEntries extends Table {
   ],
 )
 class AppDatabase extends _$AppDatabase {
-  AppDatabase([QueryExecutor? executor]) : super(executor ?? openMemFlowConnection());
+  AppDatabase([QueryExecutor? executor])
+    : super(executor ?? openMemFlowConnection());
 
   AppDatabase.memory() : super(openMemoryConnection());
 
@@ -283,13 +288,47 @@ class AppDatabase extends _$AppDatabase {
   int get schemaVersion => 1;
 
   @override
-  MigrationStrategy get migration => MigrationStrategy(
-        onCreate: (migrator) => migrator.createAll(),
-      );
+  MigrationStrategy get migration =>
+      MigrationStrategy(onCreate: (migrator) => migrator.createAll());
+
+  static const ownerKey = 'owner_user_id';
+  static const reviewLogCursorKey = 'review_log_cursor';
 
   Future<bool> isEmpty() async {
-    final row = await customSelect('SELECT COUNT(*) AS c FROM collections').getSingle();
+    final row = await customSelect(
+      'SELECT COUNT(*) AS c FROM collections',
+    ).getSingle();
     return row.read<int>('c') == 0;
+  }
+
+  /// Le stockage local n'appartient qu'à un seul compte. Si l'utilisateur
+  /// change, on repart d'une base vide plutôt que de mélanger deux jeux de
+  /// données sur le même appareil. Retourne `true` si la base a été purgée.
+  Future<bool> adoptOwner(String userId) async {
+    final currentOwner = await readMetaString(ownerKey);
+    if (currentOwner == userId) {
+      return false;
+    }
+    await clearAllUserData();
+    await writeMetaString(ownerKey, userId);
+    return true;
+  }
+
+  /// Supprime les lignes devenues orphelines après une réconciliation : quand
+  /// un autre appareil supprime un deck, la cascade distante emporte ses
+  /// cartes, mais la réconciliation locale ne voit que les identifiants
+  /// disparus de la table qu'elle compare.
+  Future<void> deleteOrphans() async {
+    await customStatement(
+      'DELETE FROM decks WHERE collection_id NOT IN (SELECT id FROM collections)',
+    );
+    await customStatement(
+      'DELETE FROM flashcards WHERE deck_id NOT IN (SELECT id FROM decks) '
+      'OR collection_id NOT IN (SELECT id FROM collections)',
+    );
+    await customStatement(
+      'DELETE FROM review_logs WHERE flashcard_id NOT IN (SELECT id FROM flashcards)',
+    );
   }
 
   Future<void> clearAllUserData() async {
@@ -303,63 +342,60 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  Future<void> upsertSyncQueueEntry({
+  /// Une entité n'a qu'une seule intention en attente : réécrire la même carte
+  /// dix fois hors ligne ne produit qu'un seul push, et un `delete` remplace
+  /// naturellement un `upsert` non parti.
+  Future<void> enqueueSync({
     required SyncEntityType entityType,
     required String entityId,
     required SyncOperation operation,
-    required String payloadJson,
   }) async {
-    final now = DateTime.now();
     await into(syncQueueEntries).insertOnConflictUpdate(
       SyncQueueEntriesCompanion.insert(
-        id: '$entityType-$entityId',
+        id: '${entityType.name}-$entityId',
         entityType: entityType,
         entityId: entityId,
         operation: operation,
-        payloadJson: payloadJson,
-        attempts: 0,
-        updatedAt: now,
-      ),
-    );
-  }
-
-  Future<List<SyncQueueEntry>> pendingSyncEntries() {
-    return (select(syncQueueEntries)
-          ..orderBy([(table) => OrderingTerm(expression: table.updatedAt)]))
-        .get();
-  }
-
-  Future<void> deleteSyncQueueEntry(String id) {
-    return (delete(syncQueueEntries)..where((table) => table.id.equals(id))).go();
-  }
-
-  Future<void> incrementSyncQueueAttempts(String id) async {
-    final entry =
-        await (select(syncQueueEntries)..where((table) => table.id.equals(id))).getSingleOrNull();
-    if (entry == null) {
-      return;
-    }
-
-    await update(syncQueueEntries).replace(
-      entry.copyWith(
-        attempts: entry.attempts + 1,
         updatedAt: DateTime.now(),
       ),
     );
   }
 
+  Future<List<SyncQueueEntry>> pendingSyncEntries() {
+    return (select(
+      syncQueueEntries,
+    )..orderBy([(table) => OrderingTerm(expression: table.updatedAt)])).get();
+  }
+
+  Future<void> deleteSyncQueueEntry(String id) {
+    return (delete(
+      syncQueueEntries,
+    )..where((table) => table.id.equals(id))).go();
+  }
+
+  Future<void> incrementSyncQueueAttempts(String id) async {
+    final entry = await (select(
+      syncQueueEntries,
+    )..where((table) => table.id.equals(id))).getSingleOrNull();
+    if (entry == null) {
+      return;
+    }
+
+    await update(syncQueueEntries).replace(
+      entry.copyWith(attempts: entry.attempts + 1, updatedAt: DateTime.now()),
+    );
+  }
+
   Future<void> writeMetaDateTime(String key, DateTime value) async {
     await into(appMetaEntries).insertOnConflictUpdate(
-      AppMetaEntriesCompanion.insert(
-        key: key,
-        value: value.toIso8601String(),
-      ),
+      AppMetaEntriesCompanion.insert(key: key, value: value.toIso8601String()),
     );
   }
 
   Future<DateTime?> readMetaDateTime(String key) async {
-    final meta =
-        await (select(appMetaEntries)..where((table) => table.key.equals(key))).getSingleOrNull();
+    final meta = await (select(
+      appMetaEntries,
+    )..where((table) => table.key.equals(key))).getSingleOrNull();
     return meta == null ? null : DateTime.tryParse(meta.value);
   }
 
@@ -370,31 +406,42 @@ class AppDatabase extends _$AppDatabase {
   }
 
   Future<String?> readMetaString(String key) async {
-    final meta =
-        await (select(appMetaEntries)..where((table) => table.key.equals(key))).getSingleOrNull();
+    final meta = await (select(
+      appMetaEntries,
+    )..where((table) => table.key.equals(key))).getSingleOrNull();
     return meta?.value;
   }
 
   Future<void> deleteMeta(String key) {
-    return (delete(appMetaEntries)..where((table) => table.key.equals(key))).go();
+    return (delete(
+      appMetaEntries,
+    )..where((table) => table.key.equals(key))).go();
   }
 
-  Future<DateTime?> readEntityUpdatedAt(SyncEntityType entityType, String entityId) async {
+  Future<DateTime?> readEntityUpdatedAt(
+    SyncEntityType entityType,
+    String entityId,
+  ) async {
     switch (entityType) {
       case SyncEntityType.collection:
-        return (await (select(collections)..where((table) => table.id.equals(entityId)))
-                .getSingleOrNull())
+        return (await (select(
+              collections,
+            )..where((table) => table.id.equals(entityId))).getSingleOrNull())
             ?.updatedAt;
       case SyncEntityType.deck:
-        return (await (select(decks)..where((table) => table.id.equals(entityId))).getSingleOrNull())
+        return (await (select(
+              decks,
+            )..where((table) => table.id.equals(entityId))).getSingleOrNull())
             ?.updatedAt;
       case SyncEntityType.flashcard:
-        return (await (select(flashcards)..where((table) => table.id.equals(entityId)))
-                .getSingleOrNull())
+        return (await (select(
+              flashcards,
+            )..where((table) => table.id.equals(entityId))).getSingleOrNull())
             ?.updatedAt;
       case SyncEntityType.reviewLog:
-        return (await (select(reviewLogs)..where((table) => table.id.equals(entityId)))
-                .getSingleOrNull())
+        return (await (select(
+              reviewLogs,
+            )..where((table) => table.id.equals(entityId))).getSingleOrNull())
             ?.createdAt;
     }
   }
@@ -402,13 +449,21 @@ class AppDatabase extends _$AppDatabase {
   Future<void> applyRemoteRecord(RemoteSyncRecord record) async {
     switch (record.entityType) {
       case SyncEntityType.collection:
-        await into(collections).insertOnConflictUpdate(_collectionFromPayload(record.payload));
+        await into(
+          collections,
+        ).insertOnConflictUpdate(_collectionFromPayload(record.payload));
       case SyncEntityType.deck:
-        await into(decks).insertOnConflictUpdate(_deckFromPayload(record.payload));
+        await into(
+          decks,
+        ).insertOnConflictUpdate(_deckFromPayload(record.payload));
       case SyncEntityType.flashcard:
-        await into(flashcards).insertOnConflictUpdate(_flashcardFromPayload(record.payload));
+        await into(
+          flashcards,
+        ).insertOnConflictUpdate(_flashcardFromPayload(record.payload));
       case SyncEntityType.reviewLog:
-        await into(reviewLogs).insertOnConflictUpdate(_reviewLogFromPayload(record.payload));
+        await into(
+          reviewLogs,
+        ).insertOnConflictUpdate(_reviewLogFromPayload(record.payload));
     }
   }
 
@@ -416,11 +471,10 @@ class AppDatabase extends _$AppDatabase {
     return CollectionsCompanion.insert(
       id: payload['id'] as String,
       name: payload['name'] as String,
-      description: payload['description'] as String,
+      description: payload['description'] as String? ?? '',
       icon: payload['icon'] as String,
-      totalCards: payload['total_cards'] as int,
-      masteredPercentage: (payload['mastered_percentage'] as num).toDouble(),
-      color: payload['color'] as int,
+      color: (payload['color'] as num).toInt(),
+      isDisabled: Value(payload['is_disabled'] as bool? ?? false),
       createdAt: DateTime.parse(payload['created_at'] as String),
       updatedAt: DateTime.parse(payload['updated_at'] as String),
     );
@@ -432,12 +486,11 @@ class AppDatabase extends _$AppDatabase {
       collectionId: payload['collection_id'] as String,
       name: payload['name'] as String,
       icon: payload['icon'] as String,
-      difficulty:
-          DeckDifficulty.values.firstWhere((value) => value.name == payload['difficulty']),
-      totalCards: payload['total_cards'] as int,
-      dueCards: payload['due_cards'] as int,
-      progress: (payload['progress'] as num).toDouble(),
-      status: DeckStatus.values.firstWhere((value) => value.name == payload['status']),
+      difficulty: DeckDifficulty.values.firstWhere(
+        (value) => value.name == payload['difficulty'],
+        orElse: () => DeckDifficulty.facile,
+      ),
+      isDisabled: Value(payload['is_disabled'] as bool? ?? false),
       createdAt: DateTime.parse(payload['created_at'] as String),
       updatedAt: DateTime.parse(payload['updated_at'] as String),
     );
@@ -451,32 +504,28 @@ class AppDatabase extends _$AppDatabase {
       question: payload['question'] as String,
       correctAnswer: payload['correct_answer'] as String,
       answer: Value(payload['answer'] as String?),
-      wrongAnswers: (payload['wrong_answers'] as List<dynamic>).cast<String>(),
+      wrongAnswers: _stringList(payload['wrong_answers']),
       hint: Value(payload['hint'] as String?),
       explanation: Value(payload['explanation'] as String?),
       currentTestMode:
-          TestMode.values.firstWhere((value) => value.name == payload['current_test_mode']),
-      allowedTestModes: (payload['allowed_test_modes'] as List<dynamic>)
-          .map((item) => TestMode.values.firstWhere((value) => value.name == item))
-          .toList(),
-      lastTestMode: Value(
-        payload['last_test_mode'] == null
-            ? null
-            : TestMode.values.firstWhere((value) => value.name == payload['last_test_mode']),
-      ),
-      modeHistory: (payload['mode_history'] as List<dynamic>)
-          .map((item) => TestMode.values.firstWhere((value) => value.name == item))
-          .toList(),
+          _testMode(payload['current_test_mode']) ?? TestMode.multipleChoice,
+      allowedTestModes: _testModeList(payload['allowed_test_modes']),
+      lastTestMode: Value(_testMode(payload['last_test_mode'])),
+      modeHistory: _testModeList(payload['mode_history']),
       clozeText: Value(payload['cloze_text'] as String?),
-      acceptedAnswers: (payload['accepted_answers'] as List<dynamic>).cast<String>(),
+      clozeAnswers: _stringList(payload['cloze_answers']),
+      clozeWordBank: _stringList(payload['cloze_word_bank']),
+      acceptedAnswers: _stringList(payload['accepted_answers']),
       source: Value(payload['source'] as String?),
       difficulty: Value(
         payload['difficulty'] == null
             ? null
-            : DeckDifficulty.values.firstWhere((value) => value.name == payload['difficulty']),
+            : DeckDifficulty.values.firstWhere(
+                (value) => value.name == payload['difficulty'],
+              ),
       ),
-      level: payload['level'] as int,
-      tags: (payload['tags'] as List<dynamic>).cast<String>(),
+      level: (payload['level'] as num).toInt(),
+      tags: _stringList(payload['tags']),
       dueAt: DateTime.parse(payload['due_at'] as String),
       lastReviewedAt: Value(
         payload['last_reviewed_at'] == null
@@ -499,12 +548,43 @@ class AppDatabase extends _$AppDatabase {
       flashcardId: payload['flashcard_id'] as String,
       collectionId: payload['collection_id'] as String,
       deckId: payload['deck_id'] as String,
-      reviewResult:
-          ReviewResult.values.firstWhere((value) => value.name == payload['review_result']),
-      testMode: TestMode.values.firstWhere((value) => value.name == payload['test_mode']),
+      reviewResult: ReviewResult.values.firstWhere(
+        (value) => value.name == payload['review_result'],
+        orElse: () => ReviewResult.good,
+      ),
+      testMode: _testMode(payload['test_mode']) ?? TestMode.multipleChoice,
       wasCorrect: payload['was_correct'] as bool,
       createdAt: DateTime.parse(payload['created_at'] as String),
       scheduledDueAt: DateTime.parse(payload['scheduled_due_at'] as String),
     );
+  }
+
+  /// Les payloads distants peuvent contenir des modes retirés du domaine
+  /// (`ordering`, `matching` d'anciennes versions) : on les ignore plutôt que
+  /// de faire échouer toute la synchronisation sur une ligne.
+  static TestMode? _testMode(Object? raw) {
+    if (raw == null) {
+      return null;
+    }
+    for (final mode in TestMode.values) {
+      if (mode.name == raw) {
+        return mode;
+      }
+    }
+    return null;
+  }
+
+  static List<TestMode> _testModeList(Object? raw) {
+    if (raw is! List) {
+      return const [];
+    }
+    return raw.map(_testMode).whereType<TestMode>().toList();
+  }
+
+  static List<String> _stringList(Object? raw) {
+    if (raw is! List) {
+      return const [];
+    }
+    return raw.map((item) => item.toString()).toList();
   }
 }
