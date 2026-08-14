@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -997,6 +998,11 @@ class _McqMode extends StatelessWidget {
           LayoutBuilder(
             builder: (context, constraints) {
               final optionWidth = (constraints.maxWidth - 10) / 2;
+              final optionHeight = _McqOptionTile.uniformHeight(
+                context,
+                options,
+                optionWidth,
+              );
               return Wrap(
                 spacing: 10,
                 runSpacing: 10,
@@ -1004,6 +1010,7 @@ class _McqMode extends StatelessWidget {
                   for (var index = 0; index < options.length; index++)
                     SizedBox(
                       width: optionWidth,
+                      height: optionHeight,
                       child: _McqOptionTile(
                         text: options[index],
                         isSelected: selectedIndex == index,
@@ -1085,6 +1092,35 @@ class _McqOptionTile extends StatelessWidget {
   final bool isWrong;
   final VoidCallback? onTap;
 
+  static const double _padding = 18;
+  static const double _borderWidth = 1;
+
+  /// Hauteur commune à toutes les bulles d'une grille : celle de l'option la
+  /// plus longue, pour que la grille reste régulière quel que soit le texte.
+  static double uniformHeight(
+    BuildContext context,
+    List<String> options,
+    double tileWidth,
+  ) {
+    final style = Theme.of(context).textTheme.bodyLarge;
+    final textScaler = MediaQuery.textScalerOf(context);
+    final maxTextWidth = math.max(
+      0.0,
+      tileWidth - (_padding + _borderWidth) * 2,
+    );
+    var tallest = 0.0;
+    for (final option in options) {
+      final painter = TextPainter(
+        text: TextSpan(text: option, style: style),
+        textDirection: Directionality.of(context),
+        textScaler: textScaler,
+      )..layout(maxWidth: maxTextWidth);
+      tallest = math.max(tallest, painter.height);
+      painter.dispose();
+    }
+    return tallest + (_padding + _borderWidth) * 2;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -1111,15 +1147,21 @@ class _McqOptionTile extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(20),
       child: Ink(
-        padding: const EdgeInsets.all(18),
+        padding: const EdgeInsets.all(_padding),
         decoration: BoxDecoration(
           color: background,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor),
+          border: Border.all(color: borderColor, width: _borderWidth),
         ),
-        child: Text(
-          text,
-          style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                text,
+                style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+              ),
+            ),
+          ],
         ),
       ),
     );
