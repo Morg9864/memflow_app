@@ -7,8 +7,6 @@ enum TestMode {
   cloze,
   freeText,
   trueFalse,
-  ordering,
-  matching,
 }
 
 enum ReviewResult { again, hard, good, easy }
@@ -45,8 +43,6 @@ extension TestModeX on TestMode {
     TestMode.cloze => 'Texte à trous',
     TestMode.freeText => 'Saisie libre',
     TestMode.trueFalse => 'Vrai / faux',
-    TestMode.ordering => 'Ordonnancement',
-    TestMode.matching => 'Association',
   };
 }
 
