@@ -199,53 +199,22 @@ class StudyController {
     return wasCorrect ? ReviewResult.good : ReviewResult.again;
   }
 
+  /// Passe à la carte suivante. Une carte ratée n'est pas rejouée dans la
+  /// session courante : elle ouvrira la session suivante (voir
+  /// `AppRepository.startStudySession`), pour que la longueur d'une session
+  /// reste celle choisie par l'utilisateur.
   StudySessionState advance(StudySessionState state, ReviewResult result) {
     final updatedCounts = Map<ReviewResult, int>.from(state.reviewCounts)
       ..update(result, (value) => value + 1, ifAbsent: () => 1);
-    final updatedSeenCardIds = {...state.seenCardIds, state.currentCard.id};
-    final updatedPendingReviewResults = Map<String, ReviewResult>.from(
-      state.pendingReviewResults,
-    );
-
-    if (_shouldRepeatInSession(result)) {
-      updatedPendingReviewResults[state.currentCard.id] = result;
-    } else {
-      updatedPendingReviewResults.remove(state.currentCard.id);
-    }
-
-    final reviewedCards = state.cards.sublist(0, state.currentIndex + 1);
-    final upcomingCards = state.cards.sublist(state.currentIndex + 1);
-    final pendingCards = <StudyCard>[
-      ...upcomingCards,
-      if (_shouldRepeatInSession(result)) state.currentCard,
-    ];
-
-    final nextCards =
-        state.hasSeenAllCards ||
-            updatedSeenCardIds.length >= state.sessionCardIds.length
-        ? [
-            ...reviewedCards,
-            ..._reorderPhaseTwoCards(pendingCards, updatedPendingReviewResults),
-          ]
-        : [...reviewedCards, ...pendingCards];
 
     final nextIndex = state.currentIndex + 1;
-    if (nextIndex >= nextCards.length) {
-      return state.copyWith(
-        cards: nextCards,
-        seenCardIds: updatedSeenCardIds,
-        pendingReviewResults: updatedPendingReviewResults,
-        reviewCounts: updatedCounts,
-        isCompleted: true,
-      );
+    if (nextIndex >= state.cards.length) {
+      return state.copyWith(reviewCounts: updatedCounts, isCompleted: true);
     }
 
-    final nextProposition = buildTrueFalseProposition(nextCards[nextIndex]);
+    final nextProposition = buildTrueFalseProposition(state.cards[nextIndex]);
 
     return state.copyWith(
-      cards: nextCards,
-      seenCardIds: updatedSeenCardIds,
-      pendingReviewResults: updatedPendingReviewResults,
       currentIndex: nextIndex,
       revealed: false,
       clearSelectedOption: true,
@@ -257,27 +226,6 @@ class StudyController {
       trueFalseProposition: nextProposition,
       clearTrueFalseProposition: nextProposition == null,
     );
-  }
-
-  List<StudyCard> _reorderPhaseTwoCards(
-    List<StudyCard> cards,
-    Map<String, ReviewResult> pendingReviewResults,
-  ) {
-    final failedCards = cards
-        .where((card) => pendingReviewResults[card.id] == ReviewResult.again)
-        .toList();
-    final successfulCards = cards
-        .where((card) => pendingReviewResults[card.id] != ReviewResult.again)
-        .toList();
-
-    failedCards.shuffle(_random);
-    successfulCards.shuffle(_random);
-
-    return [...failedCards, ...successfulCards];
-  }
-
-  bool _shouldRepeatInSession(ReviewResult result) {
-    return result == ReviewResult.again;
   }
 
   String _normalize(String value) {

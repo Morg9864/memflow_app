@@ -519,9 +519,6 @@ class StudySessionState {
     required this.collectionId,
     required this.deckId,
     required this.cards,
-    required this.sessionCardIds,
-    required this.seenCardIds,
-    required this.pendingReviewResults,
     required this.currentIndex,
     required this.revealed,
     required this.selectedOptionIndex,
@@ -537,9 +534,6 @@ class StudySessionState {
   final String? collectionId;
   final String? deckId;
   final List<StudyCard> cards;
-  final Set<String> sessionCardIds;
-  final Set<String> seenCardIds;
-  final Map<String, ReviewResult> pendingReviewResults;
   final int currentIndex;
   final bool revealed;
   final int? selectedOptionIndex;
@@ -556,8 +550,6 @@ class StudySessionState {
 
   StudyCard get currentCard => cards[currentIndex];
 
-  bool get hasSeenAllCards => seenCardIds.length >= sessionCardIds.length;
-
   int get seenCount => currentIndex + (isCompleted ? 1 : 0);
 
   double get progress => cards.isEmpty ? 0 : (currentIndex + 1) / cards.length;
@@ -567,9 +559,6 @@ class StudySessionState {
     String? collectionId,
     String? deckId,
     List<StudyCard>? cards,
-    Set<String>? sessionCardIds,
-    Set<String>? seenCardIds,
-    Map<String, ReviewResult>? pendingReviewResults,
     int? currentIndex,
     bool? revealed,
     int? selectedOptionIndex,
@@ -588,9 +577,6 @@ class StudySessionState {
       collectionId: collectionId ?? this.collectionId,
       deckId: deckId ?? this.deckId,
       cards: cards ?? this.cards,
-      sessionCardIds: sessionCardIds ?? this.sessionCardIds,
-      seenCardIds: seenCardIds ?? this.seenCardIds,
-      pendingReviewResults: pendingReviewResults ?? this.pendingReviewResults,
       currentIndex: currentIndex ?? this.currentIndex,
       revealed: revealed ?? this.revealed,
       selectedOptionIndex: clearSelectedOption

@@ -179,9 +179,6 @@ class AppRepository {
       cards: cards
           .map((card) => _mapStudyCard(card, forcedMode: forcedMode))
           .toList(),
-      sessionCardIds: cards.map((card) => card.id).toSet(),
-      seenCardIds: const <String>{},
-      pendingReviewResults: const <String, ReviewResult>{},
       currentIndex: 0,
       revealed: false,
       selectedOptionIndex: null,
@@ -849,56 +846,120 @@ class AppRepository {
   }) async {
     final disabledDeckIds = await _fetchDisabledDeckIds();
     final disabledCollectionIds = await _fetchDisabledCollectionIds();
+    bool isActive(FlashcardRecord card) =>
+        !disabledDeckIds.contains(card.deckId) &&
+        !disabledCollectionIds.contains(card.collectionId);
 
-    final dueCards = await _fetchFlashcards(
+    final retryCards = (await _fetchFailedFlashcards(
+      collectionId: collectionId,
+      deckId: deckId,
+    )).where(isActive).toList();
+
+    final dueActiveCards = (await _fetchFlashcards(
       collectionId: collectionId,
       deckId: deckId,
       dueBeforeOrAt: now,
-    );
-    final dueActiveCards = dueCards
-        .where(
-          (card) =>
-              !disabledDeckIds.contains(card.deckId) &&
-              !disabledCollectionIds.contains(card.collectionId),
-        )
-        .toList();
-    if (dueActiveCards.isNotEmpty) {
-      return _takeSessionCards(dueActiveCards, sessionCardLimit);
-    }
+    )).where(isActive).toList();
 
-    final cards = await _fetchFlashcards(
-      collectionId: collectionId,
-      deckId: deckId,
-    );
-    final activeCards = cards
-        .where(
-          (card) =>
-              !disabledDeckIds.contains(card.deckId) &&
-              !disabledCollectionIds.contains(card.collectionId),
-        )
-        .toList();
-    return _takeSessionCards(activeCards, sessionCardLimit);
+    final fillerCards = dueActiveCards.isNotEmpty
+        ? dueActiveCards
+        : (await _fetchFlashcards(
+            collectionId: collectionId,
+            deckId: deckId,
+          )).where(isActive).toList();
+
+    return _takeSessionCards(retryCards, fillerCards, sessionCardLimit);
   }
 
+  /// Cartes ratées lors de la dernière révision : un résultat `again` remet
+  /// `repetitions` à zéro et incrémente `lapses`, donc `repetitions == 0` avec
+  /// au moins un `lapse` identifie exactement les cartes dont la dernière
+  /// réponse était fausse. Une carte jamais révisée n'a aucun `lapse`.
+  Future<List<FlashcardRecord>> _fetchFailedFlashcards({
+    String? collectionId,
+    String? deckId,
+  }) async {
+    final equals = <String, Object?>{'repetitions': 0};
+    if (collectionId != null) {
+      equals['collection_id'] = collectionId;
+    }
+    if (deckId != null) {
+      equals['deck_id'] = deckId;
+    }
+    final rows = await _selectRows(
+      'flashcards',
+      equals: equals,
+      greaterThan: {'lapses': 0},
+      orderBy: 'last_reviewed_at',
+    );
+    return rows.map(_mapFlashcard).toList();
+  }
+
+  /// Compose la session : les cartes ratées à la session précédente d'abord,
+  /// puis les cartes à réviser, sans jamais dépasser la limite choisie. Le
+  /// rattrapage occupe au plus la moitié de la session pour que de nouvelles
+  /// cartes passent même après une série d'échecs ; les cartes ratées en trop
+  /// attendent la session suivante, sauf s'il n'y a rien d'autre à réviser.
   List<FlashcardRecord> _takeSessionCards(
-    Iterable<FlashcardRecord> cards,
+    Iterable<FlashcardRecord> retryCards,
+    Iterable<FlashcardRecord> fillerCards,
     int sessionCardLimit,
   ) {
-    final sortedCards = [...cards]
-      ..sort((a, b) {
-        final byCreatedAt = a.createdAt.compareTo(b.createdAt);
-        if (byCreatedAt != 0) {
-          return byCreatedAt;
-        }
-        return a.id.compareTo(b.id);
-      });
-
-    if (sortedCards.isEmpty) {
-      return const [];
+    int byImportOrder(FlashcardRecord a, FlashcardRecord b) {
+      final byCreatedAt = a.createdAt.compareTo(b.createdAt);
+      if (byCreatedAt != 0) {
+        return byCreatedAt;
+      }
+      return a.id.compareTo(b.id);
     }
 
-    final effectiveLimit = sessionCardLimit.clamp(1, sortedCards.length);
-    return sortedCards.take(effectiveLimit).toList();
+    List<FlashcardRecord> sorted(Iterable<FlashcardRecord> cards) {
+      return [...cards]..sort(byImportOrder);
+    }
+
+    // Les cartes ratées passent de la plus ancienne à la plus récente : une
+    // carte reportée faute de place ouvre la session suivante, avant les échecs
+    // survenus depuis, et ne peut donc pas rester indéfiniment en attente.
+    List<FlashcardRecord> sortedByOldestFailure(
+      Iterable<FlashcardRecord> cards,
+    ) {
+      return [...cards]..sort((a, b) {
+        final byFailure = (a.lastReviewedAt ?? a.createdAt).compareTo(
+          b.lastReviewedAt ?? b.createdAt,
+        );
+        return byFailure != 0 ? byFailure : byImportOrder(a, b);
+      });
+    }
+
+    final effectiveLimit = math.max(1, sessionCardLimit);
+    final sortedRetryCards = sortedByOldestFailure(retryCards);
+    final retryQuota = math.max(1, effectiveLimit ~/ 2);
+    final promotedRetryCards = sortedRetryCards.take(retryQuota).toList();
+    final deferredRetryIds = sortedRetryCards
+        .skip(retryQuota)
+        .map((card) => card.id)
+        .toSet();
+
+    final sessionCards = <FlashcardRecord>[];
+    final selectedIds = <String>{};
+    for (final card in [
+      ...promotedRetryCards,
+      ...sorted(
+        fillerCards,
+      ).where((card) => !deferredRetryIds.contains(card.id)),
+      // Filet de sécurité : si le rattrapage est le seul contenu disponible,
+      // il remplit la session plutôt que de la laisser incomplète.
+      ...sortedRetryCards,
+    ]) {
+      if (selectedIds.add(card.id)) {
+        sessionCards.add(card);
+      }
+      if (sessionCards.length >= effectiveLimit) {
+        break;
+      }
+    }
+
+    return sessionCards;
   }
 
   StudyCard _mapStudyCard(FlashcardRecord card, {TestMode? forcedMode}) {
@@ -1208,6 +1269,7 @@ class AppRepository {
   Future<List<Map<String, dynamic>>> _selectRows(
     String table, {
     Map<String, Object?> equals = const {},
+    Map<String, Object?> greaterThan = const {},
     DateTime? dueBeforeOrAt,
     String? orderBy,
     bool ascending = true,
@@ -1230,6 +1292,9 @@ class AppRepository {
       builder = builder.eq('user_id', _userId);
       for (final entry in equals.entries) {
         builder = builder.eq(entry.key, entry.value);
+      }
+      for (final entry in greaterThan.entries) {
+        builder = builder.gt(entry.key, entry.value);
       }
       if (dueBeforeOrAt != null) {
         builder = builder.lte(

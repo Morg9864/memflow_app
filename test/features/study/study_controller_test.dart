@@ -82,9 +82,6 @@ void main() {
       collectionId: 'react',
       deckId: 'deck-1',
       cards: cards,
-      sessionCardIds: cards.map((card) => card.id).toSet(),
-      seenCardIds: const <String>{},
-      pendingReviewResults: const <String, ReviewResult>{},
       currentIndex: 0,
       revealed: false,
       selectedOptionIndex: null,
@@ -101,7 +98,7 @@ void main() {
     );
   }
 
-  test('phase 1 keeps a fixed order and does not replay hard cards', () {
+  test('la session garde un ordre fixe et ne rejoue aucune carte', () {
     final controller = StudyController.forTesting(random: math.Random(0));
     final initialState = buildState([
       buildCard('a'),
@@ -113,11 +110,9 @@ void main() {
 
     expect(nextState.currentCard.id, 'b');
     expect(nextState.cards.map((card) => card.id).toList(), ['a', 'b', 'c']);
-    expect(nextState.seenCardIds, {'a'});
-    expect(nextState.pendingReviewResults, isEmpty);
   });
 
-  test('phase 2 replays only again cards and completes', () {
+  test('une carte ratée ne rallonge pas la session courante', () {
     final controller = StudyController.forTesting(random: math.Random(0));
     final initialState = buildState([
       buildCard('a'),
@@ -125,58 +120,17 @@ void main() {
       buildCard('c'),
     ]);
 
-    final afterA = controller.advance(initialState, ReviewResult.hard);
-    final afterB = controller.advance(afterA, ReviewResult.good);
+    final afterA = controller.advance(initialState, ReviewResult.again);
+    final afterB = controller.advance(afterA, ReviewResult.again);
     final afterC = controller.advance(afterB, ReviewResult.again);
 
-    expect(afterC.currentCard.id, 'c');
-    expect(afterC.cards.map((card) => card.id).toList(), ['a', 'b', 'c', 'c']);
-    expect(afterC.pendingReviewResults, {'c': ReviewResult.again});
-
-    final afterRetryC = controller.advance(afterC, ReviewResult.good);
-    expect(afterRetryC.isCompleted, isTrue);
-    expect(afterRetryC.pendingReviewResults, isEmpty);
+    expect(afterA.cards.map((card) => card.id).toList(), ['a', 'b', 'c']);
+    expect(afterA.currentCard.id, 'b');
+    expect(afterB.currentCard.id, 'c');
+    expect(afterC.isCompleted, isTrue);
+    expect(afterC.cards, hasLength(3));
+    expect(afterC.reviewCounts[ReviewResult.again], 3);
   });
-
-  test(
-    'hard and again can coexist but only again returns later in session',
-    () {
-      final controller = StudyController.forTesting(random: math.Random(0));
-      final initialState = buildState([
-        buildCard('a'),
-        buildCard('b'),
-        buildCard('c'),
-      ]);
-
-      final afterHard = controller.advance(initialState, ReviewResult.hard);
-      final afterAgain = controller.advance(afterHard, ReviewResult.again);
-
-      expect(afterAgain.cards.map((card) => card.id).toList(), [
-        'a',
-        'b',
-        'c',
-        'b',
-      ]);
-      expect(afterAgain.pendingReviewResults, {'b': ReviewResult.again});
-      expect(afterAgain.currentCard.id, 'c');
-    },
-  );
-
-  test(
-    'replayed again card is removed from pending results after a success',
-    () {
-      final controller = StudyController.forTesting(random: math.Random(0));
-      final initialState = buildState([buildCard('a'), buildCard('b')]);
-
-      final afterAgain = controller.advance(initialState, ReviewResult.again);
-      final afterB = controller.advance(afterAgain, ReviewResult.good);
-      final completed = controller.advance(afterB, ReviewResult.easy);
-
-      expect(afterB.pendingReviewResults, {'a': ReviewResult.again});
-      expect(completed.isCompleted, isTrue);
-      expect(completed.pendingReviewResults, isEmpty);
-    },
-  );
 
   group('mode vrai/faux', () {
     final controller = StudyController.forTesting(random: math.Random(0));
