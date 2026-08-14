@@ -7,7 +7,7 @@
 <p align="center">
   Application de flashcards Flutter offline-first pour le web et le mobile.
   <br />
-  Révision espacée, modes d'étude variés, import CSV et synchronisation cloud optionnelle.
+  Révision espacée, modes d'étude adaptatifs, import CSV et synchronisation multi-appareils.
 </p>
 
 <p align="center">
@@ -24,15 +24,16 @@
 
 ## Aperçu
 
-MemFlow est une application de révision pensée pour rester fluide sans connexion et agréable à utiliser sur mobile comme sur le web. La base locale est la source de vérité, puis la synchronisation cloud vient en option quand Supabase est configuré.
+MemFlow est une application de révision pensée pour rester fluide sans connexion et agréable à utiliser sur mobile comme sur le web. La base locale SQLite fait foi pour tout ce qui est affiché ; Supabase fait foi entre appareils et se synchronise en arrière-plan.
 
-> Local-first par défaut. Sync seulement si vous en avez besoin.
+> Local d'abord, toujours. Le réseau rattrape son retard tout seul.
 
 ## Points forts
 
-- `Offline-first` avec persistance locale via Drift et SQLite.
+- `Offline-first` : révisions, imports et suppressions fonctionnent sans réseau, puis se synchronisent seuls.
+- `Modes adaptatifs` : chaque carte passe du QCM au rappel actif à mesure qu'elle est maîtrisée.
 - `Spaced repetition` pour prioriser les cartes à revoir au bon moment.
-- `Plusieurs modes d'étude` : QCM, flashcards classiques/inversées, texte à trous avec banque de mots, saisie libre, vrai/faux.
+- `Six modes d'étude` : QCM, flashcards classiques/inversées, texte à trous avec banque de mots, saisie libre, vrai/faux.
 - `Organisation par collections et decks` pour structurer les révisions.
 - `Import / export CSV` pour alimenter rapidement vos jeux de cartes.
 - `Prompt IA intégré` dans l'écran d'import, consultable, copiable et téléchargeable.
@@ -78,7 +79,7 @@ MemFlow est une application de révision pensée pour rester fluide sans connexi
 - `flutter_riverpod` pour l'état et l'injection de dépendances
 - `go_router` pour la navigation
 - `Drift` + `SQLite` pour la base locale
-- `Supabase` pour la synchronisation cloud optionnelle
+- `Supabase` pour l'authentification et la synchronisation multi-appareils
 - `shared_preferences` pour les préférences légères
 - `file_picker` + `csv` pour l'import/export
 
@@ -117,9 +118,11 @@ Android / iOS :
 flutter run --dart-define-from-file=.env
 ```
 
-## Synchronisation Supabase (optionnelle)
+## Configuration Supabase
 
-Sans variables Supabase, l'application reste pleinement utilisable en local.
+Supabase porte l'authentification et la synchronisation entre appareils : les
+deux variables sont requises au build. Une fois connecté, l'application
+fonctionne hors ligne sur ses données locales.
 
 Variables attendues :
 
@@ -130,7 +133,8 @@ Variables attendues :
 
 1. Copier `.env.example` vers `.env`
 2. Renseigner les variables de votre projet Supabase
-3. Appliquer les migrations SQL du dossier `supabase/migrations/`
+3. Appliquer les migrations SQL du dossier `supabase/migrations/`, dans l'ordre
+   des noms de fichiers
 4. Lancer l'application avec `--dart-define-from-file=.env`
 
 Exemple :
@@ -181,7 +185,7 @@ Le projet suit une organisation feature-first avec une séparation claire entre 
 ```text
 lib/
   app/        bootstrap, routeur, providers
-  data/       base locale, connexions, repositories
+  data/       base locale Drift, moteur de synchronisation, repositories
   domain/     modèles et services métier
   features/   home, collections, study, import, stats, profile
   theme/      thèmes et contrôleur d'apparence
@@ -193,13 +197,13 @@ lib/
 Si vous modifiez le schéma Drift, regénérez les fichiers :
 
 ```bash
-dart run build_runner build --delete-conflicting-outputs
+dart run build_runner build
 ```
 
 Mode watch :
 
 ```bash
-dart run build_runner watch --delete-conflicting-outputs
+dart run build_runner watch
 ```
 
 ## Tests
