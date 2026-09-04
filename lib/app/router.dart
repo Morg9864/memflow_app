@@ -24,10 +24,10 @@ import 'providers.dart';
 
 /// Bridges a [Stream] to a [Listenable] so go_router re-evaluates [redirect]
 /// whenever the auth state changes.
-class _AuthRefreshNotifier extends ChangeNotifier {
-  _AuthRefreshNotifier(Stream<AuthState> stream) {
-    notifyListeners();
+class AuthRefreshNotifier extends ChangeNotifier {
+  AuthRefreshNotifier(Stream<AuthState> stream) {
     _subscription = stream.listen((authState) {
+      _hasResolvedAuthState = true;
       _isRecovery = authState.event == AuthChangeEvent.passwordRecovery;
       notifyListeners();
     });
@@ -35,6 +35,9 @@ class _AuthRefreshNotifier extends ChangeNotifier {
 
   bool _isRecovery = false;
   bool get isRecovery => _isRecovery;
+
+  bool _hasResolvedAuthState = false;
+  bool get hasResolvedAuthState => _hasResolvedAuthState;
 
   late final StreamSubscription<AuthState> _subscription;
 
@@ -47,7 +50,7 @@ class _AuthRefreshNotifier extends ChangeNotifier {
 
 final routerProvider = Provider<GoRouter>((ref) {
   final authService = ref.watch(authServiceProvider);
-  final refresh = _AuthRefreshNotifier(authService.onAuthStateChange);
+  final refresh = AuthRefreshNotifier(authService.onAuthStateChange);
   ref.onDispose(refresh.dispose);
 
   return GoRouter(
@@ -56,6 +59,12 @@ final routerProvider = Provider<GoRouter>((ref) {
     errorBuilder: (context, state) =>
         NotFoundScreen(requestedPath: state.uri.toString()),
     redirect: (context, state) {
+      // Supabase emits the locally restored session through this stream. Do
+      // not route to /auth during the small window before that first event.
+      if (!refresh.hasResolvedAuthState) {
+        return null;
+      }
+
       final loggedIn = authService.currentSession != null;
       final atAuth = state.matchedLocation == '/auth';
       final atReset = state.matchedLocation == '/reset-password';

@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memflow/data/local/database.dart';
 import 'package:memflow/data/sync/sync_service.dart';
 import 'package:memflow/domain/models/models.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -10,6 +13,46 @@ void main() {
 
   setUp(() => database = AppDatabase.memory());
   tearDown(() => database.close());
+
+  group('retour de la connectivité', () {
+    test('déclenche immédiatement une synchronisation', () async {
+      final networkChanges = StreamController<bool>();
+      addTearDown(networkChanges.close);
+      final service = _CountingSyncService(
+        database: database,
+        client: SupabaseClient('http://localhost', 'test-key'),
+        networkChanges: networkChanges.stream,
+      );
+      addTearDown(service.dispose);
+
+      await service.startFor('user-a');
+      expect(service.syncCalls, 1);
+
+      networkChanges.add(true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.syncCalls, 2);
+    });
+
+    test('ignore la perte de réseau et ne double pas l’écoute', () async {
+      final networkChanges = StreamController<bool>();
+      addTearDown(networkChanges.close);
+      final service = _CountingSyncService(
+        database: database,
+        client: SupabaseClient('http://localhost', 'test-key'),
+        networkChanges: networkChanges.stream,
+      );
+      addTearDown(service.dispose);
+
+      await service.startFor('user-a');
+      await service.startFor('user-a');
+      networkChanges.add(false);
+      networkChanges.add(true);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(service.syncCalls, 3);
+    });
+  });
 
   Future<void> seedCollection(String id) {
     return database
@@ -192,4 +235,19 @@ void main() {
       expect(payload['updated_at'], endsWith('Z'));
     });
   });
+}
+
+class _CountingSyncService extends SyncService {
+  _CountingSyncService({
+    required super.database,
+    required super.client,
+    required super.networkChanges,
+  });
+
+  var syncCalls = 0;
+
+  @override
+  Future<void> syncNow() async {
+    syncCalls++;
+  }
 }

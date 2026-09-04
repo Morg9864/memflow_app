@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../domain/models/models.dart';
@@ -42,10 +43,18 @@ class SyncService {
     required SupabaseClient client,
     Duration retryInterval = const Duration(seconds: 30),
     Duration remoteChangeDebounce = const Duration(milliseconds: 1500),
+    Stream<bool>? networkChanges,
   }) : _db = database,
        _client = client,
        _retryInterval = retryInterval,
-       _remoteChangeDebounce = remoteChangeDebounce;
+       _remoteChangeDebounce = remoteChangeDebounce,
+       _networkChanges =
+           networkChanges ??
+           Connectivity().onConnectivityChanged.map(
+             (results) => results.any(
+               (result) => result != ConnectivityResult.none,
+             ),
+           );
 
   static const _tables = ['collections', 'decks', 'flashcards', 'review_logs'];
 
@@ -53,6 +62,7 @@ class SyncService {
   final SupabaseClient _client;
   final Duration _retryInterval;
   final Duration _remoteChangeDebounce;
+  final Stream<bool> _networkChanges;
 
   final _statusController = StreamController<SyncStatus>.broadcast();
   var _status = const SyncStatus(state: SyncState.idle, pendingCount: 0);
@@ -60,6 +70,7 @@ class SyncService {
   RealtimeChannel? _channel;
   Timer? _retryTimer;
   Timer? _debounceTimer;
+  StreamSubscription<bool>? _networkSubscription;
   Future<void>? _inFlight;
   var _syncAgain = false;
   var _disposed = false;
@@ -74,6 +85,7 @@ class SyncService {
   Future<void> startFor(String userId) async {
     await _db.adoptOwner(userId);
     _listenToRemoteChanges();
+    _listenToNetworkChanges();
     _retryTimer ??= Timer.periodic(_retryInterval, (_) {
       if (_status.hasPendingWrites || _status.state == SyncState.offline) {
         unawaited(syncNow());
@@ -86,6 +98,8 @@ class SyncService {
   /// partagé, se déconnecter doit vraiment retirer ses cartes de l'appareil.
   Future<void> stopAndClear() async {
     await _teardownChannel();
+    await _networkSubscription?.cancel();
+    _networkSubscription = null;
     _retryTimer?.cancel();
     _retryTimer = null;
     _debounceTimer?.cancel();
@@ -97,6 +111,7 @@ class SyncService {
   Future<void> dispose() async {
     _disposed = true;
     await _teardownChannel();
+    await _networkSubscription?.cancel();
     _retryTimer?.cancel();
     _debounceTimer?.cancel();
     await _statusController.close();
@@ -480,6 +495,19 @@ class SyncService {
     _debounceTimer?.cancel();
     _debounceTimer = Timer(_remoteChangeDebounce, () {
       if (!_disposed) {
+        unawaited(syncNow());
+      }
+    });
+  }
+
+  void _listenToNetworkChanges() {
+    if (_networkSubscription != null) {
+      return;
+    }
+    _networkSubscription = _networkChanges.listen((isConnected) {
+      if (isConnected && !_disposed) {
+        // The periodic timer remains the fallback for missed connectivity
+        // notifications.
         unawaited(syncNow());
       }
     });

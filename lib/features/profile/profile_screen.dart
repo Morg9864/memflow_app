@@ -363,27 +363,62 @@ class _SyncStatusLine extends ConsumerWidget {
     final status = ref.watch(syncStatusProvider).value;
     final pending = status?.pendingCount ?? 0;
 
-    final (icon, label) = switch (status?.state) {
-      null || SyncState.idle when pending == 0 => (
-        Icons.cloud_done_outlined,
-        'Tout est synchronisé',
+    final (icon, title, detail, color) = switch (status?.state) {
+      SyncState.offline => (
+        Icons.cloud_off_outlined,
+        'Hors ligne',
+        pending == 0
+            ? 'Aucune modification en attente. Les données locales restent disponibles.'
+            : '$pending modification${pending > 1 ? 's' : ''} en attente d\'envoi. Elles seront envoyées dès la reconnexion.',
+        theme.colorScheme.error,
       ),
       SyncState.syncing => (
         Icons.cloud_sync_outlined,
         'Synchronisation en cours…',
+        pending == 0
+            ? 'Les dernières données sont en cours de vérification.'
+            : '$pending modification${pending > 1 ? 's' : ''} en attente d\'envoi.',
+        theme.colorScheme.primary,
       ),
-      _ => (
-        Icons.cloud_off_outlined,
-        '$pending modification${pending > 1 ? 's' : ''} en attente d\'envoi',
+      null || SyncState.idle => (
+        Icons.cloud_done_outlined,
+        'Synchronisé',
+        pending == 0
+            ? 'Toutes les modifications sont enregistrées.'
+            : '$pending modification${pending > 1 ? 's' : ''} en attente d\'envoi.',
+        theme.colorScheme.primary,
       ),
     };
 
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(width: 10),
-        Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-      ],
+    return Semantics(
+      container: true,
+      label: '$title. $detail',
+      child: Container(
+        key: const ValueKey('sync-status-panel'),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.10),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: color.withValues(alpha: 0.28)),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 22, color: color),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: theme.textTheme.titleSmall),
+                  const SizedBox(height: 3),
+                  Text(detail, style: theme.textTheme.bodySmall),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

@@ -40,17 +40,13 @@ class AppBootstrap {
       );
     }
 
-    // Supabase restaure la session depuis le stockage local. Un démarrage sans
-    // réseau ne doit pas empêcher l'application de s'ouvrir sur ses données
-    // locales : on tolère l'échec et la synchronisation reprendra plus tard.
-    try {
-      await Supabase.initialize(
-        url: environment.supabaseUrl,
-        anonKey: environment.supabaseAnonKey,
-      );
-    } catch (_) {
-      // Session non rafraîchie : l'app démarre quand même.
-    }
+    // L'initialisation lit d'abord la session persistée localement. Le
+    // rafraîchissement réseau est géré ensuite par Supabase : son échec ne
+    // doit pas être confondu avec une session absente par le router.
+    await Supabase.initialize(
+      url: environment.supabaseUrl,
+      anonKey: environment.supabaseAnonKey,
+    );
 
     return AppBootstrap(
       preferences: preferences,

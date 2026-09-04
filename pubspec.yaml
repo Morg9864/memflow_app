@@ -38,6 +38,7 @@ dependencies:
     drift_flutter: ^0.3.0
     sqlite3_flutter_libs: ^0.6.0+eol
     shared_preferences: ^2.5.5
+    connectivity_plus: ^7.3.0
     supabase_flutter: ^2.12.2
     google_fonts: ^8.1.0
     intl: ^0.20.2
