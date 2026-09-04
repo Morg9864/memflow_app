@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -49,6 +50,50 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   bool _isApplyingReview = false;
   bool _isProcessingReviewQueue = false;
   bool _isReviewRetryPending = false;
+
+  void _handleKeyboardPrimaryAction() {
+    final state = _state;
+    if (state == null) return;
+    if (_needsReviewButtons(state.currentCard.currentTestMode, state)) {
+      _applyReview(_controller.suggestedResult(state.currentAnswerWasCorrect));
+      return;
+    }
+    final mode = state.currentCard.currentTestMode;
+    if ((mode == TestMode.classicFlashcard ||
+            mode == TestMode.reversedFlashcard) &&
+        !state.revealed) {
+      _reveal();
+    } else if (mode == TestMode.cloze || mode == TestMode.freeText) {
+      _submitTextAnswer(isCloze: mode == TestMode.cloze);
+    }
+  }
+
+  void _handleKeyboardReview(ReviewResult result) {
+    final state = _state;
+    if (state != null &&
+        _needsReviewButtons(state.currentCard.currentTestMode, state)) {
+      _applyReview(result);
+    }
+  }
+
+  KeyEventResult _handleKeyboardEvent(FocusNode _, KeyEvent event) {
+    if (event is! KeyDownEvent || _state == null) {
+      return KeyEventResult.ignored;
+    }
+    final reviewResult = switch (event.logicalKey) {
+      LogicalKeyboardKey.digit1 => ReviewResult.again,
+      LogicalKeyboardKey.digit2 => ReviewResult.hard,
+      LogicalKeyboardKey.digit3 => ReviewResult.good,
+      LogicalKeyboardKey.digit4 => ReviewResult.easy,
+      _ => null,
+    };
+    if (reviewResult == null ||
+        !_needsReviewButtons(_state!.currentCard.currentTestMode, _state!)) {
+      return KeyEventResult.ignored;
+    }
+    _handleKeyboardReview(reviewResult);
+    return KeyEventResult.handled;
+  }
 
   @override
   void initState() {
@@ -506,205 +551,268 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         : storedProposition;
 
     final showsReview = _needsReviewButtons(mode, state);
+    final studyShortcuts = <ShortcutActivator, Intent>{};
+    if (showsReview) {
+      studyShortcuts.addAll({
+        const SingleActivator(LogicalKeyboardKey.space):
+            const _StudyPrimaryIntent(),
+        const SingleActivator(LogicalKeyboardKey.enter):
+            const _StudyPrimaryIntent(),
+        const SingleActivator(LogicalKeyboardKey.digit1):
+            const _StudyReviewIntent(ReviewResult.again),
+        const SingleActivator(LogicalKeyboardKey.digit2):
+            const _StudyReviewIntent(ReviewResult.hard),
+        const SingleActivator(LogicalKeyboardKey.digit3):
+            const _StudyReviewIntent(ReviewResult.good),
+        const SingleActivator(LogicalKeyboardKey.digit4):
+            const _StudyReviewIntent(ReviewResult.easy),
+      });
+    } else if (mode == TestMode.classicFlashcard ||
+        mode == TestMode.reversedFlashcard ||
+        mode == TestMode.cloze ||
+        mode == TestMode.freeText) {
+      studyShortcuts[const SingleActivator(LogicalKeyboardKey.enter)] =
+          const _StudyPrimaryIntent();
+      if (mode == TestMode.classicFlashcard ||
+          mode == TestMode.reversedFlashcard) {
+        studyShortcuts[const SingleActivator(LogicalKeyboardKey.space)] =
+            const _StudyPrimaryIntent();
+      }
+    }
 
-    return PopScope(
-      canPop: _canPopStudy(),
-      onPopInvokedWithResult: (didPop, _) => _handlePopInvoked(didPop),
-      child: Scaffold(
-        body: SafeArea(
-          child: LayoutBuilder(
-            builder: (context, viewportConstraints) {
-              final isWideDesktop =
-                  _isDesktopPlatform() &&
-                  viewportConstraints.maxWidth >= _desktopBreakpoint;
-              final usesReviewPanel = isWideDesktop && showsReview;
-              final maxWidth = isWideDesktop
-                  ? _desktopMaxWidth
-                  : AppTheme.contentMaxWidth;
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handleKeyboardEvent,
+      child: Shortcuts(
+        shortcuts: studyShortcuts,
+        child: Actions(
+          actions: <Type, Action<Intent>>{
+            _StudyPrimaryIntent: CallbackAction<_StudyPrimaryIntent>(
+              onInvoke: (_) {
+                _handleKeyboardPrimaryAction();
+                return null;
+              },
+            ),
+            _StudyReviewIntent: CallbackAction<_StudyReviewIntent>(
+              onInvoke: (intent) {
+                _handleKeyboardReview(intent!.result);
+                return null;
+              },
+            ),
+          },
+          child: PopScope(
+            canPop: _canPopStudy(),
+            onPopInvokedWithResult: (didPop, _) => _handlePopInvoked(didPop),
+            child: Scaffold(
+              body: SafeArea(
+                child: LayoutBuilder(
+                  builder: (context, viewportConstraints) {
+                    final isWideDesktop =
+                        _isDesktopPlatform() &&
+                        viewportConstraints.maxWidth >= _desktopBreakpoint;
+                    final usesReviewPanel = isWideDesktop && showsReview;
+                    final maxWidth = isWideDesktop
+                        ? _desktopMaxWidth
+                        : AppTheme.contentMaxWidth;
 
-              final modeContent = AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: switch (mode) {
-                  TestMode.multipleChoice => _McqMode(
-                    key: ValueKey('mcq-${card.id}-${state.hasValidatedAnswer}'),
-                    card: card,
-                    options: options,
-                    selectedIndex: state.selectedOptionIndex,
-                    hasValidatedAnswer: state.hasValidatedAnswer,
-                    desktopGrid: isWideDesktop,
-                    showInlineFeedback: !usesReviewPanel,
-                    onSelect: _selectOption,
-                  ),
-                  TestMode.cloze => _ClozeMode(
-                    key: ValueKey(
-                      'cloze-${card.id}-${state.hasValidatedAnswer}',
-                    ),
-                    prompt: card.question,
-                    tokens: clozeTokens,
-                    selectedWords: _clozeSelections,
-                    availableWords: availableClozeWords,
-                    activeGapIndex: _activeClozeGapIndex,
-                    hasValidated: state.hasValidatedAnswer,
-                    isCorrect: state.currentAnswerWasCorrect,
-                    validationResults: clozeResults,
-                    solutionText: clozeSolution,
-                    hint: card.hint,
-                    explanation: card.explanation,
-                    showInlineFeedback: !usesReviewPanel,
-                    onGapTap: _selectClozeGap,
-                    onWordTap: _fillClozeGap,
-                    onSubmit: () => _submitTextAnswer(isCloze: true),
-                  ),
-                  TestMode.freeText => _TextEntryMode(
-                    key: ValueKey(
-                      'free-${card.id}-${state.hasValidatedAnswer}',
-                    ),
-                    title: 'Saisie libre',
-                    prompt: card.question,
-                    hint: card.hint,
-                    controller: _freeTextController,
-                    hasValidated: state.hasValidatedAnswer,
-                    isCorrect: state.currentAnswerWasCorrect,
-                    answerLabel: 'Réponse',
-                    answerText: card.correctAnswer,
-                    explanation: card.explanation,
-                    showInlineFeedback: !usesReviewPanel,
-                    actionLabel: 'Vérifier',
-                    onSubmit: () => _submitTextAnswer(isCloze: false),
-                  ),
-                  TestMode.trueFalse => _TrueFalseMode(
-                    key: ValueKey('tf-${card.id}-${state.hasValidatedAnswer}'),
-                    card: card,
-                    proposition: trueFalseProposition,
-                    propositionIsCorrect: _controller
-                        .isTrueFalsePropositionCorrect(
-                          card,
-                          trueFalseProposition,
+                    final modeContent = AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 220),
+                      child: switch (mode) {
+                        TestMode.multipleChoice => _McqMode(
+                          key: ValueKey(
+                            'mcq-${card.id}-${state.hasValidatedAnswer}',
+                          ),
+                          card: card,
+                          options: options,
+                          selectedIndex: state.selectedOptionIndex,
+                          hasValidatedAnswer: state.hasValidatedAnswer,
+                          desktopGrid: isWideDesktop,
+                          showInlineFeedback: !usesReviewPanel,
+                          onSelect: _selectOption,
                         ),
-                    selectedIndex: state.selectedOptionIndex,
-                    hasValidatedAnswer: state.hasValidatedAnswer,
-                    showInlineFeedback: !usesReviewPanel,
-                    onSelect: (index) {
-                      final correct = _controller.evaluateTrueFalse(
-                        card,
-                        trueFalseProposition,
-                        answeredTrue: index == 0,
-                      );
-                      setState(() {
-                        _state = state.copyWith(
-                          selectedOptionIndex: index,
-                          hasValidatedAnswer: true,
-                          currentAnswerWasCorrect: correct,
-                        );
-                      });
-                    },
-                  ),
-                  _ => _FlashcardMode(
-                    key: ValueKey('flash-${card.id}-${state.revealed}'),
-                    card: card,
-                    revealed: state.revealed,
-                    reversed: mode == TestMode.reversedFlashcard,
-                    showInlineAnswer: !usesReviewPanel,
-                    onReveal: _reveal,
-                  ),
-                },
-              );
+                        TestMode.cloze => _ClozeMode(
+                          key: ValueKey(
+                            'cloze-${card.id}-${state.hasValidatedAnswer}',
+                          ),
+                          prompt: card.question,
+                          tokens: clozeTokens,
+                          selectedWords: _clozeSelections,
+                          availableWords: availableClozeWords,
+                          activeGapIndex: _activeClozeGapIndex,
+                          hasValidated: state.hasValidatedAnswer,
+                          isCorrect: state.currentAnswerWasCorrect,
+                          validationResults: clozeResults,
+                          solutionText: clozeSolution,
+                          hint: card.hint,
+                          explanation: card.explanation,
+                          showInlineFeedback: !usesReviewPanel,
+                          onGapTap: _selectClozeGap,
+                          onWordTap: _fillClozeGap,
+                          onSubmit: () => _submitTextAnswer(isCloze: true),
+                        ),
+                        TestMode.freeText => _TextEntryMode(
+                          key: ValueKey(
+                            'free-${card.id}-${state.hasValidatedAnswer}',
+                          ),
+                          title: 'Saisie libre',
+                          prompt: card.question,
+                          hint: card.hint,
+                          controller: _freeTextController,
+                          hasValidated: state.hasValidatedAnswer,
+                          isCorrect: state.currentAnswerWasCorrect,
+                          answerLabel: 'Réponse',
+                          answerText: card.correctAnswer,
+                          explanation: card.explanation,
+                          showInlineFeedback: !usesReviewPanel,
+                          actionLabel: 'Vérifier',
+                          onSubmit: () => _submitTextAnswer(isCloze: false),
+                        ),
+                        TestMode.trueFalse => _TrueFalseMode(
+                          key: ValueKey(
+                            'tf-${card.id}-${state.hasValidatedAnswer}',
+                          ),
+                          card: card,
+                          proposition: trueFalseProposition,
+                          propositionIsCorrect: _controller
+                              .isTrueFalsePropositionCorrect(
+                                card,
+                                trueFalseProposition,
+                              ),
+                          selectedIndex: state.selectedOptionIndex,
+                          hasValidatedAnswer: state.hasValidatedAnswer,
+                          showInlineFeedback: !usesReviewPanel,
+                          onSelect: (index) {
+                            final correct = _controller.evaluateTrueFalse(
+                              card,
+                              trueFalseProposition,
+                              answeredTrue: index == 0,
+                            );
+                            setState(() {
+                              _state = state.copyWith(
+                                selectedOptionIndex: index,
+                                hasValidatedAnswer: true,
+                                currentAnswerWasCorrect: correct,
+                              );
+                            });
+                          },
+                        ),
+                        _ => _FlashcardMode(
+                          key: ValueKey('flash-${card.id}-${state.revealed}'),
+                          card: card,
+                          revealed: state.revealed,
+                          reversed: mode == TestMode.reversedFlashcard,
+                          showInlineAnswer: !usesReviewPanel,
+                          onReveal: _reveal,
+                        ),
+                      },
+                    );
 
-              return Center(
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxWidth: maxWidth),
-                  child: GestureDetector(
-                    onVerticalDragEnd: (details) {
-                      if (details.primaryVelocity != null &&
-                          details.primaryVelocity! < -200 &&
-                          !state.revealed &&
-                          (mode == TestMode.classicFlashcard ||
-                              mode == TestMode.reversedFlashcard)) {
-                        _reveal();
-                      }
-                    },
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          StudyProgressHeader(
-                            title: state.deckTitle,
-                            currentIndex: state.currentIndex,
-                            total: state.cards.length,
-                            level: card.level,
-                            progressDots: card.progressDots,
-                            onClose: _exitStudy,
-                          ),
-                          const SizedBox(height: 24),
-                          Expanded(
-                            child: usesReviewPanel
-                                ? Row(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.stretch,
-                                    children: [
-                                      Expanded(
-                                        key: const Key('desktop-study-content'),
-                                        child: modeContent,
-                                      ),
-                                      const SizedBox(width: 24),
-                                      SizedBox(
-                                        width: _desktopReviewPanelWidth,
-                                        child: _DesktopReviewPanel(
-                                          feedback: _reviewFeedback(
-                                            mode: mode,
-                                            card: card,
-                                            state: state,
-                                            clozeSolution: clozeSolution,
-                                          ),
-                                          suggested: suggested,
-                                          onReview: _applyReview,
-                                        ),
-                                      ),
-                                    ],
-                                  )
-                                : Align(
-                                    alignment: Alignment.topCenter,
-                                    child: ConstrainedBox(
-                                      constraints: const BoxConstraints(
-                                        maxWidth: AppTheme.contentMaxWidth,
-                                      ),
-                                      child: modeContent,
-                                    ),
-                                  ),
-                          ),
-                          if (showsReview && !usesReviewPanel) ...[
-                            const SizedBox(height: 18),
-                            const SectionLabel('Comment tu t’en es sorti ?'),
-                            const SizedBox(height: 12),
-                            GridView.count(
-                              key: const Key('inline-review-controls'),
-                              crossAxisCount:
-                                  MediaQuery.of(context).size.width > 700
-                                  ? 4
-                                  : 2,
-                              shrinkWrap: true,
-                              physics: const NeverScrollableScrollPhysics(),
-                              crossAxisSpacing: 12,
-                              mainAxisSpacing: 12,
-                              childAspectRatio: 1.55,
+                    return Center(
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: maxWidth),
+                        child: GestureDetector(
+                          onVerticalDragEnd: (details) {
+                            if (details.primaryVelocity != null &&
+                                details.primaryVelocity! < -200 &&
+                                !state.revealed &&
+                                (mode == TestMode.classicFlashcard ||
+                                    mode == TestMode.reversedFlashcard)) {
+                              _reveal();
+                            }
+                          },
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                for (final result in ReviewResult.values)
-                                  ReviewButton(
-                                    result: result,
-                                    isSuggested: result == suggested,
-                                    onPressed: () => _applyReview(result),
+                                StudyProgressHeader(
+                                  title: state.deckTitle,
+                                  currentIndex: state.currentIndex,
+                                  total: state.cards.length,
+                                  level: card.level,
+                                  progressDots: card.progressDots,
+                                  onClose: _exitStudy,
+                                ),
+                                const SizedBox(height: 24),
+                                Expanded(
+                                  child: usesReviewPanel
+                                      ? Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            Expanded(
+                                              key: const Key(
+                                                'desktop-study-content',
+                                              ),
+                                              child: modeContent,
+                                            ),
+                                            const SizedBox(width: 24),
+                                            SizedBox(
+                                              width: _desktopReviewPanelWidth,
+                                              child: _DesktopReviewPanel(
+                                                feedback: _reviewFeedback(
+                                                  mode: mode,
+                                                  card: card,
+                                                  state: state,
+                                                  clozeSolution: clozeSolution,
+                                                ),
+                                                suggested: suggested,
+                                                onReview: _applyReview,
+                                              ),
+                                            ),
+                                          ],
+                                        )
+                                      : Align(
+                                          alignment: Alignment.topCenter,
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth:
+                                                  AppTheme.contentMaxWidth,
+                                            ),
+                                            child: modeContent,
+                                          ),
+                                        ),
+                                ),
+                                if (showsReview && !usesReviewPanel) ...[
+                                  const SizedBox(height: 18),
+                                  const SectionLabel(
+                                    'Comment tu t’en es sorti ?',
                                   ),
+                                  const SizedBox(height: 12),
+                                  GridView.count(
+                                    key: const Key('inline-review-controls'),
+                                    crossAxisCount:
+                                        MediaQuery.of(context).size.width > 700
+                                        ? 4
+                                        : 2,
+                                    shrinkWrap: true,
+                                    physics:
+                                        const NeverScrollableScrollPhysics(),
+                                    crossAxisSpacing: 12,
+                                    mainAxisSpacing: 12,
+                                    childAspectRatio: 1.55,
+                                    children: [
+                                      for (final result in ReviewResult.values)
+                                        ReviewButton(
+                                          result: result,
+                                          isSuggested: result == suggested,
+                                          onPressed: () => _applyReview(result),
+                                        ),
+                                    ],
+                                  ),
+                                  if (_isDesktopPlatform())
+                                    const _KeyboardHint(),
+                                ],
                               ],
                             ),
-                          ],
-                        ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
                 ),
-              );
-            },
+              ),
+            ),
           ),
         ),
       ),
@@ -719,6 +827,34 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       return state.hasValidatedAnswer;
     }
     return state.revealed;
+  }
+}
+
+class _StudyPrimaryIntent extends Intent {
+  const _StudyPrimaryIntent();
+}
+
+class _StudyReviewIntent extends Intent {
+  const _StudyReviewIntent(this.result);
+
+  final ReviewResult result;
+}
+
+class _KeyboardHint extends StatelessWidget {
+  const _KeyboardHint();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Text(
+        'Clavier : 1 Encore · 2 Difficile · 3 Correct · 4 Facile',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
   }
 }
 
@@ -843,6 +979,7 @@ class _DesktopReviewPanel extends StatelessWidget {
                     );
                   },
                 ),
+                const _KeyboardHint(),
               ],
             ),
           ),

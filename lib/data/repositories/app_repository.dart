@@ -131,12 +131,14 @@ class AppRepository {
   }
 
   Stream<StatisticsOverview> watchStatisticsOverview() {
-    return combineLatest3(
+    return combineLatest5(
+      _watchCollections(),
       _watchFlashcards(),
       _watchReviewTotals(),
+      _watchReviewLogs(),
       _clockStream(),
-      (flashcards, totals, now) =>
-          _buildStatisticsOverview(flashcards, totals, now),
+      (collections, flashcards, totals, logs, now) =>
+          _buildStatisticsOverview(collections, flashcards, totals, logs, now),
     );
   }
 
@@ -812,6 +814,29 @@ class AppRepository {
         .map(_toReviewTotals);
   }
 
+  Stream<List<ReviewLogRecord>> _watchReviewLogs() {
+    return _db
+        .select(_db.reviewLogs)
+        .watch()
+        .map(
+          (rows) => rows
+              .map(
+                (row) => ReviewLogRecord(
+                  id: row.id,
+                  flashcardId: row.flashcardId,
+                  collectionId: row.collectionId,
+                  deckId: row.deckId,
+                  reviewResult: row.reviewResult,
+                  testMode: row.testMode,
+                  wasCorrect: row.wasCorrect,
+                  createdAt: row.createdAt,
+                  scheduledDueAt: row.scheduledDueAt,
+                ),
+              )
+              .toList(),
+        );
+  }
+
   Stream<Map<String, int>> _watchErrorCountsByCollection() {
     return _db
         .customSelect(
@@ -1183,8 +1208,10 @@ class AppRepository {
   }
 
   StatisticsOverview _buildStatisticsOverview(
+    List<CollectionRecord> collections,
     List<FlashcardRecord> flashcards,
     _ReviewTotals totals,
+    List<ReviewLogRecord> logs,
     DateTime now,
   ) {
     final localNow = now.toLocal();
@@ -1207,6 +1234,77 @@ class AppRepository {
       levelCounts.update(card.level, (value) => value + 1, ifAbsent: () => 1);
     }
     final maxLevel = levelCounts.values.fold<int>(1, math.max);
+
+    final trend = List.generate(14, (index) {
+      final date = DateTime(
+        localNow.year,
+        localNow.month,
+        localNow.day,
+      ).subtract(Duration(days: 13 - index));
+      final dayLogs = logs.where((log) {
+        final created = log.createdAt.toLocal();
+        return created.year == date.year &&
+            created.month == date.month &&
+            created.day == date.day;
+      }).toList();
+      final correct = dayLogs.where((log) => log.wasCorrect).length;
+      return StatisticsTrendPoint(
+        label: '${date.day}/${date.month}',
+        reviewCount: dayLogs.length,
+        successRate: dayLogs.isEmpty ? 0 : correct / dayLogs.length,
+      );
+    });
+
+    final collectionNames = {
+      for (final collection in collections) collection.id: collection.name,
+    };
+    final collectionGroups = <String, List<ReviewLogRecord>>{};
+    for (final log in logs) {
+      collectionGroups.putIfAbsent(log.collectionId, () => []).add(log);
+    }
+    final collectionProgress = collectionGroups.entries.map((entry) {
+      final correct = entry.value.where((log) => log.wasCorrect).length;
+      return CollectionStatistics(
+        name: collectionNames[entry.key] ?? 'Collection supprimée',
+        reviewCount: entry.value.length,
+        successRate: correct / entry.value.length,
+      );
+    }).toList()..sort((a, b) => b.reviewCount.compareTo(a.reviewCount));
+
+    final modeGroups = <TestMode, List<ReviewLogRecord>>{};
+    for (final log in logs) {
+      modeGroups.putIfAbsent(log.testMode, () => []).add(log);
+    }
+    final modeProgress = modeGroups.entries.map((entry) {
+      final correct = entry.value.where((log) => log.wasCorrect).length;
+      return ModeStatistics(
+        mode: entry.key,
+        reviewCount: entry.value.length,
+        successRate: correct / entry.value.length,
+      );
+    }).toList()..sort((a, b) => b.reviewCount.compareTo(a.reviewCount));
+
+    final cardGroups = <String, List<ReviewLogRecord>>{};
+    for (final log in logs) {
+      cardGroups.putIfAbsent(log.flashcardId, () => []).add(log);
+    }
+    final cardsById = {for (final card in flashcards) card.id: card};
+    final difficultCards =
+        cardGroups.entries
+            .map((entry) {
+              final card = cardsById[entry.key];
+              final errors = entry.value.where((log) => !log.wasCorrect).length;
+              final correct = entry.value.where((log) => log.wasCorrect).length;
+              return DifficultCardStatistics(
+                question: card?.question ?? 'Carte supprimée',
+                errorCount: errors,
+                reviewCount: entry.value.length,
+                successRate: correct / entry.value.length,
+              );
+            })
+            .where((item) => item.errorCount > 0)
+            .toList()
+          ..sort((a, b) => b.errorCount.compareTo(a.errorCount));
 
     LevelProgress level(
       int value,
@@ -1246,6 +1344,10 @@ class AppRepository {
           Icons.psychology_alt_rounded,
         ),
       ],
+      successTrend: trend,
+      collectionProgress: collectionProgress,
+      modeProgress: modeProgress,
+      difficultCards: difficultCards.take(5).toList(),
     );
   }
 

@@ -282,6 +282,11 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor])
     : super(executor ?? openMemFlowConnection());
 
+  static Future<AppDatabase> open() async {
+    final executor = await openMemFlowConnectionWithKey();
+    return AppDatabase(executor);
+  }
+
   AppDatabase.memory() : super(openMemoryConnection());
 
   @override

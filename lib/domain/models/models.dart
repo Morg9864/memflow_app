@@ -438,6 +438,10 @@ class StatisticsOverview {
     required this.studyDays,
     required this.heatmap,
     required this.levelProgress,
+    required this.successTrend,
+    required this.collectionProgress,
+    required this.modeProgress,
+    required this.difficultCards,
   });
 
   final int streakDays;
@@ -446,6 +450,60 @@ class StatisticsOverview {
   final int studyDays;
   final List<HeatmapCell> heatmap;
   final List<LevelProgress> levelProgress;
+  final List<StatisticsTrendPoint> successTrend;
+  final List<CollectionStatistics> collectionProgress;
+  final List<ModeStatistics> modeProgress;
+  final List<DifficultCardStatistics> difficultCards;
+}
+
+class StatisticsTrendPoint {
+  const StatisticsTrendPoint({
+    required this.label,
+    required this.reviewCount,
+    required this.successRate,
+  });
+
+  final String label;
+  final int reviewCount;
+  final double successRate;
+}
+
+class CollectionStatistics {
+  const CollectionStatistics({
+    required this.name,
+    required this.reviewCount,
+    required this.successRate,
+  });
+
+  final String name;
+  final int reviewCount;
+  final double successRate;
+}
+
+class ModeStatistics {
+  const ModeStatistics({
+    required this.mode,
+    required this.reviewCount,
+    required this.successRate,
+  });
+
+  final TestMode mode;
+  final int reviewCount;
+  final double successRate;
+}
+
+class DifficultCardStatistics {
+  const DifficultCardStatistics({
+    required this.question,
+    required this.errorCount,
+    required this.reviewCount,
+    required this.successRate,
+  });
+
+  final String question;
+  final int errorCount;
+  final int reviewCount;
+  final double successRate;
 }
 
 class CsvImportIssue {

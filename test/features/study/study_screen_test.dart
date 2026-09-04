@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memflow/app/app_scaffold_messenger.dart';
@@ -207,6 +208,30 @@ void main() {
       expect(controller.submissions.length, 2);
     },
   );
+
+  testWidgets('number shortcuts submit the selected review immediately', (
+    tester,
+  ) async {
+    final controller = _FakeStudyController(
+      initialState: buildState([buildCard('a'), buildCard('b')]),
+      submitReviewImpl:
+          ({
+            required String cardId,
+            required ReviewResult result,
+            required bool wasCorrect,
+          }) async {},
+    );
+
+    await pumpStudyScreen(tester, controller: controller);
+
+    await tester.tap(find.text('Réponse a'));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit3);
+    await tester.pump();
+
+    expect(find.text('Question b'), findsOneWidget);
+    expect(controller.submissions.single.result, ReviewResult.good);
+  });
 
   testWidgets(
     'structured cloze mode fills blanks from the word bank and validates the full text',

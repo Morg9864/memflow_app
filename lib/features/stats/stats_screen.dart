@@ -89,6 +89,8 @@ class StatisticsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 20),
+            _StatisticsDetails(data: data),
+            const SizedBox(height: 20),
             const SectionLabel('Progression par niveau'),
             const SizedBox(height: 12),
             ...data.levelProgress.map(
@@ -134,6 +136,155 @@ class StatisticsScreen extends ConsumerWidget {
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Text(error.toString()),
+      ),
+    );
+  }
+}
+
+class _StatisticsDetails extends StatelessWidget {
+  const _StatisticsDetails({required this.data});
+
+  final StatisticsOverview data;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionLabel('Évolution de la réussite'),
+        const SizedBox(height: 12),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: data.successTrend.map((point) {
+                final height = point.reviewCount == 0
+                    ? 8.0
+                    : 12 + point.successRate * 64;
+                return Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Column(
+                      children: [
+                        Text(
+                          point.reviewCount == 0
+                              ? '—'
+                              : '${(point.successRate * 100).round()}%',
+                          style: Theme.of(context).textTheme.labelSmall,
+                        ),
+                        const SizedBox(height: 4),
+                        Container(
+                          height: height,
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).colorScheme.primary,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          point.label,
+                          style: Theme.of(context).textTheme.labelSmall,
+                          overflow: TextOverflow.clip,
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+        if (data.collectionProgress.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          const SectionLabel('Progression par collection'),
+          const SizedBox(height: 12),
+          ...data.collectionProgress.map(
+            (item) => _MetricRow(
+              title: item.name,
+              detail:
+                  '${item.reviewCount} cartes · ${_percent(item.successRate)}',
+              value: item.successRate,
+            ),
+          ),
+        ],
+        if (data.modeProgress.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          const SectionLabel('Réussite par mode'),
+          const SizedBox(height: 12),
+          ...data.modeProgress.map(
+            (item) => _MetricRow(
+              title: item.mode.label,
+              detail:
+                  '${item.reviewCount} cartes · ${_percent(item.successRate)}',
+              value: item.successRate,
+            ),
+          ),
+        ],
+        if (data.difficultCards.isNotEmpty) ...[
+          const SizedBox(height: 20),
+          const SectionLabel('Cartes les plus difficiles'),
+          const SizedBox(height: 12),
+          ...data.difficultCards.map(
+            (item) => Card(
+              child: ListTile(
+                title: Text(
+                  item.question,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  '${item.errorCount} erreur${item.errorCount > 1 ? 's' : ''} · ${item.reviewCount} vues',
+                ),
+                trailing: Text(_percent(item.successRate)),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  static String _percent(double value) => '${(value * 100).round()}%';
+}
+
+class _MetricRow extends StatelessWidget {
+  const _MetricRow({
+    required this.title,
+    required this.detail,
+    required this.value,
+  });
+
+  final String title;
+  final String detail;
+  final double value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                  ),
+                  Text(detail, style: Theme.of(context).textTheme.bodySmall),
+                ],
+              ),
+              const SizedBox(height: 9),
+              ProgressPill(value: value),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -237,6 +237,13 @@ void main() {
     expect(stats.studyDays, 1);
     expect(stats.streakDays, 1);
     expect(stats.heatmap.last.count, 2);
+    expect(stats.successTrend.last.reviewCount, 2);
+    expect(stats.successTrend.last.successRate, 0.5);
+    expect(stats.collectionProgress.single.name, 'Systèmes');
+    expect(stats.collectionProgress.single.successRate, 0.5);
+    expect(stats.modeProgress.single.mode, TestMode.multipleChoice);
+    expect(stats.modeProgress.single.successRate, 0.5);
+    expect(stats.difficultCards.single.errorCount, 1);
   });
 
   test('le compteur d\'erreurs remonte par collection', () async {

@@ -36,7 +36,8 @@ dependencies:
     go_router: ^17.2.3
     drift: ^2.33.0
     drift_flutter: ^0.3.0
-    sqlite3_flutter_libs: ^0.6.0+eol
+    flutter_secure_storage: ^10.3.1
+    path_provider: ^2.1.5
     shared_preferences: ^2.5.5
     connectivity_plus: ^7.3.0
     supabase_flutter: ^2.12.2
@@ -67,3 +68,8 @@ flutter:
         - design/
         - memflow.png
         - prompt_csv_memflow_neutre.md
+
+hooks:
+    user_defines:
+        sqlite3:
+            source: sqlite3mc

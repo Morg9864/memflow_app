@@ -1,6 +1,6 @@
 # Sécurité du stockage local
 
-## État audité
+## État implémenté
 
 MemFlow utilise Drift avec `drift_flutter` :
 
@@ -9,50 +9,25 @@ MemFlow utilise Drift avec `drift_flutter` :
   `package:sqlite3` ;
 - sur le Web, Drift charge `web/sqlite3.wasm`, qui est également la build
   SQLite standard ;
-- `sqlcipher_flutter_libs` apparaît dans le lockfile comme dépendance
-  transitive historique de `drift_flutter`, mais n'est pas configuré comme
-  bibliothèque d'exécution et ne chiffre donc pas la base.
+La base persistante native est maintenant ouverte avec SQLite3MultipleCiphers,
+sélectionné par `hooks.user_defines`, puis protégée par `PRAGMA key` avant que
+Drift n'exécute ses migrations. Une clé aléatoire de 256 bits est générée une
+fois par installation et stockée par `flutter_secure_storage` (KeyStore
+Android / Keychain Apple). Elle n'est jamais écrite dans SQLite, les
+préférences ou le dépôt.
 
-La base persistante actuelle n'est pas chiffrée au niveau SQLite. Les tests
-avec `AppDatabase.memory()` ne permettent pas de conclure à un chiffrement
-du fichier persistant.
+L'ouverture de la base est asynchrone et terminée dans le bootstrap avant le
+lancement de l'interface. La même clé, qui est une donnée sérialisable, est
+transmise au callback exécuté dans l'isolate Drift. Les fichiers SQLite en
+clair créés par les anciennes versions sont convertis avec `PRAGMA rekey` avant
+l'ouverture chiffrée ; en cas d'échec de lecture préalable, le fichier n'est
+pas modifié.
 
-## Pourquoi le chiffrement n'est pas activé ici
+Le Web reste volontairement sur `sqlite3.wasm` standard : son stockage n'est
+pas chiffré au niveau SQLite. La protection annoncée ici concerne Android et
+iOS (ainsi que les autres plateformes natives qui embarquent la build
+SQLite3MultipleCiphers).
 
-La version actuelle de `package:sqlite3` sait charger SQLite3MultipleCiphers
-via un `hooks.user_defines` (`source: sqlite3mc`) et Drift expose bien un
-callback `setup` pour exécuter `PRAGMA key`. Cela rend le moteur disponible,
-mais pas l'intégration complète et sûre de MemFlow :
-
-1. La clé doit être générée par installation et conservée dans le trousseau
-   natif (`flutter_secure_storage`), jamais dans SQLite, les préférences
-   ordinaires, le dépôt ou une constante compilée.
-2. La connexion Drift est créée avant l'authentification et peut être ouverte
-   dans un isolate. Il faut donc résoudre la clé de manière asynchrone puis
-   la transmettre explicitement à chaque isolate avant l'ouverture SQLite.
-3. Les installations existantes possèdent potentiellement un fichier SQLite
-   en clair. Ajouter `PRAGMA key` ne le convertit pas : sans migration
-   contrôlée (sauvegarde, ouverture en clair, `rekey`, validation puis
-   remplacement atomique), l'application peut perdre l'accès aux données.
-4. Le Web actuel charge `sqlite3.wasm`, pas `sqlite3mc.wasm`. Activer seulement
-   le natif créerait une garantie différente selon la plateforme. La variante
-   WASM chiffrée est expérimentale et nécessite aussi une stratégie de clé
-   adaptée au stockage navigateur.
-
-Pour ces raisons, aucun `PRAGMA key` factice, clé codée en dur, chiffrement
-applicatif incomplet ou dépendance décorative n'a été ajouté.
-
-## Préparation requise pour une implémentation future
-
-Avant d'activer cette fonctionnalité, il faudra une tranche dédiée qui :
-
-- ajoute et configure le trousseau natif avec une politique de suppression /
-  réinstallation explicitement décidée ;
-- sélectionne SQLite3MultipleCiphers sur les plateformes supportées ;
-- implémente une migration des bases en clair avec remplacement atomique et
-  récupération en cas d'échec ;
-- définit séparément la politique Web (WASM chiffré expérimental ou absence
-  explicitement assumée) ;
-- teste réellement les octets du fichier : absence d'en-tête SQLite et de
-  marqueur en clair, réouverture avec la bonne clé, échec avec une mauvaise
-  clé, et migration d'une base existante.
+La suppression du trousseau, la réinstallation de l'application ou un appareil
+réinitialisé rendent la base chiffrée irrécupérable sans sauvegarde exportée,
+ce qui est le comportement attendu d'une clé par installation.

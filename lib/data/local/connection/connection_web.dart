@@ -11,6 +11,9 @@ QueryExecutor openMemFlowConnection() {
   );
 }
 
+Future<QueryExecutor> openMemFlowConnectionWithKey() async =>
+    openMemFlowConnection();
+
 QueryExecutor openMemoryConnection() {
   throw UnsupportedError(
     'In-memory drift connections are not available on the web.',

@@ -51,7 +51,7 @@ class AppBootstrap {
     return AppBootstrap(
       preferences: preferences,
       environment: environment,
-      database: AppDatabase(),
+      database: await AppDatabase.open(),
     );
   }
 }
