@@ -15,6 +15,18 @@ void main() {
   tearDown(() => database.close());
 
   group('retour de la connectivité', () {
+    test('distingue une erreur serveur d’une erreur réseau', () {
+      final server = SyncService.classifyFailure(
+        const PostgrestException(message: 'permission denied', code: '42501'),
+      );
+      expect(server.kind, SyncFailureKind.server);
+
+      final network = SyncService.classifyFailure(
+        StateError('network connection timeout'),
+      );
+      expect(network.kind, SyncFailureKind.network);
+    });
+
     test('déclenche immédiatement une synchronisation', () async {
       final networkChanges = StreamController<bool>();
       addTearDown(networkChanges.close);

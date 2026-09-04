@@ -8,6 +8,14 @@ import 'package:memflow/domain/services/csv_import_service.dart';
 void main() {
   final service = CsvImportService(const CardModeService());
 
+  test('empty backup is rejected before decoding', () {
+    final preview = service.parse(const []);
+
+    expect(preview.cards, isEmpty);
+    expect(preview.issues, hasLength(1));
+    expect(preview.issues.single.message, 'Le fichier CSV est vide.');
+  });
+
   test('legacy CSV rows keep free text but no longer activate cloze', () {
     final csv = [
       'collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers',

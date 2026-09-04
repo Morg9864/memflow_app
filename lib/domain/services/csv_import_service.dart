@@ -31,14 +31,40 @@ class CsvImportService {
   ];
 
   CsvImportPreview parse(List<int> bytes) {
+    if (bytes.isEmpty) {
+      return const CsvImportPreview(
+        cards: [],
+        issues: [
+          CsvImportIssue(rowNumber: 0, message: 'Le fichier CSV est vide.'),
+        ],
+        delimiter: ';',
+        withHeader: true,
+      );
+    }
     final raw = utf8
         .decode(bytes, allowMalformed: true)
         .replaceAll('\r\n', '\n');
     final delimiter = _detectDelimiter(raw);
-    final rows = CsvDecoder(
-      fieldDelimiter: delimiter,
-      dynamicTyping: false,
-    ).convert(raw);
+    final List<List<dynamic>> rows;
+    try {
+      rows = CsvDecoder(
+        fieldDelimiter: delimiter,
+        dynamicTyping: false,
+      ).convert(raw);
+    } on FormatException {
+      return CsvImportPreview(
+        cards: const [],
+        issues: const [
+          CsvImportIssue(
+            rowNumber: 0,
+            message:
+                'Le fichier CSV est mal formé et ne peut pas être restauré.',
+          ),
+        ],
+        delimiter: delimiter,
+        withHeader: false,
+      );
+    }
 
     if (rows.isEmpty) {
       return const CsvImportPreview(

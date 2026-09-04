@@ -362,6 +362,7 @@ class _SyncStatusLine extends ConsumerWidget {
     final theme = Theme.of(context);
     final status = ref.watch(syncStatusProvider).value;
     final pending = status?.pendingCount ?? 0;
+    final lastSynced = status?.lastSyncedAt;
 
     final (icon, title, detail, color) = switch (status?.state) {
       SyncState.offline => (
@@ -379,6 +380,13 @@ class _SyncStatusLine extends ConsumerWidget {
             ? 'Les dernières données sont en cours de vérification.'
             : '$pending modification${pending > 1 ? 's' : ''} en attente d\'envoi.',
         theme.colorScheme.primary,
+      ),
+      SyncState.error => (
+        Icons.cloud_off_outlined,
+        'Synchronisation impossible',
+        status?.errorMessage ??
+            'La synchronisation a échoué. Réessaie plus tard.',
+        theme.colorScheme.error,
       ),
       null || SyncState.idle => (
         Icons.cloud_done_outlined,
@@ -401,25 +409,56 @@ class _SyncStatusLine extends ConsumerWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withValues(alpha: 0.28)),
         ),
-        child: Row(
+        child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, size: 22, color: color),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: theme.textTheme.titleSmall),
-                  const SizedBox(height: 3),
-                  Text(detail, style: theme.textTheme.bodySmall),
-                ],
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(icon, size: 22, color: color),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: theme.textTheme.titleSmall),
+                      const SizedBox(height: 3),
+                      Text(detail, style: theme.textTheme.bodySmall),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            if (lastSynced != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Dernière synchronisation : ${_formatSyncDate(lastSynced)}',
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+            const SizedBox(height: 8),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                key: const ValueKey('sync-now-button'),
+                onPressed: status?.state == SyncState.syncing
+                    ? null
+                    : () => ref.read(syncServiceProvider).syncNow(),
+                icon: const Icon(Icons.sync_rounded, size: 18),
+                label: const Text('Synchroniser maintenant'),
               ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  String _formatSyncDate(DateTime date) {
+    final local = date.toLocal();
+    String two(int value) => value.toString().padLeft(2, '0');
+    return '${two(local.day)}/${two(local.month)}/${local.year} à '
+        '${two(local.hour)}:${two(local.minute)}';
   }
 }
 

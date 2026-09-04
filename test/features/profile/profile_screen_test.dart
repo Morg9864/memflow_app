@@ -34,7 +34,45 @@ void main() {
     );
 
     expect(find.text('Hors ligne'), findsOneWidget);
-    expect(find.textContaining('Aucune modification en attente'), findsOneWidget);
+    expect(
+      find.textContaining('Aucune modification en attente'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('shows the last sync time and manual sync action', (
+    tester,
+  ) async {
+    await _pumpProfile(
+      tester,
+      SyncStatus(
+        state: SyncState.idle,
+        pendingCount: 0,
+        lastSyncedAt: DateTime(2026, 9, 4, 14, 5),
+      ),
+    );
+
+    expect(find.textContaining('Dernière synchronisation'), findsOneWidget);
+    expect(find.textContaining('04/09/2026 à 14:05'), findsOneWidget);
+    expect(find.byKey(const ValueKey('sync-now-button')), findsOneWidget);
+  });
+
+  testWidgets('explains a server synchronization failure', (tester) async {
+    await _pumpProfile(
+      tester,
+      const SyncStatus(
+        state: SyncState.error,
+        pendingCount: 2,
+        failureKind: SyncFailureKind.server,
+        errorMessage: 'Le serveur a refusé la synchronisation.',
+      ),
+    );
+
+    expect(find.text('Synchronisation impossible'), findsOneWidget);
+    expect(
+      find.text('Le serveur a refusé la synchronisation.'),
+      findsOneWidget,
+    );
   });
 }
 

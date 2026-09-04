@@ -6,18 +6,26 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../domain/models/models.dart';
 import '../local/database.dart';
 
-enum SyncState { idle, syncing, offline }
+enum SyncState { idle, syncing, offline, error }
+
+enum SyncFailureKind { network, server, unknown }
 
 class SyncStatus {
   const SyncStatus({
     required this.state,
     required this.pendingCount,
     this.lastSyncedAt,
+    this.lastAttemptAt,
+    this.failureKind,
+    this.errorMessage,
   });
 
   final SyncState state;
   final int pendingCount;
   final DateTime? lastSyncedAt;
+  final DateTime? lastAttemptAt;
+  final SyncFailureKind? failureKind;
+  final String? errorMessage;
 
   bool get hasPendingWrites => pendingCount > 0;
 }
@@ -51,9 +59,8 @@ class SyncService {
        _networkChanges =
            networkChanges ??
            Connectivity().onConnectivityChanged.map(
-             (results) => results.any(
-               (result) => result != ConnectivityResult.none,
-             ),
+             (results) =>
+                 results.any((result) => result != ConnectivityResult.none),
            );
 
   static const _tables = ['collections', 'decks', 'flashcards', 'review_logs'];
@@ -87,7 +94,9 @@ class SyncService {
     _listenToRemoteChanges();
     _listenToNetworkChanges();
     _retryTimer ??= Timer.periodic(_retryInterval, (_) {
-      if (_status.hasPendingWrites || _status.state == SyncState.offline) {
+      if (_status.hasPendingWrites ||
+          _status.state == SyncState.offline ||
+          _status.state == SyncState.error) {
         unawaited(syncNow());
       }
     });
@@ -143,7 +152,15 @@ class SyncService {
       return;
     }
 
-    _emit(_status.copyWith(state: SyncState.syncing));
+    final attemptAt = DateTime.now();
+    _emit(
+      SyncStatus(
+        state: SyncState.syncing,
+        pendingCount: _status.pendingCount,
+        lastSyncedAt: _status.lastSyncedAt,
+        lastAttemptAt: attemptAt,
+      ),
+    );
     try {
       await _pushPending();
       await _pull();
@@ -152,19 +169,55 @@ class SyncService {
           state: SyncState.idle,
           pendingCount: await _pendingCount(),
           lastSyncedAt: DateTime.now(),
+          lastAttemptAt: attemptAt,
         ),
       );
-    } catch (_) {
-      // Réseau indisponible ou requête refusée : la file reste intacte et le
-      // prochain passage réessaiera.
+    } catch (error) {
+      final failure = classifyFailure(error);
+      // La file reste intacte dans tous les cas. Un échec serveur est
+      // distingué d'une absence de réseau afin que l'utilisateur puisse agir.
       _emit(
         SyncStatus(
-          state: SyncState.offline,
+          state: failure.kind == SyncFailureKind.network
+              ? SyncState.offline
+              : SyncState.error,
           pendingCount: await _pendingCount(),
           lastSyncedAt: _status.lastSyncedAt,
+          lastAttemptAt: attemptAt,
+          failureKind: failure.kind,
+          errorMessage: failure.message,
         ),
       );
     }
+  }
+
+  static ({SyncFailureKind kind, String message}) classifyFailure(
+    Object error,
+  ) {
+    // PostgREST errors mean that the server was reached, even for 4xx/5xx.
+    if (error is PostgrestException) {
+      return (
+        kind: SyncFailureKind.server,
+        message: 'Le serveur a refusé la synchronisation. Réessaie plus tard.',
+      );
+    }
+    final type = error.runtimeType.toString().toLowerCase();
+    final text = error.toString().toLowerCase();
+    if (type.contains('socket') ||
+        type.contains('timeout') ||
+        type.contains('clientexception') ||
+        text.contains('connection') ||
+        text.contains('network') ||
+        text.contains('timeout')) {
+      return (
+        kind: SyncFailureKind.network,
+        message: 'Connexion indisponible. Les changements restent en attente.',
+      );
+    }
+    return (
+      kind: SyncFailureKind.unknown,
+      message: 'La synchronisation a échoué. Réessaie plus tard.',
+    );
   }
 
   // --- Push ---------------------------------------------------------------
@@ -557,6 +610,7 @@ extension on SyncStatus {
       state: state ?? this.state,
       pendingCount: pendingCount ?? this.pendingCount,
       lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
+      lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
     );
   }
 }

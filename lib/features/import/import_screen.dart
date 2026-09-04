@@ -66,6 +66,25 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     );
   }
 
+  Future<void> _downloadBackup() async {
+    setState(() => _isBusy = true);
+    try {
+      final csv = await ref.read(appRepositoryProvider).exportAllCardsCsv();
+      final stamp = DateTime.now().toIso8601String().substring(0, 10);
+      await FilePicker.saveFile(
+        dialogTitle: 'Sauvegarder mes cartes',
+        fileName: 'memflow_backup_$stamp.csv',
+        type: FileType.custom,
+        allowedExtensions: const ['csv'],
+        bytes: utf8.encode(csv),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _isBusy = false);
+      }
+    }
+  }
+
   Future<void> _downloadPrompt() async {
     final prompt = _csvPrompt;
     if (prompt == null) {
@@ -97,6 +116,30 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   Future<void> _confirmImport() async {
     final preview = _preview;
     if (preview == null || preview.cards.isEmpty) {
+      return;
+    }
+    final shouldImport = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmer la restauration'),
+        content: Text(
+          '${preview.cards.length} cartes seront ajoutées à vos données locales. '
+          'Les cartes déjà présentes ne seront pas supprimées. '
+          'Pour éviter les doublons, utilisez une sauvegarde complète sur une base vide.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Annuler'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Restaurer'),
+          ),
+        ],
+      ),
+    );
+    if (shouldImport != true || !mounted) {
       return;
     }
     setState(() => _isBusy = true);
@@ -156,6 +199,15 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isBusy ? null : _downloadBackup,
+              icon: const Icon(Icons.save_alt_rounded),
+              label: const Text('Sauvegarder toutes mes cartes'),
+            ),
           ),
           const SizedBox(height: 22),
           Card(

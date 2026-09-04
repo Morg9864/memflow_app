@@ -5,28 +5,30 @@ import '../models/models.dart';
 class CsvExportService {
   const CsvExportService();
 
+  /// Header shared by templates and backups. Keeping the format flat and
+  /// human-readable means backups remain compatible with the existing import.
+  static const header = [
+    'collection',
+    'deck',
+    'question',
+    'correct_answer',
+    'wrong_answer_1',
+    'wrong_answer_2',
+    'wrong_answer_3',
+    'hint',
+    'explanation',
+    'level',
+    'difficulty',
+    'tags',
+    'source',
+    'cloze_text',
+    'accepted_answers',
+    'cloze_answers',
+    'cloze_word_bank',
+  ];
+
   String buildTemplate() {
-    final rows = [
-      const [
-        'collection',
-        'deck',
-        'question',
-        'correct_answer',
-        'wrong_answer_1',
-        'wrong_answer_2',
-        'wrong_answer_3',
-        'hint',
-        'explanation',
-        'level',
-        'difficulty',
-        'tags',
-        'source',
-        'cloze_text',
-        'accepted_answers',
-        'cloze_answers',
-        'cloze_word_bank',
-      ],
-    ];
+    final rows = [header];
 
     return Csv(fieldDelimiter: ';').encode(rows);
   }
@@ -36,27 +38,7 @@ class CsvExportService {
     Map<String, String> collectionsById,
     Map<String, String> decksById,
   ) {
-    final rows = <List<String>>[
-      const [
-        'collection',
-        'deck',
-        'question',
-        'correct_answer',
-        'wrong_answer_1',
-        'wrong_answer_2',
-        'wrong_answer_3',
-        'hint',
-        'explanation',
-        'level',
-        'difficulty',
-        'tags',
-        'source',
-        'cloze_text',
-        'accepted_answers',
-        'cloze_answers',
-        'cloze_word_bank',
-      ],
-    ];
+    final rows = <List<String>>[header];
 
     for (final card in cards) {
       final wrongAnswers = card.wrongAnswers;
