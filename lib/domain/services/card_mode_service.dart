@@ -1,4 +1,5 @@
 import '../models/models.dart';
+import 'answer_rules.dart';
 
 class CardModeService {
   const CardModeService();
@@ -19,11 +20,15 @@ class CardModeService {
       TestMode.reversedFlashcard,
     ];
 
-    if (_supportsStructuredCloze(
-      clozeText: clozeText,
-      clozeAnswers: clozeAnswers,
-      clozeWordBank: clozeWordBank,
-    )) {
+    if (clozeText != null &&
+        clozeAnswers.isNotEmpty &&
+        clozeWordBank.isNotEmpty &&
+        validateStructuredCloze(
+              clozeText: clozeText,
+              clozeAnswers: clozeAnswers,
+              clozeWordBank: clozeWordBank,
+            ) ==
+            null) {
       modes.add(TestMode.cloze);
     }
 
@@ -38,60 +43,6 @@ class CardModeService {
     }
 
     return modes;
-  }
-
-  bool _supportsStructuredCloze({
-    required String? clozeText,
-    required List<String> clozeAnswers,
-    required List<String> clozeWordBank,
-  }) {
-    if (clozeText == null || clozeAnswers.isEmpty || clozeWordBank.isEmpty) {
-      return false;
-    }
-
-    final holeCount = RegExp(r'\{\{([^}]+)\}\}').allMatches(clozeText).length;
-    if (holeCount == 0 || holeCount != clozeAnswers.length) {
-      return false;
-    }
-
-    return _containsRequiredWords(
-      haystack: clozeWordBank,
-      needles: clozeAnswers,
-    );
-  }
-
-  bool _containsRequiredWords({
-    required List<String> haystack,
-    required List<String> needles,
-  }) {
-    final availableCounts = <String, int>{};
-    for (final word in haystack) {
-      final normalized = _normalize(word);
-      availableCounts.update(
-        normalized,
-        (count) => count + 1,
-        ifAbsent: () => 1,
-      );
-    }
-
-    for (final answer in needles) {
-      final normalized = _normalize(answer);
-      final count = availableCounts[normalized] ?? 0;
-      if (count == 0) {
-        return false;
-      }
-      availableCounts[normalized] = count - 1;
-    }
-
-    return true;
-  }
-
-  String _normalize(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
   }
 
   /// Mode à présenter la prochaine fois. [playedMode] est le mode réellement

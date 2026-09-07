@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:csv/csv.dart';
 
 import '../models/models.dart';
+import 'answer_rules.dart';
 import 'card_mode_service.dart';
 
 class CsvImportService {
@@ -265,103 +266,26 @@ class CsvImportService {
       return null;
     }
 
-    if (clozeText == null || clozeText.trim().isEmpty) {
-      return 'Le mode texte à trous nécessite un cloze_text lorsque cloze_answers ou cloze_word_bank est renseigné.';
-    }
-
-    final placeholders = _extractClozePlaceholders(clozeText);
-    if (placeholders.isEmpty) {
-      return 'cloze_text doit contenir au moins un trou au format {{réponse}}.';
-    }
-
-    if (clozeAnswers.length != placeholders.length) {
-      return 'Le nombre de cloze_answers doit correspondre exactement au nombre de trous dans cloze_text.';
-    }
-
-    if (clozeWordBank.isEmpty) {
-      return 'cloze_word_bank est obligatoire pour activer un vrai texte à trous.';
-    }
-
-    final missingAnswers = _findMissingRequiredWords(
-      haystack: clozeWordBank,
-      needles: clozeAnswers,
+    final issue = validateStructuredCloze(
+      clozeText: clozeText,
+      clozeAnswers: clozeAnswers,
+      clozeWordBank: clozeWordBank,
     );
-    if (missingAnswers.isNotEmpty) {
-      return 'cloze_word_bank doit contenir toutes les bonnes réponses. Manquantes : ${missingAnswers.join(', ')}.';
-    }
-
-    final duplicatedWords = _findDuplicateWords(
-      clozeWordBank,
-      allowedDuplicates: _countByNormalized(clozeAnswers),
-    );
-    if (duplicatedWords.isNotEmpty) {
-      return 'cloze_word_bank contient des doublons inutiles : ${duplicatedWords.join(', ')}.';
-    }
-
-    return null;
-  }
-
-  List<String> _extractClozePlaceholders(String text) {
-    return RegExp(
-      r'\{\{([^}]+)\}\}',
-    ).allMatches(text).map((match) => match.group(1)!.trim()).toList();
-  }
-
-  List<String> _findMissingRequiredWords({
-    required List<String> haystack,
-    required List<String> needles,
-  }) {
-    final available = _countByNormalized(haystack);
-    final missing = <String>[];
-
-    for (final needle in needles) {
-      final normalized = _normalize(needle);
-      final count = available[normalized] ?? 0;
-      if (count == 0) {
-        missing.add(needle);
-        continue;
-      }
-      available[normalized] = count - 1;
-    }
-
-    return missing;
-  }
-
-  List<String> _findDuplicateWords(
-    List<String> words, {
-    required Map<String, int> allowedDuplicates,
-  }) {
-    final seen = <String, int>{};
-    final duplicates = <String>[];
-
-    for (final word in words) {
-      final normalized = _normalize(word);
-      final nextCount = (seen[normalized] ?? 0) + 1;
-      seen[normalized] = nextCount;
-      final maxAllowed = allowedDuplicates[normalized] ?? 1;
-      if (nextCount > maxAllowed && !duplicates.contains(word)) {
-        duplicates.add(word);
-      }
-    }
-
-    return duplicates;
-  }
-
-  Map<String, int> _countByNormalized(List<String> values) {
-    final counts = <String, int>{};
-    for (final value in values) {
-      final normalized = _normalize(value);
-      counts.update(normalized, (count) => count + 1, ifAbsent: () => 1);
-    }
-    return counts;
-  }
-
-  String _normalize(String value) {
-    return value
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z0-9]+'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
+    return switch (issue?.reason) {
+      null => null,
+      ClozeIssue.missingText =>
+        'Le mode texte à trous nécessite un cloze_text lorsque cloze_answers ou cloze_word_bank est renseigné.',
+      ClozeIssue.missingPlaceholders =>
+        'cloze_text doit contenir au moins un trou au format {{réponse}}.',
+      ClozeIssue.answerCountMismatch =>
+        'Le nombre de cloze_answers doit correspondre exactement au nombre de trous dans cloze_text.',
+      ClozeIssue.missingWordBank =>
+        'cloze_word_bank est obligatoire pour activer un vrai texte à trous.',
+      ClozeIssue.missingAnswers =>
+        'cloze_word_bank doit contenir toutes les bonnes réponses. Manquantes : ${issue!.words.join(', ')}.',
+      ClozeIssue.duplicateWords =>
+        'cloze_word_bank contient des doublons inutiles : ${issue!.words.join(', ')}.',
+    };
   }
 
   DeckDifficulty? _parseDifficulty(String raw) {
