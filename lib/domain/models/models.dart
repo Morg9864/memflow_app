@@ -415,19 +415,13 @@ class HeatmapCell {
 class LevelProgress {
   const LevelProgress({
     required this.level,
-    required this.title,
-    required this.subtitle,
     required this.count,
     required this.progress,
-    required this.icon,
   });
 
   final int level;
-  final String title;
-  final String subtitle;
   final int count;
   final double progress;
-  final IconData icon;
 }
 
 class StatisticsOverview {

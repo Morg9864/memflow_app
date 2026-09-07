@@ -6,6 +6,31 @@ import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
 
+({String title, String subtitle, IconData icon}) _levelPresentation(int level) {
+  return switch (level) {
+    1 => (
+      title: 'Basique',
+      subtitle: 'Fondations et reconnaissance',
+      icon: Icons.visibility_rounded,
+    ),
+    2 => (
+      title: 'Intermédiaire',
+      subtitle: 'Compréhension guidée',
+      icon: Icons.tune_rounded,
+    ),
+    3 => (
+      title: 'Actif',
+      subtitle: 'Rappel actif et reformulation',
+      icon: Icons.bolt_rounded,
+    ),
+    _ => (
+      title: 'Avancé',
+      subtitle: 'Maîtrise contextuelle',
+      icon: Icons.psychology_alt_rounded,
+    ),
+  };
+}
+
 final statisticsOverviewProvider = StreamProvider<StatisticsOverview>((ref) {
   return ref.watch(appRepositoryProvider).watchStatisticsOverview();
 });
@@ -93,27 +118,28 @@ class StatisticsScreen extends ConsumerWidget {
             const SizedBox(height: 20),
             const SectionLabel('Progression par niveau'),
             const SizedBox(height: 12),
-            ...data.levelProgress.map(
-              (item) => Padding(
+            ...data.levelProgress.map((item) {
+              final presentation = _levelPresentation(item.level);
+              return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: Card(
                   child: Padding(
                     padding: const EdgeInsets.all(18),
                     child: Row(
                       children: [
-                        IconTile(icon: item.icon),
+                        IconTile(icon: presentation.icon),
                         const SizedBox(width: 16),
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                'Niv. ${item.level}, ${item.title}',
+                                'Niv. ${item.level}, ${presentation.title}',
                                 style: Theme.of(context).textTheme.titleMedium,
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                item.subtitle,
+                                presentation.subtitle,
                                 style: Theme.of(context).textTheme.bodySmall,
                               ),
                               const SizedBox(height: 12),
@@ -130,8 +156,8 @@ class StatisticsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-              ),
-            ),
+              );
+            }),
           ],
         ),
         loading: () => const Center(child: CircularProgressIndicator()),

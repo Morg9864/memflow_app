@@ -3,7 +3,6 @@ import 'dart:math' as math;
 
 import 'package:csv/csv.dart';
 import 'package:drift/drift.dart';
-import 'package:flutter/material.dart' show IconData, Icons;
 import 'package:uuid/uuid.dart';
 
 import '../../domain/models/models.dart';
@@ -1306,19 +1305,11 @@ class AppRepository {
             .toList()
           ..sort((a, b) => b.errorCount.compareTo(a.errorCount));
 
-    LevelProgress level(
-      int value,
-      String title,
-      String subtitle,
-      IconData icon,
-    ) {
+    LevelProgress level(int value) {
       return LevelProgress(
         level: value,
-        title: title,
-        subtitle: subtitle,
         count: levelCounts[value] ?? 0,
         progress: (levelCounts[value] ?? 0) / maxLevel,
-        icon: icon,
       );
     }
 
@@ -1328,22 +1319,7 @@ class AppRepository {
       successRate: totals.successRate,
       studyDays: totals.dayCounts.length,
       heatmap: heatmap,
-      levelProgress: [
-        level(
-          1,
-          'Basique',
-          'Fondations et reconnaissance',
-          Icons.visibility_rounded,
-        ),
-        level(2, 'Intermédiaire', 'Compréhension guidée', Icons.tune_rounded),
-        level(3, 'Actif', 'Rappel actif et reformulation', Icons.bolt_rounded),
-        level(
-          4,
-          'Avancé',
-          'Maîtrise contextuelle',
-          Icons.psychology_alt_rounded,
-        ),
-      ],
+      levelProgress: [level(1), level(2), level(3), level(4)],
       successTrend: trend,
       collectionProgress: collectionProgress,
       modeProgress: modeProgress,
