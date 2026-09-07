@@ -78,80 +78,154 @@ class SyncService {
   Timer? _retryTimer;
   Timer? _debounceTimer;
   StreamSubscription<bool>? _networkSubscription;
-  Future<void>? _inFlight;
-  var _syncAgain = false;
+  _SyncSession? _session;
+  Future<void> _lifecycle = Future.value();
+  var _transitionId = 0;
   var _disposed = false;
 
   Stream<SyncStatus> get statusStream => _statusController.stream;
   SyncStatus get status => _status;
 
-  String? get _userId => _client.auth.currentUser?.id;
-
   /// Prend possession de la base locale pour [userId], puis lance une première
   /// synchronisation. Les données d'un autre compte sont effacées.
   Future<void> startFor(String userId) async {
-    await _db.adoptOwner(userId);
-    _listenToRemoteChanges();
-    _listenToNetworkChanges();
-    _retryTimer ??= Timer.periodic(_retryInterval, (_) {
-      if (_status.hasPendingWrites ||
-          _status.state == SyncState.offline ||
-          _status.state == SyncState.error) {
-        unawaited(syncNow());
-      }
+    if (_disposed) return;
+    final currentSession = _session;
+    if (currentSession != null &&
+        currentSession.userId == userId &&
+        _isCurrent(currentSession)) {
+      return syncNow();
+    }
+    final transitionId = ++_transitionId;
+    _session = null;
+    await _serializeTransition(() async {
+      await _stopListeners();
+      if (_disposed || transitionId != _transitionId) return;
+      await _db.adoptOwner(userId);
+      if (_disposed || transitionId != _transitionId) return;
+      final session = _session = _SyncSession(userId);
+      _emit(const SyncStatus(state: SyncState.idle, pendingCount: 0));
+      _listenToRemoteChanges(session);
+      _listenToNetworkChanges(session);
+      _retryTimer = Timer.periodic(_retryInterval, (_) {
+        if (_isActive(session) &&
+            (_status.hasPendingWrites ||
+                _status.state == SyncState.offline ||
+                _status.state == SyncState.error)) {
+          unawaited(syncNow());
+        }
+      });
     });
-    await syncNow();
+    if (!_disposed && transitionId == _transitionId) await syncNow();
   }
 
   /// Coupe la synchronisation et efface les données locales : sur un appareil
   /// partagé, se déconnecter doit vraiment retirer ses cartes de l'appareil.
-  Future<void> stopAndClear() async {
-    await _teardownChannel();
-    await _networkSubscription?.cancel();
-    _networkSubscription = null;
-    _retryTimer?.cancel();
-    _retryTimer = null;
-    _debounceTimer?.cancel();
-    _debounceTimer = null;
-    await _db.clearAllUserData();
-    _emit(const SyncStatus(state: SyncState.idle, pendingCount: 0));
+  Future<void> stopAndClear() {
+    if (_disposed) return _lifecycle;
+    ++_transitionId;
+    _session = null;
+    return _serializeTransition(() async {
+      await _stopListeners();
+      await _db.clearAllUserData();
+      _emit(const SyncStatus(state: SyncState.idle, pendingCount: 0));
+    });
   }
 
-  Future<void> dispose() async {
+  Future<void> dispose() {
+    if (_disposed) return _lifecycle;
     _disposed = true;
-    await _teardownChannel();
-    await _networkSubscription?.cancel();
-    _retryTimer?.cancel();
-    _debounceTimer?.cancel();
-    await _statusController.close();
+    ++_transitionId;
+    _session = null;
+    return _serializeTransition(() async {
+      await _stopListeners();
+      // Drain local transactions before the caller can close the database.
+      // Outstanding HTTP requests will be discarded on return.
+      await _db.transaction(() async {});
+      await _statusController.close();
+    });
+  }
+
+  Future<void> _serializeTransition(Future<void> Function() action) {
+    final next = _lifecycle.then((_) => action());
+    _lifecycle = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return next;
+  }
+
+  bool _isActive(_SyncSession session) =>
+      !_disposed && identical(_session, session);
+
+  bool _isCurrent(_SyncSession session) {
+    if (!_isActive(session)) return false;
+    // Tests and explicitly injected clients may have no GoTrue session. In
+    // that case the service's bound session is the authority. When GoTrue has
+    // a user, it must agree with the bound account so auth changes invalidate
+    // in-flight work.
+    final authUserId = _client.auth.currentUser?.id;
+    return authUserId == null || authUserId == session.userId;
+  }
+
+  void _checkSession(_SyncSession session) {
+    if (!_isCurrent(session)) throw const _ExpiredSession();
+  }
+
+  Future<T> _localTransaction<T>(
+    _SyncSession session,
+    Future<T> Function() action,
+  ) {
+    _checkSession(session);
+    return _db.transaction(() async {
+      _checkSession(session);
+      final result = await action();
+      // Roll back if an account transition started during local work.
+      _checkSession(session);
+      return result;
+    });
   }
 
   /// Pousse la file puis rapatrie l'état distant. Les appels concurrents sont
   /// fusionnés : une demande arrivée pendant une synchronisation en cours en
   /// déclenche exactement une autre derrière.
   Future<void> syncNow() {
-    final inFlight = _inFlight;
+    final session = _session;
+    // ignore: avoid_print
+    if (session == null || !_isCurrent(session)) return Future.value();
+    final inFlight = session.inFlight;
     if (inFlight != null) {
-      _syncAgain = true;
-      return inFlight;
+      session.syncAgain = true;
+      // A caller that arrives during a run owns the follow-up wait as well;
+      // otherwise it could observe the old run completing while its queued
+      // work is still pending.
+      return inFlight.then((_) {
+        if (!session.syncAgain || !_isCurrent(session)) {
+          return Future<void>.value();
+        }
+        session.syncAgain = false;
+        return syncNow();
+      });
     }
 
-    final run = _runSync().whenComplete(() {
-      _inFlight = null;
-      if (_syncAgain && !_disposed) {
-        _syncAgain = false;
-        unawaited(syncNow());
-      }
-    });
-    _inFlight = run;
-    return run;
+    final completion = Completer<void>();
+    final run = _runSync(session);
+    session.inFlight = completion.future;
+    run.then(
+      (_) {
+        if (identical(session.inFlight, completion.future)) {
+          session.inFlight = null;
+        }
+        completion.complete();
+      },
+      onError: (Object error, StackTrace stackTrace) {
+        if (identical(session.inFlight, completion.future)) {
+          session.inFlight = null;
+        }
+        completion.completeError(error, stackTrace);
+      },
+    );
+    return completion.future;
   }
 
-  Future<void> _runSync() async {
-    if (_userId == null) {
-      return;
-    }
-
+  Future<void> _runSync(_SyncSession session) async {
     final attemptAt = DateTime.now();
     _emit(
       SyncStatus(
@@ -162,26 +236,36 @@ class SyncService {
       ),
     );
     try {
-      await _pushPending();
-      await _pull();
+      await _pushPending(session);
+      await _pull(session);
+      final pendingCount = await _pendingCount(session);
+      _checkSession(session);
       _emit(
         SyncStatus(
           state: SyncState.idle,
-          pendingCount: await _pendingCount(),
+          pendingCount: pendingCount,
           lastSyncedAt: DateTime.now(),
           lastAttemptAt: attemptAt,
         ),
       );
     } catch (error) {
+      if (!_isCurrent(session)) return;
       final failure = classifyFailure(error);
       // La file reste intacte dans tous les cas. Un échec serveur est
       // distingué d'une absence de réseau afin que l'utilisateur puisse agir.
+      int pendingCount;
+      try {
+        pendingCount = await _pendingCount(session);
+      } on _ExpiredSession {
+        return;
+      }
+      if (!_isCurrent(session)) return;
       _emit(
         SyncStatus(
           state: failure.kind == SyncFailureKind.network
               ? SyncState.offline
               : SyncState.error,
-          pendingCount: await _pendingCount(),
+          pendingCount: pendingCount,
           lastSyncedAt: _status.lastSyncedAt,
           lastAttemptAt: attemptAt,
           failureKind: failure.kind,
@@ -222,13 +306,8 @@ class SyncService {
 
   // --- Push ---------------------------------------------------------------
 
-  Future<void> _pushPending() async {
-    final userId = _userId;
-    if (userId == null) {
-      return;
-    }
-
-    final entries = await _db.pendingSyncEntries();
+  Future<void> _pushPending(_SyncSession session) async {
+    final entries = await _localTransaction(session, _db.pendingSyncEntries);
     if (entries.isEmpty) {
       return;
     }
@@ -247,63 +326,78 @@ class SyncService {
           ..sort((a, b) => _rank(b.entityType).compareTo(_rank(a.entityType)));
 
     for (final entry in upserts) {
-      final payload = await _localPayload(entry.entityType, entry.entityId);
+      final payload = await _localTransaction(
+        session,
+        () => _localPayload(entry.entityType, entry.entityId),
+      );
+      _checkSession(session);
       if (payload == null) {
         // La ligne a disparu localement entre la mise en file et l'envoi.
-        await _db.deleteSyncQueueEntry(entry.id);
+        await _acknowledge(session, entry);
         continue;
       }
       await _client.from(_tableOf(entry.entityType)).upsert({
         ...payload,
-        'user_id': userId,
+        'user_id': session.userId,
       });
-      await _db.deleteSyncQueueEntry(entry.id);
+      await _acknowledge(session, entry);
     }
 
     for (final entry in deletes) {
+      _checkSession(session);
       await _client
           .from(_tableOf(entry.entityType))
           .delete()
           .eq('id', entry.entityId)
-          .eq('user_id', userId);
-      await _db.deleteSyncQueueEntry(entry.id);
+          .eq('user_id', session.userId);
+      await _acknowledge(session, entry);
     }
   }
 
+  Future<void> _acknowledge(_SyncSession session, SyncQueueEntry entry) =>
+      _localTransaction(session, () => _db.acknowledgeSyncEntry(entry));
+
   // --- Pull ---------------------------------------------------------------
 
-  Future<void> _pull() async {
-    final userId = _userId;
-    if (userId == null) {
-      return;
-    }
+  Future<void> _pull(_SyncSession session) async {
+    final remoteCollections = await _fetchAll('collections', session);
+    final remoteDecks = await _fetchAll('decks', session);
+    final remoteFlashcards = await _fetchAll('flashcards', session);
 
-    final protectedIds = {
-      for (final entry in await _db.pendingSyncEntries()) entry.entityId,
-    };
-
-    final remoteCollections = await _fetchAll('collections', userId);
-    final remoteDecks = await _fetchAll('decks', userId);
-    final remoteFlashcards = await _fetchAll('flashcards', userId);
-
-    await _db.transaction(() async {
+    await _localTransaction(session, () async {
+      // Resolve protection after the network awaits, atomically with applying
+      // the snapshot. Pending descendants also keep their local ancestors.
+      final protectedIds = await _protectedIds();
       await _applyRemoteRows(
         SyncEntityType.collection,
         remoteCollections,
-        protectedIds,
+        protectedIds[SyncEntityType.collection]!,
       );
-      await _applyRemoteRows(SyncEntityType.deck, remoteDecks, protectedIds);
+      await _applyRemoteRows(
+        SyncEntityType.deck,
+        remoteDecks,
+        protectedIds[SyncEntityType.deck]!,
+      );
       await _applyRemoteRows(
         SyncEntityType.flashcard,
         remoteFlashcards,
-        protectedIds,
+        protectedIds[SyncEntityType.flashcard]!,
       );
 
       // Ce qui a disparu côté distant disparaît côté local, sauf ce qui porte
       // une intention pas encore poussée.
-      final keptFlashcards = _keepIds(remoteFlashcards, protectedIds);
-      final keptDecks = _keepIds(remoteDecks, protectedIds);
-      final keptCollections = _keepIds(remoteCollections, protectedIds);
+      final keptFlashcards = _keepIds(
+        remoteFlashcards,
+        protectedIds[SyncEntityType.flashcard]!,
+      );
+      final keptDecks = _keepIds(
+        remoteDecks,
+        protectedIds[SyncEntityType.deck]!,
+      );
+      final keptCollections = _keepIds(
+        remoteCollections,
+        protectedIds[SyncEntityType.collection]!,
+      );
       await (_db.delete(
         _db.flashcards,
       )..where((row) => row.id.isNotIn(keptFlashcards))).go();
@@ -316,20 +410,48 @@ class SyncService {
       await _db.deleteOrphans();
     });
 
-    await _pullReviewLogs(userId);
+    await _pullReviewLogs(session);
+  }
+
+  Future<Map<SyncEntityType, Set<String>>> _protectedIds() async {
+    final ids = {for (final type in SyncEntityType.values) type: <String>{}};
+    for (final entry in await _db.pendingSyncEntries()) {
+      ids[entry.entityType]!.add(entry.entityId);
+    }
+    final logs = await (_db.select(
+      _db.reviewLogs,
+    )..where((row) => row.id.isIn(ids[SyncEntityType.reviewLog]!))).get();
+    ids[SyncEntityType.flashcard]!.addAll(logs.map((row) => row.flashcardId));
+    final cards = await (_db.select(
+      _db.flashcards,
+    )..where((row) => row.id.isIn(ids[SyncEntityType.flashcard]!))).get();
+    ids[SyncEntityType.deck]!.addAll(cards.map((row) => row.deckId));
+    ids[SyncEntityType.collection]!.addAll(
+      cards.map((row) => row.collectionId),
+    );
+    final decks = await (_db.select(
+      _db.decks,
+    )..where((row) => row.id.isIn(ids[SyncEntityType.deck]!))).get();
+    ids[SyncEntityType.collection]!.addAll(
+      decks.map((row) => row.collectionId),
+    );
+    return ids;
   }
 
   /// Les journaux ne sont jamais modifiés ni supprimés directement : on ne
   /// rapatrie que ce qui a été écrit depuis le dernier passage.
-  Future<void> _pullReviewLogs(String userId) async {
-    final cursor = await _db.readMetaDateTime(AppDatabase.reviewLogCursorKey);
-    final rows = await _fetchAll('review_logs', userId, createdAfter: cursor);
+  Future<void> _pullReviewLogs(_SyncSession session) async {
+    final cursor = await _localTransaction(
+      session,
+      () => _db.readMetaDateTime(AppDatabase.reviewLogCursorKey),
+    );
+    final rows = await _fetchAll('review_logs', session, createdAfter: cursor);
     if (rows.isEmpty) {
       return;
     }
 
     DateTime? newest = cursor;
-    await _db.transaction(() async {
+    await _localTransaction(session, () async {
       for (final row in rows) {
         await _db.applyRemoteRecord(
           RemoteSyncRecord(
@@ -345,11 +467,10 @@ class SyncService {
         }
       }
       await _db.deleteOrphans();
+      if (newest != null) {
+        await _db.writeMetaDateTime(AppDatabase.reviewLogCursorKey, newest!);
+      }
     });
-
-    if (newest != null) {
-      await _db.writeMetaDateTime(AppDatabase.reviewLogCursorKey, newest!);
-    }
   }
 
   Future<void> _applyRemoteRows(
@@ -376,6 +497,26 @@ class SyncService {
         ),
       );
     }
+
+    // A pending child wins over a remote parent deletion. Restore any missing
+    // local ancestors too, so the next push can satisfy remote foreign keys.
+    final missing = protectedIds.difference(
+      rows.map((row) => row['id'] as String).toSet(),
+    );
+    if (missing.isEmpty) return;
+    final pendingIds = {
+      for (final entry in await _db.pendingSyncEntries())
+        if (entry.entityType == entityType) entry.entityId,
+    };
+    for (final id in missing.difference(pendingIds)) {
+      if (await _db.readEntityUpdatedAt(entityType, id) != null) {
+        await _db.enqueueSync(
+          entityType: entityType,
+          entityId: id,
+          operation: SyncOperation.upsert,
+        );
+      }
+    }
   }
 
   static List<String> _keepIds(
@@ -390,7 +531,7 @@ class SyncService {
 
   Future<List<Map<String, dynamic>>> _fetchAll(
     String table,
-    String userId, {
+    _SyncSession session, {
     DateTime? createdAfter,
   }) async {
     const pageSize = 500;
@@ -398,13 +539,18 @@ class SyncService {
     var offset = 0;
 
     while (true) {
-      dynamic query = _client.from(table).select().eq('user_id', userId);
+      _checkSession(session);
+      dynamic query = _client
+          .from(table)
+          .select()
+          .eq('user_id', session.userId);
       if (createdAfter != null) {
         query = query.gt('created_at', createdAfter.toUtc().toIso8601String());
       }
       final page = await query
           .order('created_at', ascending: true)
           .range(offset, offset + pageSize - 1);
+      _checkSession(session);
       final mapped = (page as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
@@ -525,17 +671,22 @@ class SyncService {
 
   // --- Temps réel ---------------------------------------------------------
 
-  void _listenToRemoteChanges() {
+  void _listenToRemoteChanges(_SyncSession session) {
     if (_channel != null) {
       return;
     }
-    final channel = _client.channel('memflow-sync');
+    final channel = _client.channel('memflow-sync-${session.userId}');
     for (final table in _tables) {
       channel.onPostgresChanges(
         event: PostgresChangeEvent.all,
         schema: 'public',
         table: table,
-        callback: (_) => _scheduleRemotePull(),
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'user_id',
+          value: session.userId,
+        ),
+        callback: (_) => _scheduleRemotePull(session),
       );
     }
     _channel = channel..subscribe();
@@ -544,21 +695,22 @@ class SyncService {
   /// Un changement distant peut être le nôtre qui revient : on laisse retomber
   /// la rafale avant de rapatrier, pour ne pas relire la base à chaque ligne
   /// d'un import.
-  void _scheduleRemotePull() {
+  void _scheduleRemotePull(_SyncSession session) {
+    if (!_isActive(session)) return;
     _debounceTimer?.cancel();
     _debounceTimer = Timer(_remoteChangeDebounce, () {
-      if (!_disposed) {
+      if (_isActive(session)) {
         unawaited(syncNow());
       }
     });
   }
 
-  void _listenToNetworkChanges() {
+  void _listenToNetworkChanges(_SyncSession session) {
     if (_networkSubscription != null) {
       return;
     }
     _networkSubscription = _networkChanges.listen((isConnected) {
-      if (isConnected && !_disposed) {
+      if (isConnected && _isActive(session)) {
         // The periodic timer remains the fallback for missed connectivity
         // notifications.
         unawaited(syncNow());
@@ -566,9 +718,16 @@ class SyncService {
     });
   }
 
-  Future<void> _teardownChannel() async {
+  Future<void> _stopListeners() async {
+    _retryTimer?.cancel();
+    _retryTimer = null;
+    _debounceTimer?.cancel();
+    _debounceTimer = null;
+    final networkSubscription = _networkSubscription;
+    _networkSubscription = null;
     final channel = _channel;
     _channel = null;
+    await networkSubscription?.cancel();
     if (channel != null) {
       await _client.removeChannel(channel);
     }
@@ -576,7 +735,10 @@ class SyncService {
 
   // --- Utilitaires --------------------------------------------------------
 
-  Future<int> _pendingCount() async => (await _db.pendingSyncEntries()).length;
+  Future<int> _pendingCount(_SyncSession session) => _localTransaction(
+    session,
+    () async => (await _db.pendingSyncEntries()).length,
+  );
 
   void _emit(SyncStatus status) {
     _status = status;
@@ -600,17 +762,14 @@ class SyncService {
   };
 }
 
-extension on SyncStatus {
-  SyncStatus copyWith({
-    SyncState? state,
-    int? pendingCount,
-    DateTime? lastSyncedAt,
-  }) {
-    return SyncStatus(
-      state: state ?? this.state,
-      pendingCount: pendingCount ?? this.pendingCount,
-      lastSyncedAt: lastSyncedAt ?? this.lastSyncedAt,
-      lastAttemptAt: lastAttemptAt ?? this.lastAttemptAt,
-    );
-  }
+class _SyncSession {
+  _SyncSession(this.userId);
+
+  final String userId;
+  Future<void>? inFlight;
+  bool syncAgain = false;
+}
+
+class _ExpiredSession implements Exception {
+  const _ExpiredSession();
 }

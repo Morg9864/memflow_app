@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../domain/models/models.dart';
 import 'connection/connection.dart';
@@ -309,7 +310,7 @@ class AppDatabase extends _$AppDatabase {
   /// Le stockage local n'appartient qu'à un seul compte. Si l'utilisateur
   /// change, on repart d'une base vide plutôt que de mélanger deux jeux de
   /// données sur le même appareil. Retourne `true` si la base a été purgée.
-  Future<bool> adoptOwner(String userId) async {
+  Future<bool> adoptOwner(String userId) => transaction(() async {
     final currentOwner = await readMetaString(ownerKey);
     if (currentOwner == userId) {
       return false;
@@ -317,7 +318,7 @@ class AppDatabase extends _$AppDatabase {
     await clearAllUserData();
     await writeMetaString(ownerKey, userId);
     return true;
-  }
+  });
 
   /// Supprime les lignes devenues orphelines après une réconciliation : quand
   /// un autre appareil supprime un deck, la cascade distante emporte ses
@@ -354,17 +355,25 @@ class AppDatabase extends _$AppDatabase {
     required SyncEntityType entityType,
     required String entityId,
     required SyncOperation operation,
-  }) async {
-    await into(syncQueueEntries).insertOnConflictUpdate(
+  }) => transaction(() async {
+    await (delete(syncQueueEntries)..where(
+          (row) =>
+              row.entityType.equalsValue(entityType) &
+              row.entityId.equals(entityId),
+        ))
+        .go();
+    await into(syncQueueEntries).insert(
       SyncQueueEntriesCompanion.insert(
-        id: '${entityType.name}-$entityId',
+        // Each intent has its own acknowledgment identity, even when two
+        // edits share a timestamp or restore the same content.
+        id: const Uuid().v4(),
         entityType: entityType,
         entityId: entityId,
         operation: operation,
         updatedAt: DateTime.now(),
       ),
     );
-  }
+  });
 
   Future<List<SyncQueueEntry>> pendingSyncEntries() {
     return (select(
@@ -372,23 +381,13 @@ class AppDatabase extends _$AppDatabase {
     )..orderBy([(table) => OrderingTerm(expression: table.updatedAt)])).get();
   }
 
-  Future<void> deleteSyncQueueEntry(String id) {
+  /// Acknowledge exactly the queue intent that was uploaded. Queue IDs are
+  /// unique per intent, so a stale upload cannot remove a replacement intent
+  /// for the same entity.
+  Future<void> acknowledgeSyncEntry(SyncQueueEntry entry) {
     return (delete(
       syncQueueEntries,
-    )..where((table) => table.id.equals(id))).go();
-  }
-
-  Future<void> incrementSyncQueueAttempts(String id) async {
-    final entry = await (select(
-      syncQueueEntries,
-    )..where((table) => table.id.equals(id))).getSingleOrNull();
-    if (entry == null) {
-      return;
-    }
-
-    await update(syncQueueEntries).replace(
-      entry.copyWith(attempts: entry.attempts + 1, updatedAt: DateTime.now()),
-    );
+    )..where((table) => table.id.equals(entry.id))).go();
   }
 
   Future<void> writeMetaDateTime(String key, DateTime value) async {

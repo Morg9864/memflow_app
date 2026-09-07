@@ -103,11 +103,13 @@ final appRepositoryProvider = Provider<AppRepository>((ref) {
 final sessionSyncProvider = Provider<void>((ref) {
   final service = ref.watch(syncServiceProvider);
   String? boundUserId;
+  var initialized = false;
 
   void bind(String? userId) {
-    if (userId == boundUserId) {
+    if (initialized && userId == boundUserId) {
       return;
     }
+    initialized = true;
     boundUserId = userId;
     if (userId == null) {
       unawaited(service.stopAndClear());
