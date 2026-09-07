@@ -595,7 +595,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
             ),
             _StudyReviewIntent: CallbackAction<_StudyReviewIntent>(
               onInvoke: (intent) {
-                _handleKeyboardReview(intent!.result);
+                _handleKeyboardReview(intent.result);
                 return null;
               },
             ),

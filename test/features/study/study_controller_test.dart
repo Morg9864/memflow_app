@@ -99,7 +99,7 @@ void main() {
   }
 
   test('la session garde un ordre fixe et ne rejoue aucune carte', () {
-    final controller = StudyController.forTesting(random: math.Random(0));
+    final controller = StudyRules(random: math.Random(0));
     final initialState = buildState([
       buildCard('a'),
       buildCard('b'),
@@ -113,7 +113,7 @@ void main() {
   });
 
   test('une carte ratée ne rallonge pas la session courante', () {
-    final controller = StudyController.forTesting(random: math.Random(0));
+    final controller = StudyRules(random: math.Random(0));
     final initialState = buildState([
       buildCard('a'),
       buildCard('b'),
@@ -133,7 +133,7 @@ void main() {
   });
 
   group('mode vrai/faux', () {
-    final controller = StudyController.forTesting(random: math.Random(0));
+    final controller = StudyRules(random: math.Random(0));
 
     test('la proposition est toujours tirée du jeu de réponses du CSV', () {
       final card = buildTrueFalseCard();
@@ -221,7 +221,7 @@ void main() {
   });
 
   group('mode texte à trous', () {
-    final controller = StudyController.forTesting(random: math.Random(0));
+    final controller = StudyRules(random: math.Random(0));
 
     test('construit des tokens inline pour les trous', () {
       final tokens = controller.buildClozeTokens(buildClozeCard());

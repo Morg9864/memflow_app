@@ -463,7 +463,23 @@ class _FakeStudyController extends StudyController {
     required _SubmitReviewCallback submitReviewImpl,
   }) : _initialState = initialState,
        _submitReviewImpl = submitReviewImpl,
-       super.forTesting(random: math.Random(0));
+       super.fromPersistence(
+         random: math.Random(0),
+         loadSession:
+             ({
+               collectionId,
+               deckId,
+               forcedMode,
+               required sessionCardLimit,
+             }) async => initialState,
+         submitReview:
+             ({
+               required cardId,
+               required reviewResult,
+               required wasCorrect,
+               required playedMode,
+             }) async {},
+       );
 
   final StudySessionState _initialState;
   final _SubmitReviewCallback _submitReviewImpl;
