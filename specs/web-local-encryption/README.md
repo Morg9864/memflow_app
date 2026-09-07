@@ -12,8 +12,8 @@ La protection ne couvre pas XSS, extension compromise, navigateur compromis ou d
 
 ## Découpage
 
-- Slice 00 — prouver une persistance de coffre chiffrée et atomique.
-- Slice 01 — format versionné et primitives Web Crypto.
+- [Slice 00](slices/00-persistence-spike.md) — prouver une persistance de coffre chiffrée et atomique.
+- [Slice 01](slices/01-crypto-format.md) — format versionné et primitives Web Crypto.
 - Slice 02 — machine d’état du coffre et session mémoire.
 - Slice 03 — migration de l’ancien stockage Drift Web.
 - Slice 04 — bootstrap, providers, routage et suspension de sync.
@@ -22,11 +22,9 @@ La protection ne couvre pas XSS, extension compromise, navigateur compromis ou d
 
 ## État actuel
 
-Le stockage natif est déjà chiffré via SQLite3MultipleCiphers. Le Web utilise
-encore SQLite WASM standard pour l’application. Un spike isolé de
-snapshot/restauration a été ajouté dans
-`lib/data/local/connection/web_snapshot_probe.dart`, mais il n’est pas encore
-branché au bootstrap.
+Voir l’[état du stockage local](../../lib/data/local/LOCAL_STORAGE_SECURITY.md).
+La faisabilité du coffre Web reste à démontrer : la Slice 00 est ouverte,
+sans preuve navigateur de restauration ni de persistance chiffrée atomique.
 
 ## Sources techniques
 
@@ -36,21 +34,6 @@ branché au bootstrap.
 
 ## Prochaine étape
 
-Terminer la Slice 00 avec un test navigateur réel du spike : base WASM en
-mémoire, export/restauration, puis validation de l’écriture atomique d’un
-envelope chiffré dans IndexedDB/OPFS. Ne modifier ni les providers ni l’UX
-avant ce verdict.
-
-## TODO global
-
-- [ ] Slice 00 : spike ajouté, gate navigateur et adaptateur atomique à valider.
-- [ ] Slice 01 : AES-GCM/PBKDF2, format et tests de corruption.
-- [ ] Slice 02 : `WebVault`, états locked/unlocked et clé en mémoire.
-- [ ] Slice 03 : migration sans suppression prématurée de l’ancien stockage.
-- [ ] Slice 04 : bootstrap, providers et sync conditionnelle.
-- [ ] Slice 05 : écrans, auto-lock et changement de mot de passe.
-- [ ] Slice 06 : durcissement, CSP, quota, multi-onglets et documentation.
-
-## Next Agent Prompt
-
-Tu reprends la protection locale Web. Commence par la Slice 00 et prouve la frontière de persistance avec un test navigateur réel ou un spike isolé. Ne branche pas encore l’UI. Mets à jour ce README avec le verdict, les limites découvertes et la prochaine slice avant de terminer.
+Exécuter les vérifications de la [Slice 00](slices/00-persistence-spike.md)
+dans un navigateur réel et consigner le verdict ici avant de poursuivre.
+Le format de snapshot et l’interface de persistance dépendent de ce résultat.
