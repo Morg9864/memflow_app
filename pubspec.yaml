@@ -47,6 +47,7 @@ dependencies:
     csv: ^8.0.0
     uuid: ^4.5.1
     url_launcher: ^6.3.0
+    sentry_flutter: ^9.29.0
 
 dev_dependencies:
     flutter_test:

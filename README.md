@@ -145,6 +145,17 @@ flutter run -d chrome --dart-define-from-file=.env
 
 Les valeurs sont lues au bootstrap avec `String.fromEnvironment(...)`.
 
+## Rapport d'erreurs (Sentry)
+
+`SENTRY_DSN` est optionnelle. Si elle est absente, l'application tourne
+normalement mais les erreurs non interceptées ne sont journalisées qu'en
+local (`debugPrint`), pas remontées. Pour l'activer :
+
+1. Créer un projet Flutter sur [sentry.io](https://sentry.io) et récupérer
+   son DSN
+2. Renseigner `SENTRY_DSN` dans `.env`
+3. Lancer avec `--dart-define-from-file=.env` comme les autres variables
+
 ## Import CSV et prompt IA
 
 L'écran `Importer` permet :
