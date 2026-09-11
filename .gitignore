@@ -111,4 +111,6 @@ migrate_working_dir/
 .metadata
 nYWL4ki14lKZJfoo
 
+# text files
 text.txt
+md/*
