@@ -50,6 +50,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   bool _isApplyingReview = false;
   bool _isProcessingReviewQueue = false;
   bool _isReviewRetryPending = false;
+  Future<void>? _reviewFlush;
 
   void _handleKeyboardPrimaryAction() {
     final state = _state;
@@ -298,6 +299,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       _queueReviewSubmission(submission);
 
       if (nextState.isCompleted) {
+        // Wait for the last review to actually reach the local database
+        // before leaving the study flow: if the app were killed right after
+        // navigating, a still-in-flight write would be lost.
+        await _reviewFlush;
         if (!mounted) return;
         context.go(
           '/session-summary',
@@ -317,9 +322,12 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   void _queueReviewSubmission(_PendingReviewSubmission submission) {
     _pendingReviewSubmissions.add(submission);
     if (_isReviewRetryPending || _isProcessingReviewQueue) {
+      // Already covered by the running flush's loop, which re-checks the
+      // queue on every iteration, or blocked on a user-initiated retry.
       return;
     }
-    unawaited(_flushPendingReviewSubmissions());
+    _reviewFlush = _flushPendingReviewSubmissions();
+    unawaited(_reviewFlush);
   }
 
   Future<void> _flushPendingReviewSubmissions() async {
