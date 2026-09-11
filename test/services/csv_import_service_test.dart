@@ -18,8 +18,8 @@ void main() {
 
   test('legacy CSV rows keep free text but no longer activate cloze', () {
     final csv = [
-      'collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers',
-      'React;Hooks;Quel hook garde un état local ?;useState;useEffect;useMemo;useRef;-;useState crée un état local.;1;facile;react|hooks;Cours React;React utilise {{useState}}.;useState|use state',
+      'collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;tags;source;cloze_text;accepted_answers',
+      'React;Hooks;Quel hook garde un état local ?;useState;useEffect;useMemo;useRef;-;useState crée un état local.;1;react|hooks;Cours React;React utilise {{useState}}.;useState|use state',
     ].join('\n');
 
     final preview = service.parse(utf8.encode(csv));
@@ -35,8 +35,8 @@ void main() {
 
   test('structured cloze rows activate true cloze mode', () {
     final csv = [
-      'collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
-      'React;Hooks;Quel hook garde un état local ?;useState;useEffect;useMemo;useRef;-;useState crée un état local.;1;facile;react|hooks;Cours React;Le hook {{useState}} retourne une valeur et une fonction pour la {{modifier}}.;useState|use state;useState|modifier;useState|useEffect|modifier|afficher',
+      'collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
+      'React;Hooks;Quel hook garde un état local ?;useState;useEffect;useMemo;useRef;-;useState crée un état local.;1;react|hooks;Cours React;Le hook {{useState}} retourne une valeur et une fonction pour la {{modifier}}.;useState|use state;useState|modifier;useState|useEffect|modifier|afficher',
     ].join('\n');
 
     final preview = service.parse(utf8.encode(csv));
@@ -55,8 +55,8 @@ void main() {
 
   test('invalid structured cloze rows are rejected with a clear issue', () {
     final csv = [
-      'collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
-      'React;Hooks;Quel hook garde un état local ?;useState;useEffect;useMemo;useRef;-;useState crée un état local.;1;facile;react|hooks;Cours React;Le hook {{useState}} retourne une valeur et une fonction pour la {{modifier}}.;useState|use state;useState;useState|useEffect|modifier|afficher',
+      'collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
+      'React;Hooks;Quel hook garde un état local ?;useState;useEffect;useMemo;useRef;-;useState crée un état local.;1;react|hooks;Cours React;Le hook {{useState}} retourne une valeur et une fonction pour la {{modifier}}.;useState|use state;useState;useState|useEffect|modifier|afficher',
     ].join('\n');
 
     final preview = service.parse(utf8.encode(csv));

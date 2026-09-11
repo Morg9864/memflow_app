@@ -67,7 +67,7 @@ flutter:
     assets:
         - design/
         - memflow.png
-        - prompt_csv_memflow_neutre.md
+        - md/prompt_csv_memflow_neutre.md
 
 hooks:
     user_defines:

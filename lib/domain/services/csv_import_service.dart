@@ -22,7 +22,6 @@ class CsvImportService {
     'hint',
     'explanation',
     'level',
-    'difficulty',
     'tags',
     'source',
     'cloze_text',
@@ -131,30 +130,17 @@ class CsvImportService {
         continue;
       }
 
-      final difficulty = _parseDifficulty(
-        _readValue(row, 'difficulty', 10, headerMap),
-      );
-      if (difficulty == null) {
-        issues.add(
-          CsvImportIssue(
-            rowNumber: rowNumber,
-            message: 'La difficulté doit être facile, moyen ou avancé.',
-          ),
-        );
-        continue;
-      }
-
       final acceptedAnswers = _splitMultiValue(
-        _readValue(row, 'accepted_answers', 14, headerMap),
+        _readValue(row, 'accepted_answers', 13, headerMap),
       );
       final clozeAnswers = _splitMultiValue(
-        _readValue(row, 'cloze_answers', 15, headerMap),
+        _readValue(row, 'cloze_answers', 14, headerMap),
       );
       final clozeWordBank = _splitMultiValue(
-        _readValue(row, 'cloze_word_bank', 16, headerMap),
+        _readValue(row, 'cloze_word_bank', 15, headerMap),
       );
       final clozeText = _emptyToNull(
-        _readValue(row, 'cloze_text', 13, headerMap),
+        _readValue(row, 'cloze_text', 12, headerMap),
       );
       final clozeIssue = _validateStructuredCloze(
         clozeText: clozeText,
@@ -177,9 +163,8 @@ class CsvImportService {
             _readValue(row, 'explanation', 8, headerMap),
           ),
           level: level,
-          difficulty: difficulty,
-          tags: _splitMultiValue(_readValue(row, 'tags', 11, headerMap)),
-          source: _emptyToNull(_readValue(row, 'source', 12, headerMap)),
+          tags: _splitMultiValue(_readValue(row, 'tags', 10, headerMap)),
+          source: _emptyToNull(_readValue(row, 'source', 11, headerMap)),
           clozeText: clozeText,
           clozeAnswers: clozeAnswers,
           clozeWordBank: clozeWordBank,
@@ -288,19 +273,4 @@ class CsvImportService {
     };
   }
 
-  DeckDifficulty? _parseDifficulty(String raw) {
-    switch (raw.toLowerCase()) {
-      case 'facile':
-        return DeckDifficulty.facile;
-      case 'moyen':
-        return DeckDifficulty.moyen;
-      case 'avance':
-      case 'avancé':
-        return DeckDifficulty.avance;
-      case '':
-        return DeckDifficulty.facile;
-      default:
-        return null;
-    }
-  }
 }

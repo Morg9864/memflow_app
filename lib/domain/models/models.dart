@@ -11,7 +11,7 @@ enum TestMode {
 
 enum ReviewResult { again, hard, good, easy }
 
-enum DeckDifficulty { facile, moyen, avance }
+enum DeckDifficulty { facile, moyen, difficile, avance }
 
 enum DeckStatus { nouveau, maitrise, dues }
 
@@ -80,6 +80,7 @@ extension DeckDifficultyX on DeckDifficulty {
   String get label => switch (this) {
     DeckDifficulty.facile => 'Facile',
     DeckDifficulty.moyen => 'Moyen',
+    DeckDifficulty.difficile => 'Difficile',
     DeckDifficulty.avance => 'Avancé',
   };
 }
@@ -517,7 +518,6 @@ class CsvImportCardDraft {
     required this.hint,
     required this.explanation,
     required this.level,
-    required this.difficulty,
     required this.tags,
     required this.source,
     required this.clozeText,
@@ -535,7 +535,6 @@ class CsvImportCardDraft {
   final String? hint;
   final String? explanation;
   final int level;
-  final DeckDifficulty difficulty;
   final List<String> tags;
   final String? source;
   final String? clozeText;

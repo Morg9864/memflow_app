@@ -46,6 +46,7 @@ void main() {
       'Mauvaise 3',
     ],
     List<String> acceptedAnswers = const [],
+    int level = 1,
   }) {
     return CsvImportCardDraft(
       collection: collection,
@@ -55,8 +56,7 @@ void main() {
       wrongAnswers: wrongAnswers,
       hint: null,
       explanation: null,
-      level: 1,
-      difficulty: DeckDifficulty.facile,
+      level: level,
       tags: const [],
       source: null,
       clozeText: null,
@@ -112,6 +112,16 @@ void main() {
 
     expect(session.cards, hasLength(2));
     expect(session.deckTitle, 'Révision');
+  });
+
+  test('la difficulté du deck est inférée par moyenne des niveaux', () async {
+    await importDrafts([
+      draft(question: 'Q1', level: 1),
+      draft(question: 'Q2', level: 4),
+    ]);
+
+    final deck = (await database.select(database.decks).get()).single;
+    expect(deck.difficulty, DeckDifficulty.difficile);
   });
 
   test('une révision avance la carte et journalise le mode joué', () async {

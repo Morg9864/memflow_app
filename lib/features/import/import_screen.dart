@@ -29,7 +29,9 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   }
 
   Future<void> _loadCsvPrompt() async {
-    final prompt = await rootBundle.loadString('prompt_csv_memflow_neutre.md');
+    final prompt = await rootBundle.loadString(
+      'md/prompt_csv_memflow_neutre.md',
+    );
     if (!mounted) {
       return;
     }
@@ -214,7 +216,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Text(
-                'Format recommandé : collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;difficulty;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
+                'Format recommandé : collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),

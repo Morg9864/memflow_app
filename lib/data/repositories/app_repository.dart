@@ -299,6 +299,7 @@ class AppRepository {
       for (final deck in decks)
         '${deck.collectionId}:${deck.name.toLowerCase()}': deck,
     };
+    final importedDeckIds = <String>{};
 
     await _db.transaction(() async {
       for (final draft in preview.cards) {
@@ -333,7 +334,7 @@ class AppRepository {
             collectionId: collection.id,
             name: draft.deck,
             icon: '🗂️',
-            difficulty: draft.difficulty,
+            difficulty: DeckDifficulty.facile,
             createdAt: now,
             updatedAt: now,
           );
@@ -347,6 +348,7 @@ class AppRepository {
           );
           decksByKey[deckKey] = deck;
         }
+        importedDeckIds.add(deck.id);
 
         final card = FlashcardRecord(
           id: _uuid.v4(),
@@ -367,7 +369,7 @@ class AppRepository {
           clozeWordBank: draft.clozeWordBank,
           acceptedAnswers: draft.acceptedAnswers,
           source: draft.source,
-          difficulty: draft.difficulty,
+          difficulty: null,
           level: draft.level,
           tags: draft.tags,
           dueAt: now,
@@ -389,8 +391,39 @@ class AppRepository {
           operation: SyncOperation.upsert,
         );
       }
+
+      for (final deckId in importedDeckIds) {
+        final levels = (await _fetchFlashcards(deckId: deckId))
+            .map((card) => card.level)
+            .toList();
+        if (levels.isEmpty) continue;
+        final difficulty = _difficultyFromAverageLevel(levels);
+        await (_db.update(_db.decks)..where((table) => table.id.equals(deckId)))
+            .write(
+              DecksCompanion(
+                difficulty: Value(difficulty),
+                updatedAt: Value(now),
+              ),
+            );
+        await _db.enqueueSync(
+          entityType: SyncEntityType.deck,
+          entityId: deckId,
+          operation: SyncOperation.upsert,
+        );
+      }
     });
     _requestSync();
+  }
+
+  DeckDifficulty _difficultyFromAverageLevel(List<int> levels) {
+    final average = levels.reduce((a, b) => a + b) / levels.length;
+    final rounded = math.max(1, math.min(4, (average + 0.5).floor()));
+    return switch (rounded) {
+      1 => DeckDifficulty.facile,
+      2 => DeckDifficulty.moyen,
+      3 => DeckDifficulty.difficile,
+      _ => DeckDifficulty.avance,
+    };
   }
 
   Future<String> exportAllCardsCsv() async {
@@ -416,7 +449,6 @@ class AppRepository {
         card.hint ?? '',
         card.explanation ?? '',
         card.level.toString(),
-        card.difficulty?.name ?? '',
         card.tags.join('|'),
         card.source ?? '',
         card.clozeText ?? '',
@@ -440,7 +472,6 @@ class AppRepository {
     'hint',
     'explanation',
     'level',
-    'difficulty',
     'tags',
     'source',
     'cloze_text',

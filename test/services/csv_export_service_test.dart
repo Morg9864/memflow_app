@@ -56,8 +56,8 @@ void main() {
     expect(rows[1][0], 'Collection');
     expect(rows[1][1], 'Deck');
     expect(rows[1][2], card.question);
-    expect(rows[1][14], 'Bonne réponse');
-    expect(rows[1][15], isEmpty);
+    expect(rows[1][13], 'Bonne réponse');
+    expect(rows[1][14], isEmpty);
     expect(utf8.decode(utf8.encode(csv)), csv);
 
     final restored = CsvImportService(
