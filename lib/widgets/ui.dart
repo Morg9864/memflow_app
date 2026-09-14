@@ -560,6 +560,7 @@ class StudyProgressHeader extends StatelessWidget {
         Row(
           children: [
             IconButton(
+              tooltip: 'Quitter la session',
               onPressed: onClose,
               icon: const Icon(Icons.close_rounded),
             ),

@@ -81,6 +81,22 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
     if (event is! KeyDownEvent || _state == null) {
       return KeyEventResult.ignored;
     }
+    final state = _state!;
+    if (state.currentCard.currentTestMode == TestMode.multipleChoice &&
+        !state.hasValidatedAnswer) {
+      final index = switch (event.logicalKey) {
+        LogicalKeyboardKey.digit1 => 0,
+        LogicalKeyboardKey.digit2 => 1,
+        LogicalKeyboardKey.digit3 => 2,
+        LogicalKeyboardKey.digit4 => 3,
+        _ => null,
+      };
+      final options = state.currentCard.buildOptions();
+      if (index != null && index < options.length) {
+        _selectOption(index, options);
+        return KeyEventResult.handled;
+      }
+    }
     final reviewResult = switch (event.logicalKey) {
       LogicalKeyboardKey.digit1 => ReviewResult.again,
       LogicalKeyboardKey.digit2 => ReviewResult.hard,
@@ -526,7 +542,21 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       return PopScope(
         canPop: _canPopStudy(),
         onPopInvokedWithResult: (didPop, _) => _handlePopInvoked(didPop),
-        child: const Scaffold(body: Center(child: CircularProgressIndicator())),
+        child: Scaffold(
+          body: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const CircularProgressIndicator(),
+                const SizedBox(height: 18),
+                Text(
+                  'Préparation de ta session…',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 
@@ -810,7 +840,12 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                                   ),
                                   if (_isDesktopPlatform())
                                     const _KeyboardHint(),
-                                ],
+                                ] else if (_isDesktopPlatform() &&
+                                    mode == TestMode.multipleChoice)
+                                  const _KeyboardHint(
+                                    label:
+                                        'Clavier : 1–4 pour choisir une réponse',
+                                  ),
                               ],
                             ),
                           ),
@@ -849,7 +884,11 @@ class _StudyReviewIntent extends Intent {
 }
 
 class _KeyboardHint extends StatelessWidget {
-  const _KeyboardHint();
+  const _KeyboardHint({
+    this.label = 'Clavier : 1 Encore · 2 Difficile · 3 Correct · 4 Facile',
+  });
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
@@ -857,7 +896,7 @@ class _KeyboardHint extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Text(
-        'Clavier : 1 Encore · 2 Difficile · 3 Correct · 4 Facile',
+        label,
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -1165,6 +1204,7 @@ class _McqMode extends StatelessWidget {
                       height: optionHeight,
                       child: _McqOptionTile(
                         text: options[index],
+                        shortcutLabel: String.fromCharCode(65 + index),
                         isSelected: selectedIndex == index,
                         isCorrect: hasValidatedAnswer && index == correctIndex,
                         isWrong:
@@ -1184,6 +1224,7 @@ class _McqMode extends StatelessWidget {
           for (var index = 0; index < options.length; index++) ...[
             _McqOptionTile(
               text: options[index],
+              shortcutLabel: String.fromCharCode(65 + index),
               isSelected: selectedIndex == index,
               isCorrect: hasValidatedAnswer && index == correctIndex,
               isWrong:
@@ -1236,6 +1277,7 @@ class _McqOptionTile extends StatelessWidget {
     required this.isCorrect,
     required this.isWrong,
     required this.onTap,
+    this.shortcutLabel,
   });
 
   final String text;
@@ -1243,6 +1285,7 @@ class _McqOptionTile extends StatelessWidget {
   final bool isCorrect;
   final bool isWrong;
   final VoidCallback? onTap;
+  final String? shortcutLabel;
 
   static const double _padding = 18;
   static const double _borderWidth = 1;
@@ -1295,25 +1338,53 @@ class _McqOptionTile extends StatelessWidget {
         : isSelected
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface;
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(20),
-      child: Ink(
-        padding: const EdgeInsets.all(_padding),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: borderColor, width: _borderWidth),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                text,
-                style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      selected: isSelected,
+      label: shortcutLabel == null ? text : '$shortcutLabel. $text',
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(20),
+        child: Ink(
+          padding: const EdgeInsets.all(_padding),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: borderColor, width: _borderWidth),
+          ),
+          child: Row(
+            children: [
+              if (shortcutLabel != null) ...[
+                Container(
+                  width: 32,
+                  height: 32,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: foreground.withValues(alpha: 0.10),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    shortcutLabel!,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: foreground,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 14),
+              ],
+              Expanded(
+                child: Text(
+                  text,
+                  style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+                ),
               ),
-            ),
-          ],
+              if (isCorrect)
+                Icon(Icons.check_circle_rounded, color: foreground, size: 22)
+              else if (isWrong)
+                Icon(Icons.cancel_rounded, color: foreground, size: 22),
+            ],
+          ),
         ),
       ),
     );

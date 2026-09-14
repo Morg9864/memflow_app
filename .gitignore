@@ -48,6 +48,9 @@ app.*.map.json
 # VS Code local settings (keep shared config if you prefer)
 .vscode/
 
+# agents
+.agents/*
+
 # -----------------------------
 # Android
 # -----------------------------

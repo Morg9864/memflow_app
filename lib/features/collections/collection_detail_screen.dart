@@ -293,11 +293,12 @@ class _CollectionDetailScreenState
     final currentCollection = collection.asData?.value;
 
     return AppScaffold(
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: _busy || currentCollection?.isDisabled != false
             ? null
             : () => _launchStudy(),
-        child: const Icon(Icons.play_arrow_rounded),
+        icon: const Icon(Icons.play_arrow_rounded),
+        label: const Text('Étudier'),
       ),
       child: collection.when(
         data: (item) {

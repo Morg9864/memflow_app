@@ -64,6 +64,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               ),
               const Spacer(),
               IconButton.filledTonal(
+                tooltip: 'Voir les statistiques',
                 onPressed: () => context.push('/stats'),
                 icon: const Icon(Icons.notifications_none_rounded),
               ),
@@ -102,6 +103,37 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             error: (error, stackTrace) => Text(error.toString()),
           ),
           const SizedBox(height: 24),
+          stats.when(
+            data: (data) {
+              final canStudy = data.dueCards > 0;
+              return Semantics(
+                button: true,
+                label: canStudy
+                    ? 'Commencer une session de ${data.dueCards} cartes'
+                    : 'Aucune carte à réviser aujourd’hui',
+                child: SizedBox(
+                  width: double.infinity,
+                  child: FilledButton.icon(
+                    key: const ValueKey('home-study-cta'),
+                    onPressed: canStudy ? () => context.push('/study') : null,
+                    icon: Icon(
+                      canStudy
+                          ? Icons.play_arrow_rounded
+                          : Icons.check_circle_outline_rounded,
+                    ),
+                    label: Text(
+                      canStudy
+                          ? 'Étudier maintenant · ${data.dueCards} cartes'
+                          : 'Tout est à jour',
+                    ),
+                  ),
+                ),
+              );
+            },
+            loading: () => const SizedBox(height: 56),
+            error: (error, stackTrace) => const SizedBox.shrink(),
+          ),
+          const SizedBox(height: 20),
           TextField(
             decoration: const InputDecoration(
               hintText: 'Rechercher une collection',
