@@ -82,6 +82,7 @@ ios/.symlinks/
 # -----------------------------
 .gradle/
 .build/
+supabase/*
 
 # -----------------------------
 # Tooling / metadata
