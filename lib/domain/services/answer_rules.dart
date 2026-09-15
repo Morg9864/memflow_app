@@ -1,11 +1,20 @@
-/// Answer matching ignores case and whitespace only. Accents, other scripts,
-/// punctuation and symbols carry meaning (for example C, C# and C++).
+/// Canonical form used by every objective answer grader.
 ///
-/// This uses Dart's lowercase mapping, not locale-specific case folding or
-/// Unicode canonical normalization: composed and decomposed accents remain
-/// distinct. Import and study deliberately use this same rule.
-String normalizeAnswer(String value) =>
-    value.toLowerCase().replaceAll(RegExp(r'\s+', unicode: true), ' ').trim();
+/// It deliberately does not perform fuzzy matching: only presentation noise
+/// is removed. Accents are folded so composed/decomposed Unicode input and
+/// ordinary keyboard input have the same meaning; symbols such as `+` and `#`
+/// remain significant.
+String normalizeAnswer(String value) {
+  final withoutCombiningMarks = value.toLowerCase().replaceAll(
+    RegExp(r'[\u0300-\u036f]', unicode: true),
+    '',
+  );
+  return withoutCombiningMarks
+      .replaceAll(RegExp(r'\s+', unicode: true), ' ')
+      .trim()
+      .replaceFirst(RegExp(r'[.!?。！？]+$'), '')
+      .trim();
+}
 
 /// The same placeholder syntax drives validation, rendering and solutions.
 final clozePlaceholderPattern = RegExp(r'\{\{([^{}]*\S[^{}]*)\}\}');

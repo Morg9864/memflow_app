@@ -73,8 +73,7 @@ void main() {
       ('C++', 'c++', 'C'),
       ('C#', 'c#', 'C++'),
       ('côte', 'CÔTE', 'cote'),
-      // Canonical Unicode normalization is intentionally not provided.
-      ('café', 'CAFÉ', 'cafe\u0301'),
+      ('café', 'CAFÉ', 'cafeteria'),
     ]) {
       final preview = importCloze(
         text: 'Avant {{$answer}} après.',

@@ -62,6 +62,7 @@ void main() {
       clozeAnswers: const ['useEffect'],
       clozeWordBank: const ['useEffect', 'useState', 'useMemo'],
       acceptedAnswers: const ['useEffect'],
+      wrongAnswers: const ['useState'],
     );
 
     expect(modes, contains(TestMode.multipleChoice));

@@ -170,6 +170,7 @@ class CsvImportService {
           clozeWordBank: clozeWordBank,
           acceptedAnswers: acceptedAnswers,
           allowedTestModes: _cardModeService.allowedModesFor(
+            correctAnswer: correctAnswer,
             clozeText: clozeText,
             clozeAnswers: clozeAnswers,
             clozeWordBank: clozeWordBank,
@@ -272,5 +273,4 @@ class CsvImportService {
         'cloze_word_bank contient des doublons inutiles : ${issue!.words.join(', ')}.',
     };
   }
-
 }

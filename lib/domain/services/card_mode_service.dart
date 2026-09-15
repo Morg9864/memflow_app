@@ -4,10 +4,24 @@ import 'answer_rules.dart';
 class CardModeService {
   const CardModeService();
 
+  StudyModeAvailability availability(Iterable<FlashcardRecord> cards) {
+    final all = cards.toList(growable: false);
+    return StudyModeAvailability(
+      total: all.length,
+      compatible: {
+        for (final mode in TestMode.values)
+          mode: all
+              .where((card) => card.allowedTestModes.contains(mode))
+              .length,
+      },
+    );
+  }
+
   /// Modes jouables pour une carte, déduits uniquement de ses données. Calculé
   /// à l'import et figé sur la carte : un mode n'est proposé que si la carte
   /// porte de quoi le jouer correctement.
   List<TestMode> allowedModesFor({
+    String? correctAnswer,
     required String? clozeText,
     List<String> clozeAnswers = const [],
     List<String> clozeWordBank = const [],
@@ -15,10 +29,22 @@ class CardModeService {
     List<String> wrongAnswers = const [],
   }) {
     final modes = <TestMode>[
-      TestMode.multipleChoice,
       TestMode.classicFlashcard,
       TestMode.reversedFlashcard,
     ];
+
+    final usableDistractors = <String>{};
+    final correct = normalizeAnswer(correctAnswer ?? '');
+    for (final answer in wrongAnswers) {
+      final normalized = normalizeAnswer(answer);
+      if (normalized.isNotEmpty && normalized != correct) {
+        usableDistractors.add(normalized);
+      }
+    }
+    if (wrongAnswers.isNotEmpty &&
+        (correctAnswer == null || usableDistractors.isNotEmpty)) {
+      modes.insert(0, TestMode.multipleChoice);
+    }
 
     if (clozeText != null &&
         clozeAnswers.isNotEmpty &&
@@ -110,4 +136,14 @@ class CardModeService {
     final current = playedMode ?? card.currentTestMode;
     return [...card.modeHistory, current, if (current != nextMode) nextMode];
   }
+}
+
+class StudyModeAvailability {
+  const StudyModeAvailability({required this.total, required this.compatible});
+
+  final int total;
+  final Map<TestMode, int> compatible;
+
+  int count(TestMode mode) => compatible[mode] ?? 0;
+  bool isFullyCompatible(TestMode mode) => count(mode) == total;
 }
