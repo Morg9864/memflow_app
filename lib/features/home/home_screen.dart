@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../app/daily_goal_controller.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
@@ -31,13 +30,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final stats = ref.watch(homeStatsProvider);
     final collections = ref.watch(homeCollectionsProvider(_search));
     final displayName = ref.watch(displayNameProvider);
-    final dailyGoal = ref.watch(dailyGoalProvider);
     final location = GoRouterState.of(context).uri.path;
 
     return AppScaffold(
       bottomNavigation: AppBottomNav(location: location),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
         children: [
           Row(
             children: [
@@ -77,14 +74,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             data: (data) {
               final due = data.dueCards;
               final goalReached = due == 0;
-              final String subtitle;
-              if (goalReached) {
-                subtitle = 'Objectif atteint ! Reviens demain.';
-              } else if (due >= dailyGoal) {
-                subtitle = '$due cartes t\'attendent aujourd\'hui.';
-              } else {
-                subtitle = '$due / $dailyGoal cartes aujourd\'hui.';
-              }
+              final subtitle = goalReached
+                  ? 'Tout est à jour !'
+                  : '$due cartes à revoir';
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -94,7 +86,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   const SizedBox(height: 8),
                   Text(
                     subtitle,
-                    style: Theme.of(context).textTheme.displaySmall,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               );
@@ -142,93 +138,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             onChanged: (value) => setState(() => _search = value),
           ),
           const SizedBox(height: 24),
-          Expanded(
-            child: ListView(
+          stats.when(
+            data: (data) => GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              mainAxisSpacing: 12,
+              crossAxisSpacing: 12,
+              // Les cartes contiennent une icône, une valeur et son libellé.
+              // Une cellule presque carrée évite de les comprimer sur mobile.
+              childAspectRatio: 1,
               children: [
-                stats.when(
-                  data: (data) => GridView.count(
-                    crossAxisCount: MediaQuery.of(context).size.width > 720
-                        ? 3
-                        : 1,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
-                    childAspectRatio: 1.45,
-                    children: [
-                      StatCard(
-                        value: '${data.streakDays}j',
-                        label: 'de série',
-                        icon: Icons.local_fire_department_rounded,
-                      ),
-                      StatCard(
-                        value: '${(data.successRate * 100).round()}%',
-                        label: 'réussite',
-                        icon: Icons.trending_up_rounded,
-                      ),
-                      StatCard(
-                        value: '${data.dueCards}',
-                        label: 'à revoir',
-                        icon: Icons.schedule_rounded,
-                      ),
-                    ],
-                  ),
-                  loading: () => const SizedBox.shrink(),
-                  error: (error, stackTrace) => const SizedBox.shrink(),
+                StatCard(
+                  value: '${data.streakDays}j',
+                  label: 'de série',
+                  icon: Icons.local_fire_department_rounded,
                 ),
-                const SizedBox(height: 26),
-                Row(
-                  children: [
-                    const SectionLabel('Collections'),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () => context.push('/import'),
-                      child: const Text('Importer CSV'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                collections.when(
-                  data: (items) {
-                    if (items.isEmpty) {
-                      return const EmptyState(
-                        title: 'Aucune collection',
-                        message:
-                            'Ajuste la recherche ou importe un nouveau jeu de cartes.',
-                      );
-                    }
-
-                    final crossAxisCount =
-                        MediaQuery.of(context).size.width > 980
-                        ? 3
-                        : MediaQuery.of(context).size.width > 680
-                        ? 2
-                        : 1;
-
-                    return GridView.count(
-                      crossAxisCount: crossAxisCount,
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      mainAxisSpacing: 12,
-                      crossAxisSpacing: 12,
-                      childAspectRatio: 1.22,
-                      children: [
-                        for (final item in items)
-                          CollectionCard(
-                            collection: item,
-                            onTap: () => context.push('/collection/${item.id}'),
-                          ),
-                      ],
-                    );
-                  },
-                  loading: () => const Padding(
-                    padding: EdgeInsets.all(24),
-                    child: Center(child: CircularProgressIndicator()),
-                  ),
-                  error: (error, stackTrace) => Text(error.toString()),
+                StatCard(
+                  value: '${data.dueCards}',
+                  label: 'à revoir',
+                  icon: Icons.schedule_rounded,
                 ),
               ],
             ),
+            loading: () => const SizedBox.shrink(),
+            error: (error, stackTrace) => const SizedBox.shrink(),
+          ),
+          const SizedBox(height: 26),
+          Row(
+            children: [
+              const SectionLabel('Collections'),
+              const Spacer(),
+              TextButton(
+                onPressed: () => context.push('/import'),
+                child: const Text('Importer CSV'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          collections.when(
+            data: (items) {
+              if (items.isEmpty) {
+                return const EmptyState(
+                  title: 'Aucune collection',
+                  message:
+                      'Ajuste la recherche ou importe un nouveau jeu de cartes.',
+                );
+              }
+
+              return LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardWidth = (constraints.maxWidth - 12) / 2;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final item in items)
+                        SizedBox(
+                          width: cardWidth,
+                          child: CollectionCard(
+                            collection: item,
+                            onTap: () => context.push('/collection/${item.id}'),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              );
+            },
+            loading: () => const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (error, stackTrace) => Text(error.toString()),
           ),
         ],
       ),

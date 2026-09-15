@@ -149,26 +149,44 @@ class StatCard extends StatelessWidget {
     required this.value,
     required this.label,
     required this.icon,
+    this.compact = false,
   });
 
   final String value;
   final String label;
   final IconData icon;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(18),
+        padding: EdgeInsets.all(compact ? 12 : 18),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IconTile(icon: icon),
-            const SizedBox(height: 16),
-            Text(value, style: theme.textTheme.titleLarge),
-            const SizedBox(height: 6),
-            Text(label, style: theme.textTheme.bodySmall),
+            if (compact)
+              IconTile(icon: icon, size: 34)
+            else
+              IconTile(icon: icon),
+            SizedBox(height: compact ? 10 : 16),
+            Text(
+              value,
+              style: compact
+                  ? theme.textTheme.titleLarge?.copyWith(fontSize: 20)
+                  : theme.textTheme.titleLarge,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: compact ? 2 : null,
+              overflow: compact ? TextOverflow.ellipsis : null,
+              style: compact
+                  ? theme.textTheme.bodySmall?.copyWith(fontSize: 12)
+                  : theme.textTheme.bodySmall,
+            ),
           ],
         ),
       ),
@@ -182,18 +200,20 @@ class IconTile extends StatelessWidget {
     required this.icon,
     this.background,
     this.foreground,
+    this.size = 40,
   });
 
   final IconData icon;
   final Color? background;
   final Color? foreground;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
-      width: 40,
-      height: 40,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: background ?? theme.colorScheme.primary.withValues(alpha: 0.11),
         borderRadius: BorderRadius.circular(14),
@@ -201,7 +221,7 @@ class IconTile extends StatelessWidget {
       child: Icon(
         icon,
         color: foreground ?? theme.colorScheme.primary,
-        size: 20,
+        size: size * 0.5,
       ),
     );
   }
@@ -241,64 +261,84 @@ class CollectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Card(
-      child: Opacity(
-        opacity: collection.isDisabled ? 0.45 : 1,
-        child: InkWell(
-          borderRadius: AppTheme.radiusMd,
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 240;
+        return Card(
+          child: Opacity(
+            opacity: collection.isDisabled ? 0.45 : 1,
+            child: InkWell(
+              borderRadius: AppTheme.radiusMd,
+              onTap: onTap,
+              child: Padding(
+                padding: EdgeInsets.all(compact ? 14 : 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 42,
-                      height: 42,
-                      decoration: BoxDecoration(
-                        color: Color(collection.color).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        collection.icon,
-                        style: const TextStyle(fontSize: 20),
+                    Row(
+                      children: [
+                        Container(
+                          width: compact ? 36 : 42,
+                          height: compact ? 36 : 42,
+                          decoration: BoxDecoration(
+                            color: Color(
+                              collection.color,
+                            ).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            collection.icon,
+                            style: TextStyle(fontSize: compact ? 18 : 20),
+                          ),
+                        ),
+                        const Spacer(),
+                        if (collection.isDisabled) ...[
+                          const _DisabledBadge(label: 'Désactivée'),
+                          const SizedBox(width: 8),
+                        ],
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: compact ? 22 : 24,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: compact ? 12 : 24),
+                    Text(
+                      collection.name,
+                      maxLines: compact ? 2 : null,
+                      overflow: compact ? TextOverflow.ellipsis : null,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      compact
+                          ? '${collection.cardsDone}/${collection.totalCards} faites'
+                          : '${collection.cardsDone} / ${collection.totalCards} cartes faites',
+                      maxLines: compact ? 1 : null,
+                      overflow: compact ? TextOverflow.ellipsis : null,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${collection.dueCards} à revoir',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
                       ),
                     ),
-                    const Spacer(),
-                    if (collection.isDisabled) ...[
-                      const _DisabledBadge(label: 'Désactivée'),
-                      const SizedBox(width: 8),
-                    ],
-                    Icon(
-                      Icons.arrow_outward_rounded,
-                      color: theme.colorScheme.primary,
-                    ),
+                    SizedBox(height: compact ? 10 : 12),
+                    ProgressPill(value: collection.progress),
                   ],
                 ),
-                const Spacer(),
-                Text(collection.name, style: theme.textTheme.titleMedium),
-                const SizedBox(height: 6),
-                Text(
-                  '${collection.cardsDone} / ${collection.totalCards} cartes faites',
-                  style: theme.textTheme.bodySmall,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '${collection.dueCards} à revoir',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.primary,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ProgressPill(value: collection.progress),
-              ],
+              ),
             ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 }
