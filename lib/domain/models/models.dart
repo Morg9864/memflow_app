@@ -575,6 +575,18 @@ class StudySessionState {
     required this.currentAnswerWasCorrect,
     required this.isCompleted,
     this.trueFalseProposition,
+    this.sessionId,
+    this.requestedMode,
+    this.startedAt,
+    this.completedAt,
+    this.correctCount = 0,
+    this.incorrectCount = 0,
+    this.incorrectCardIds = const {},
+    this.clozeCorrectGaps = 0,
+    this.clozeTotalGaps = 0,
+    this.activeDuration = Duration.zero,
+    this.cardDisplayedAt,
+    this.answerValidatedAt,
   });
 
   final String deckTitle;
@@ -594,6 +606,18 @@ class StudySessionState {
   /// réponse et les mauvaises réponses. Reste stable tant que la carte courante
   /// ne change pas. `null` pour les autres modes.
   final String? trueFalseProposition;
+  final String? sessionId;
+  final TestMode? requestedMode;
+  final DateTime? startedAt;
+  final DateTime? completedAt;
+  final int correctCount;
+  final int incorrectCount;
+  final Set<String> incorrectCardIds;
+  final int clozeCorrectGaps;
+  final int clozeTotalGaps;
+  final Duration activeDuration;
+  final DateTime? cardDisplayedAt;
+  final DateTime? answerValidatedAt;
 
   StudyCard get currentCard => cards[currentIndex];
 
@@ -618,6 +642,18 @@ class StudySessionState {
     bool? isCompleted,
     String? trueFalseProposition,
     bool clearTrueFalseProposition = false,
+    String? sessionId,
+    TestMode? requestedMode,
+    DateTime? startedAt,
+    DateTime? completedAt,
+    int? correctCount,
+    int? incorrectCount,
+    Set<String>? incorrectCardIds,
+    int? clozeCorrectGaps,
+    int? clozeTotalGaps,
+    Duration? activeDuration,
+    DateTime? cardDisplayedAt,
+    DateTime? answerValidatedAt,
   }) {
     return StudySessionState(
       deckTitle: deckTitle ?? this.deckTitle,
@@ -639,6 +675,18 @@ class StudySessionState {
       trueFalseProposition: clearTrueFalseProposition
           ? null
           : (trueFalseProposition ?? this.trueFalseProposition),
+      sessionId: sessionId ?? this.sessionId,
+      requestedMode: requestedMode ?? this.requestedMode,
+      startedAt: startedAt ?? this.startedAt,
+      completedAt: completedAt ?? this.completedAt,
+      correctCount: correctCount ?? this.correctCount,
+      incorrectCount: incorrectCount ?? this.incorrectCount,
+      incorrectCardIds: incorrectCardIds ?? this.incorrectCardIds,
+      clozeCorrectGaps: clozeCorrectGaps ?? this.clozeCorrectGaps,
+      clozeTotalGaps: clozeTotalGaps ?? this.clozeTotalGaps,
+      activeDuration: activeDuration ?? this.activeDuration,
+      cardDisplayedAt: cardDisplayedAt ?? this.cardDisplayedAt,
+      answerValidatedAt: answerValidatedAt ?? this.answerValidatedAt,
     );
   }
 }
@@ -681,7 +729,12 @@ class StudyCard {
   final int progressDots;
 
   List<String> buildOptions() {
-    final options = <String>[correctAnswer, ...wrongAnswers];
+    final seen = <String>{};
+    final options = <String>[];
+    for (final answer in [correctAnswer, ...wrongAnswers]) {
+      final key = answer.trim().toLowerCase();
+      if (answer.trim().isNotEmpty && seen.add(key)) options.add(answer);
+    }
     options.sort((a, b) => a.hashCode.compareTo(b.hashCode));
     return options;
   }
@@ -737,6 +790,12 @@ class SessionSummary {
     required this.deckTitle,
     required this.totalCards,
     required this.reviewCounts,
+    this.correctCount = 0,
+    this.incorrectCount = 0,
+    this.duration,
+    this.incorrectCardIds = const {},
+    this.clozeCorrectGaps = 0,
+    this.clozeTotalGaps = 0,
   });
 
   final String? collectionId;
@@ -744,10 +803,14 @@ class SessionSummary {
   final String deckTitle;
   final int totalCards;
   final Map<ReviewResult, int> reviewCounts;
+  final int correctCount;
+  final int incorrectCount;
+  final Duration? duration;
+  final Set<String> incorrectCardIds;
+  final int clozeCorrectGaps;
+  final int clozeTotalGaps;
 
-  int get successCount =>
-      (reviewCounts[ReviewResult.good] ?? 0) +
-      (reviewCounts[ReviewResult.easy] ?? 0);
+  int get successCount => correctCount;
 
-  double get successRate => totalCards == 0 ? 0 : successCount / totalCards;
+  double get successRate => totalCards == 0 ? 0 : correctCount / totalCards;
 }

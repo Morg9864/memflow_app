@@ -172,15 +172,16 @@ void main() {
     expect(session.currentCard.currentTestMode, TestMode.trueFalse);
   });
 
-  test('un mode imposé indisponible retombe sur la flashcard', () async {
+  test('un mode imposé indisponible est refusé explicitement', () async {
     await importDrafts([draft()]);
 
-    final session = await repository.startStudySession(
-      sessionCardLimit: 1,
-      forcedMode: TestMode.cloze,
+    expect(
+      () => repository.startStudySession(
+        sessionCardLimit: 1,
+        forcedMode: TestMode.cloze,
+      ),
+      throwsStateError,
     );
-
-    expect(session.currentCard.currentTestMode, TestMode.classicFlashcard);
   });
 
   test('réécrire la même carte ne produit qu\'une intention', () async {
@@ -270,5 +271,41 @@ void main() {
 
     expect(collections.single.errorCount, 1);
     expect(collections.single.totalCards, 1);
+  });
+
+  test('une session interrompue est restaurée depuis la base locale', () async {
+    await importDrafts([draft(), draft(question: 'Deuxième ?')]);
+    final created = await repository.startStudySession(sessionCardLimit: 2);
+    await repository.saveStudySession(created.copyWith(currentIndex: 1));
+
+    final restored = await repository.startStudySession(sessionCardLimit: 2);
+
+    expect(restored.sessionId, created.sessionId);
+    expect(restored.currentIndex, 1);
+    expect(restored.cards.map((card) => card.id), created.cards.map((card) => card.id));
+  });
+
+  test('une review avec le même identifiant est idempotente', () async {
+    await importDrafts([draft()]);
+    final card = (await database.select(database.flashcards).get()).single;
+
+    await repository.submitReview(
+      reviewId: 'review-1',
+      cardId: card.id,
+      reviewResult: ReviewResult.good,
+      wasCorrect: true,
+      playedMode: TestMode.multipleChoice,
+    );
+    await repository.submitReview(
+      reviewId: 'review-1',
+      cardId: card.id,
+      reviewResult: ReviewResult.good,
+      wasCorrect: true,
+      playedMode: TestMode.multipleChoice,
+    );
+
+    final updated = (await database.select(database.flashcards).get()).single;
+    expect(updated.repetitions, 1);
+    expect(await database.select(database.reviewLogs).get(), hasLength(1));
   });
 }

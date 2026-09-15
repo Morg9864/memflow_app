@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:csv/csv.dart';
@@ -35,6 +36,7 @@ class AppRepository {
   final SpacedRepetitionService _spacedRepetitionService;
   final CardModeService _cardModeService;
   final Uuid _uuid = const Uuid();
+  static const _activeStudySessionKey = 'active_study_session';
 
   // ---------------------------------------------------------------------
   // Listes et tableaux de bord
@@ -145,18 +147,82 @@ class AppRepository {
   // Session d'étude
   // ---------------------------------------------------------------------
 
+  Future<StudyModeAvailability> studyModeAvailability({
+    String? collectionId,
+    String? deckId,
+  }) async {
+    final cards = await _fetchFlashcards(
+      collectionId: collectionId,
+      deckId: deckId,
+    );
+    final disabledCollections = (await _fetchCollections())
+        .where((item) => item.isDisabled)
+        .map((item) => item.id)
+        .toSet();
+    final disabledDecks = (await _fetchDecks())
+        .where((item) => item.isDisabled)
+        .map((item) => item.id)
+        .toSet();
+    return _cardModeService.availability(
+      cards.where(
+        (card) =>
+            !disabledCollections.contains(card.collectionId) &&
+            !disabledDecks.contains(card.deckId),
+      ),
+    );
+  }
+
+  Future<StudySessionState> startErrorReviewSession({
+    String? collectionId,
+    String? deckId,
+    required Set<String> cardIds,
+    required int sessionCardLimit,
+  }) async {
+    final session = await startStudySession(
+      collectionId: collectionId,
+      deckId: deckId,
+      onlyCardIds: cardIds,
+      sessionCardLimit: sessionCardLimit,
+    );
+    final cards = session.cards
+        .where((card) => cardIds.contains(card.id))
+        .toList();
+    if (cards.isEmpty) throw StateError('Aucune erreur à revoir.');
+    final filtered = session.copyWith(
+      cards: cards,
+      currentIndex: 0,
+      reviewCounts: {for (final result in ReviewResult.values) result: 0},
+      correctCount: 0,
+      incorrectCount: 0,
+      incorrectCardIds: const {},
+      isCompleted: false,
+    );
+    await saveStudySession(filtered);
+    return filtered;
+  }
+
   Future<StudySessionState> startStudySession({
     String? collectionId,
     String? deckId,
     TestMode? forcedMode,
+    Set<String>? onlyCardIds,
     required int sessionCardLimit,
   }) async {
     final now = DateTime.now();
+    final restored = await _restoreStudySession(
+      collectionId: collectionId,
+      deckId: deckId,
+      forcedMode: forcedMode,
+      onlyCardIds: onlyCardIds,
+    );
+    if (restored != null) return restored;
     final cards = await _loadSessionCards(
       collectionId: collectionId,
       deckId: deckId,
       now: now,
       sessionCardLimit: sessionCardLimit,
+      forcedMode: forcedMode,
+      onlyCardIds: onlyCardIds,
     );
 
     if (cards.isEmpty) {
@@ -178,7 +244,7 @@ class AppRepository {
       title = collection.name;
     }
 
-    return StudySessionState(
+    final session = StudySessionState(
       deckTitle: title,
       collectionId: collectionId,
       deckId: deckId,
@@ -198,7 +264,123 @@ class AppRepository {
       },
       currentAnswerWasCorrect: null,
       isCompleted: false,
+      startedAt: now,
+      sessionId: _uuid.v4(),
+      requestedMode: forcedMode,
+      cardDisplayedAt: now,
     );
+    await saveStudySession(session);
+    return session;
+  }
+
+  /// Persists only the session envelope and card IDs. Card content remains in
+  /// the normal flashcard table, so edits/deletions are detected on restore.
+  Future<void> saveStudySession(StudySessionState state) async {
+    if (state.isCompleted) {
+      await _db.deleteMeta(AppRepository._activeStudySessionKey);
+      return;
+    }
+    await _db.writeMetaString(
+      _activeStudySessionKey,
+      jsonEncode({
+        'session_id': state.sessionId,
+        'collection_id': state.collectionId,
+        'deck_id': state.deckId,
+        'deck_title': state.deckTitle,
+        'card_ids': state.cards.map((card) => card.id).toList(),
+        'requested_mode': state.requestedMode?.name,
+        'current_index': state.currentIndex,
+        'review_counts': {
+          for (final entry in state.reviewCounts.entries)
+            entry.key.name: entry.value,
+        },
+        'started_at': state.startedAt?.toIso8601String(),
+        'correct_count': state.correctCount,
+        'incorrect_count': state.incorrectCount,
+        'incorrect_card_ids': state.incorrectCardIds.toList(),
+        'cloze_correct_gaps': state.clozeCorrectGaps,
+        'cloze_total_gaps': state.clozeTotalGaps,
+        'active_seconds': state.activeDuration.inSeconds,
+      }),
+    );
+  }
+
+  Future<StudySessionState?> _restoreStudySession({
+    required String? collectionId,
+    required String? deckId,
+    required TestMode? forcedMode,
+    Set<String>? onlyCardIds,
+  }) async {
+    final raw = await _db.readMetaString(_activeStudySessionKey);
+    if (raw == null) return null;
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      if (data['collection_id'] != collectionId || data['deck_id'] != deckId) {
+        return null;
+      }
+      final savedMode = data['requested_mode'] == null
+          ? null
+          : TestMode.values.firstWhere(
+              (mode) => mode.name == data['requested_mode'],
+              orElse: () => TestMode.multipleChoice,
+            );
+      if (savedMode != forcedMode) return null;
+      final ids = (data['card_ids'] as List<dynamic>).cast<String>();
+      if (onlyCardIds != null && ids.any((id) => !onlyCardIds.contains(id))) {
+        return null;
+      }
+      final records = await _fetchFlashcards(
+        collectionId: collectionId,
+        deckId: deckId,
+      );
+      final byId = {for (final record in records) record.id: record};
+      if (ids.any((id) => !byId.containsKey(id))) {
+        await _db.deleteMeta(_activeStudySessionKey);
+        return null;
+      }
+      final cards = ids
+          .map((id) => _mapStudyCard(byId[id]!, forcedMode: savedMode))
+          .toList();
+      final index = (data['current_index'] as num).toInt();
+      if (index < 0 || index >= cards.length) return null;
+      final rawCounts = (data['review_counts'] as Map<String, dynamic>?) ?? {};
+      final counts = {
+        for (final result in ReviewResult.values)
+          result: (rawCounts[result.name] as num?)?.toInt() ?? 0,
+      };
+      return StudySessionState(
+        sessionId: data['session_id'] as String?,
+        requestedMode: savedMode,
+        deckTitle: data['deck_title'] as String? ?? 'Révision',
+        collectionId: collectionId,
+        deckId: deckId,
+        cards: cards,
+        currentIndex: index,
+        revealed: false,
+        selectedOptionIndex: null,
+        hasValidatedAnswer: false,
+        freeTextAnswer: '',
+        reviewCounts: counts,
+        currentAnswerWasCorrect: null,
+        isCompleted: false,
+        startedAt: DateTime.tryParse(data['started_at'] as String? ?? ''),
+        correctCount: (data['correct_count'] as num?)?.toInt() ?? 0,
+        incorrectCount: (data['incorrect_count'] as num?)?.toInt() ?? 0,
+        incorrectCardIds:
+            ((data['incorrect_card_ids'] as List<dynamic>?) ?? const [])
+                .cast<String>()
+                .toSet(),
+        clozeCorrectGaps: (data['cloze_correct_gaps'] as num?)?.toInt() ?? 0,
+        clozeTotalGaps: (data['cloze_total_gaps'] as num?)?.toInt() ?? 0,
+        activeDuration: Duration(
+          seconds: (data['active_seconds'] as num?)?.toInt() ?? 0,
+        ),
+        cardDisplayedAt: DateTime.now(),
+      );
+    } catch (_) {
+      await _db.deleteMeta(_activeStudySessionKey);
+      return null;
+    }
   }
 
   /// Enregistre une révision. [playedMode] est le mode réellement présenté à
@@ -206,12 +388,19 @@ class AppRepository {
   /// pas le mode stocké, qui peut différer quand un mode est imposé pour toute
   /// la session.
   Future<void> submitReview({
+    String? reviewId,
     required String cardId,
     required ReviewResult reviewResult,
     required bool wasCorrect,
     required TestMode playedMode,
   }) async {
     final now = DateTime.now();
+    if (reviewId != null) {
+      final alreadyApplied = await (_db.select(_db.reviewLogs)
+            ..where((row) => row.id.equals(reviewId)))
+          .getSingleOrNull();
+      if (alreadyApplied != null) return;
+    }
     final card = await _fetchFlashcard(cardId);
     if (card == null) {
       throw StateError('Carte introuvable.');
@@ -247,7 +436,7 @@ class AppRepository {
     );
 
     final log = ReviewLogRecord(
-      id: _uuid.v4(),
+      id: reviewId ?? _uuid.v4(),
       flashcardId: card.id,
       collectionId: card.collectionId,
       deckId: card.deckId,
@@ -393,18 +582,16 @@ class AppRepository {
       }
 
       for (final deckId in importedDeckIds) {
-        final levels = (await _fetchFlashcards(deckId: deckId))
-            .map((card) => card.level)
-            .toList();
+        final levels = (await _fetchFlashcards(
+          deckId: deckId,
+        )).map((card) => card.level).toList();
         if (levels.isEmpty) continue;
         final difficulty = _difficultyFromAverageLevel(levels);
-        await (_db.update(_db.decks)..where((table) => table.id.equals(deckId)))
-            .write(
-              DecksCompanion(
-                difficulty: Value(difficulty),
-                updatedAt: Value(now),
-              ),
-            );
+        await (_db.update(
+          _db.decks,
+        )..where((table) => table.id.equals(deckId))).write(
+          DecksCompanion(difficulty: Value(difficulty), updatedAt: Value(now)),
+        );
         await _db.enqueueSync(
           entityType: SyncEntityType.deck,
           entityId: deckId,
@@ -967,6 +1154,8 @@ class AppRepository {
     required String? deckId,
     required DateTime now,
     required int sessionCardLimit,
+    TestMode? forcedMode,
+    Set<String>? onlyCardIds,
   }) async {
     final disabledDeckIds = {
       for (final deck in await _fetchDecks())
@@ -983,22 +1172,45 @@ class AppRepository {
     final retryCards = (await _fetchFailedFlashcards(
       collectionId: collectionId,
       deckId: deckId,
-    )).where(isActive).toList();
+    )).where((card) => isActive(card) && (onlyCardIds == null || onlyCardIds.contains(card.id))).toList();
 
     final dueActiveCards = (await _fetchFlashcards(
       collectionId: collectionId,
       deckId: deckId,
       dueBeforeOrAt: now,
-    )).where(isActive).toList();
+    )).where((card) => isActive(card) && (onlyCardIds == null || onlyCardIds.contains(card.id))).toList();
 
-    final fillerCards = dueActiveCards.isNotEmpty
-        ? dueActiveCards
-        : (await _fetchFlashcards(
-            collectionId: collectionId,
-            deckId: deckId,
-          )).where(isActive).toList();
+    final allActiveCards = (await _fetchFlashcards(
+      collectionId: collectionId,
+      deckId: deckId,
+    )).where((card) => isActive(card) && (onlyCardIds == null || onlyCardIds.contains(card.id))).toList();
+    // Due cards retain priority, then new/non-due cards fill the requested
+    // session size without pulling future reviews ahead of due material.
+    final fillerCards = [
+      ...dueActiveCards,
+      ...allActiveCards.where(
+        (card) => !dueActiveCards.any((due) => due.id == card.id),
+      ),
+    ];
 
-    return _takeSessionCards(retryCards, fillerCards, sessionCardLimit);
+    if (forcedMode != null) {
+      retryCards.removeWhere(
+        (card) => !card.allowedTestModes.contains(forcedMode),
+      );
+      fillerCards.removeWhere(
+        (card) => !card.allowedTestModes.contains(forcedMode),
+      );
+    }
+    final selected = _takeSessionCards(
+      retryCards,
+      fillerCards,
+      sessionCardLimit,
+    );
+    if (forcedMode == null) return selected;
+    // A forced mode is explicit: incompatible cards are excluded rather than
+    // silently being rendered in another mode. The picker can report this
+    // availability before starting the session.
+    return selected;
   }
 
   /// Cartes ratées lors de la dernière révision : un résultat `again` remet
