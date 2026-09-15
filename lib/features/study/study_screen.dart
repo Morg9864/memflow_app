@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:uuid/uuid.dart';
 
 import '../../app/app_scaffold_messenger.dart';
 import '../../app/session_card_limit_controller.dart';
@@ -22,19 +23,22 @@ class StudyScreen extends ConsumerStatefulWidget {
     this.collectionId,
     this.deckId,
     this.forcedMode,
+    this.errorCardIds,
     this.controller,
   });
 
   final String? collectionId;
   final String? deckId;
   final TestMode? forcedMode;
+  final Set<String>? errorCardIds;
   final StudyController? controller;
 
   @override
   ConsumerState<StudyScreen> createState() => _StudyScreenState();
 }
 
-class _StudyScreenState extends ConsumerState<StudyScreen> {
+class _StudyScreenState extends ConsumerState<StudyScreen>
+    with WidgetsBindingObserver {
   static const double _desktopBreakpoint = 1100;
   static const double _desktopMaxWidth = 1240;
   static const double _desktopReviewPanelWidth = 340;
@@ -46,11 +50,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   List<String?> _clozeSelections = const [];
   List<String> _clozeWordBank = const [];
   int? _activeClozeGapIndex;
-  final List<_PendingReviewSubmission> _pendingReviewSubmissions = [];
   bool _isApplyingReview = false;
-  bool _isProcessingReviewQueue = false;
-  bool _isReviewRetryPending = false;
-  Future<void>? _reviewFlush;
+  DateTime? _activeSegmentStartedAt;
+  final Map<String, String> _reviewIdsByCard = {};
+  final Uuid _uuid = const Uuid();
 
   void _handleKeyboardPrimaryAction() {
     final state = _state;
@@ -115,6 +118,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _controller =
         widget.controller ?? StudyController(ref.read(appRepositoryProvider));
     if (widget.forcedMode != null) {
@@ -126,7 +130,15 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
 
   Future<void> _askModeAndLoad() async {
     if (!mounted) return;
-    final choice = await showModeSelectionSheet(context);
+    final availability = await _controller.modeAvailability(
+      collectionId: widget.collectionId,
+      deckId: widget.deckId,
+    );
+    if (!mounted) return;
+    final choice = await showModeSelectionSheet(
+      context,
+      availability: availability,
+    );
     // null = user dismissed without choosing → go back
     if (!mounted) return;
     if (choice == null) {
@@ -138,15 +150,23 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
 
   Future<void> _load({TestMode? forcedMode}) async {
     try {
-      final session = await _controller.load(
-        collectionId: widget.collectionId,
-        deckId: widget.deckId,
-        forcedMode: forcedMode,
-        sessionCardLimit: ref.read(sessionCardLimitProvider),
-      );
+      final session = widget.errorCardIds == null
+          ? await _controller.load(
+              collectionId: widget.collectionId,
+              deckId: widget.deckId,
+              forcedMode: forcedMode,
+              sessionCardLimit: ref.read(sessionCardLimitProvider),
+            )
+          : await _controller.loadErrorsOnly(
+              collectionId: widget.collectionId,
+              deckId: widget.deckId,
+              cardIds: widget.errorCardIds!,
+              sessionCardLimit: ref.read(sessionCardLimitProvider),
+            );
       final preparedSession = _controller.prepareCurrentCard(session);
       _prepareCardInputState(preparedSession.currentCard);
       if (mounted) {
+        _activeSegmentStartedAt = DateTime.now();
         setState(() => _state = preparedSession);
       }
     } catch (error) {
@@ -158,8 +178,33 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _freeTextController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _activeSegmentStartedAt = DateTime.now();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused) {
+      _captureActiveTime();
+    }
+  }
+
+  void _captureActiveTime() {
+    final current = _state;
+    final started = _activeSegmentStartedAt;
+    if (current == null || started == null) return;
+    final elapsed = DateTime.now().difference(started);
+    if (elapsed <= Duration.zero) return;
+    final updated = current.copyWith(
+      activeDuration: current.activeDuration + elapsed,
+    );
+    _activeSegmentStartedAt = null;
+    if (mounted) setState(() => _state = updated);
+    unawaited(_controller.saveSession(updated));
   }
 
   void _selectOption(int index, List<String> options) {
@@ -187,11 +232,17 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
         state.currentCard,
         _clozeSelections,
       );
+      final gaps = _controller.rules.evaluateClozeGaps(
+        state.currentCard,
+        _clozeSelections,
+      );
       setState(() {
         _state = state.copyWith(
           hasValidatedAnswer: true,
           currentAnswerWasCorrect: isCorrect,
           freeTextAnswer: _clozeSelections.whereType<String>().join(' | '),
+          clozeCorrectGaps: gaps.where((value) => value).length,
+          clozeTotalGaps: gaps.length,
         );
         _activeClozeGapIndex = null;
       });
@@ -303,22 +354,36 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
 
     _isApplyingReview = true;
     try {
-      final submission = _PendingReviewSubmission(
-        cardId: state.currentCard.id,
+      final activeState = _stateWithCapturedActiveTime(state);
+      _activeSegmentStartedAt = DateTime.now();
+      final wasCorrect =
+          activeState.currentAnswerWasCorrect ?? result != ReviewResult.again;
+      // SQLite is the acknowledgement boundary: the UI never advances until
+      // the review and scheduling update are durable locally.
+      await _controller.submitReviewIdempotent(
+        reviewId: _reviewIdsByCard.putIfAbsent(
+          activeState.currentCard.id,
+          _uuid.v4,
+        ),
+        cardId: activeState.currentCard.id,
         result: result,
-        wasCorrect:
-            state.currentAnswerWasCorrect ?? result != ReviewResult.again,
-        playedMode: state.currentCard.currentTestMode,
+        wasCorrect: wasCorrect,
+        playedMode: activeState.currentCard.currentTestMode,
       );
-      final nextState = _controller.advance(state, result);
-
-      _queueReviewSubmission(submission);
+      final nextState = _controller.advance(
+        activeState,
+        result,
+        answerWasCorrect: activeState.currentAnswerWasCorrect,
+        clozeCorrectGaps: activeState.clozeTotalGaps > 0
+            ? activeState.clozeCorrectGaps
+            : null,
+        clozeTotalGaps: activeState.clozeTotalGaps > 0
+            ? activeState.clozeTotalGaps
+            : null,
+      );
+      await _controller.saveSession(nextState);
 
       if (nextState.isCompleted) {
-        // Wait for the last review to actually reach the local database
-        // before leaving the study flow: if the app were killed right after
-        // navigating, a still-in-flight write would be lost.
-        await _reviewFlush;
         if (!mounted) return;
         context.go(
           '/session-summary',
@@ -330,79 +395,29 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       if (!mounted) return;
       _prepareCardInputState(nextState.currentCard);
       setState(() => _state = nextState);
+    } catch (_) {
+      // Keep the card visible so the user can retry. Most importantly, a
+      // failed local write cannot silently turn into a completed review.
+      final messenger = appScaffoldMessengerKey.currentState;
+      messenger
+        ?..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('La sauvegarde locale a échoué. Réessaie.'),
+          ),
+        );
     } finally {
       _isApplyingReview = false;
     }
   }
 
-  void _queueReviewSubmission(_PendingReviewSubmission submission) {
-    _pendingReviewSubmissions.add(submission);
-    if (_isReviewRetryPending || _isProcessingReviewQueue) {
-      // Already covered by the running flush's loop, which re-checks the
-      // queue on every iteration, or blocked on a user-initiated retry.
-      return;
-    }
-    _reviewFlush = _flushPendingReviewSubmissions();
-    unawaited(_reviewFlush);
-  }
-
-  Future<void> _flushPendingReviewSubmissions() async {
-    if (_isProcessingReviewQueue || _isReviewRetryPending) {
-      return;
-    }
-
-    _isProcessingReviewQueue = true;
-    try {
-      while (_pendingReviewSubmissions.isNotEmpty) {
-        final submission = _pendingReviewSubmissions.first;
-        try {
-          await _controller.submitReview(
-            cardId: submission.cardId,
-            result: submission.result,
-            wasCorrect: submission.wasCorrect,
-            playedMode: submission.playedMode,
-          );
-          _pendingReviewSubmissions.removeAt(0);
-        } catch (_) {
-          _isReviewRetryPending = true;
-          _showReviewSaveError();
-          break;
-        }
-      }
-    } finally {
-      _isProcessingReviewQueue = false;
-    }
-  }
-
-  void _retryPendingReviewSubmissions() {
-    if (_pendingReviewSubmissions.isEmpty) {
-      _isReviewRetryPending = false;
-      return;
-    }
-
-    _isReviewRetryPending = false;
-    unawaited(_flushPendingReviewSubmissions());
-  }
-
-  void _showReviewSaveError() {
-    final messenger = appScaffoldMessengerKey.currentState;
-    if (messenger == null) {
-      return;
-    }
-
-    messenger
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: const Text(
-            'La carte suivante est déjà prête, mais une sauvegarde a échoué.',
-          ),
-          action: SnackBarAction(
-            label: 'Réessayer',
-            onPressed: _retryPendingReviewSubmissions,
-          ),
-        ),
-      );
+  StudySessionState _stateWithCapturedActiveTime(StudySessionState state) {
+    final started = _activeSegmentStartedAt;
+    if (started == null) return state;
+    final elapsed = DateTime.now().difference(started);
+    return elapsed <= Duration.zero
+        ? state
+        : state.copyWith(activeDuration: state.activeDuration + elapsed);
   }
 
   void _reveal() {
@@ -759,7 +774,12 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                             }
                           },
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                            padding: EdgeInsets.fromLTRB(
+                              16,
+                              viewportConstraints.maxWidth < 600 ? 8 : 16,
+                              16,
+                              viewportConstraints.maxWidth < 600 ? 12 : 24,
+                            ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
@@ -771,7 +791,11 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                                   progressDots: card.progressDots,
                                   onClose: _exitStudy,
                                 ),
-                                const SizedBox(height: 24),
+                                SizedBox(
+                                  height: viewportConstraints.maxWidth < 600
+                                      ? 14
+                                      : 24,
+                                ),
                                 Expanded(
                                   child: usesReviewPanel
                                       ? Row(
@@ -800,6 +824,47 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                                             ),
                                           ],
                                         )
+                                      : showsReview
+                                      ? SingleChildScrollView(
+                                          physics:
+                                              const ClampingScrollPhysics(),
+                                          child: Align(
+                                            alignment: Alignment.topCenter,
+                                            child: ConstrainedBox(
+                                              constraints: const BoxConstraints(
+                                                maxWidth:
+                                                    AppTheme.contentMaxWidth,
+                                              ),
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.stretch,
+                                                children: [
+                                                  modeContent,
+                                                  if (showsReview) ...[
+                                                    const SizedBox(height: 18),
+                                                    const SectionLabel(
+                                                      'Comment tu t’en es sorti ?',
+                                                    ),
+                                                    const SizedBox(height: 12),
+                                                    _buildInlineReviewGrid(
+                                                      context,
+                                                      suggested,
+                                                    ),
+                                                    if (_isDesktopPlatform())
+                                                      const _KeyboardHint(),
+                                                  ] else if (_isDesktopPlatform() &&
+                                                      mode ==
+                                                          TestMode
+                                                              .multipleChoice)
+                                                    const _KeyboardHint(
+                                                      label:
+                                                          'Clavier : 1–4 pour choisir une réponse',
+                                                    ),
+                                                ],
+                                              ),
+                                            ),
+                                          ),
+                                        )
                                       : Align(
                                           alignment: Alignment.topCenter,
                                           child: ConstrainedBox(
@@ -811,41 +876,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
                                           ),
                                         ),
                                 ),
-                                if (showsReview && !usesReviewPanel) ...[
-                                  const SizedBox(height: 18),
-                                  const SectionLabel(
-                                    'Comment tu t’en es sorti ?',
-                                  ),
-                                  const SizedBox(height: 12),
-                                  GridView.count(
-                                    key: const Key('inline-review-controls'),
-                                    crossAxisCount:
-                                        MediaQuery.of(context).size.width > 700
-                                        ? 4
-                                        : 2,
-                                    shrinkWrap: true,
-                                    physics:
-                                        const NeverScrollableScrollPhysics(),
-                                    crossAxisSpacing: 12,
-                                    mainAxisSpacing: 12,
-                                    childAspectRatio: 1.55,
-                                    children: [
-                                      for (final result in ReviewResult.values)
-                                        ReviewButton(
-                                          result: result,
-                                          isSuggested: result == suggested,
-                                          onPressed: () => _applyReview(result),
-                                        ),
-                                    ],
-                                  ),
-                                  if (_isDesktopPlatform())
-                                    const _KeyboardHint(),
-                                ] else if (_isDesktopPlatform() &&
-                                    mode == TestMode.multipleChoice)
-                                  const _KeyboardHint(
-                                    label:
-                                        'Clavier : 1–4 pour choisir une réponse',
-                                  ),
                               ],
                             ),
                           ),
@@ -870,6 +900,26 @@ class _StudyScreenState extends ConsumerState<StudyScreen> {
       return state.hasValidatedAnswer;
     }
     return state.revealed;
+  }
+
+  Widget _buildInlineReviewGrid(BuildContext context, ReviewResult suggested) {
+    return GridView.count(
+      key: const Key('inline-review-controls'),
+      crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 4 : 2,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      crossAxisSpacing: 12,
+      mainAxisSpacing: 12,
+      childAspectRatio: 1.55,
+      children: [
+        for (final result in ReviewResult.values)
+          ReviewButton(
+            result: result,
+            isSuggested: result == suggested,
+            onPressed: () => _applyReview(result),
+          ),
+      ],
+    );
   }
 }
 
@@ -903,23 +953,6 @@ class _KeyboardHint extends StatelessWidget {
       ),
     );
   }
-}
-
-class _PendingReviewSubmission {
-  const _PendingReviewSubmission({
-    required this.cardId,
-    required this.result,
-    required this.wasCorrect,
-    required this.playedMode,
-  });
-
-  final String cardId;
-  final ReviewResult result;
-  final bool wasCorrect;
-
-  /// Mode réellement présenté : c'est lui qui est journalisé et qui fait
-  /// avancer la carte, pas le mode stocké avant la session.
-  final TestMode playedMode;
 }
 
 class _ReviewFeedback {
@@ -1092,6 +1125,8 @@ class _FlashcardMode extends StatelessWidget {
     }
 
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         Card(
           child: Padding(
@@ -1154,25 +1189,30 @@ class _McqMode extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 600;
     final correctIndex = options.indexWhere(
       (item) => item == card.correctAnswer,
     );
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         Card(
           child: Padding(
-            padding: const EdgeInsets.all(24),
+            padding: EdgeInsets.all(compact ? 16 : 24),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SectionLabel('Question'),
-                const SizedBox(height: 14),
+                SizedBox(height: compact ? 8 : 14),
                 Text(
                   card.question,
-                  style: Theme.of(context).textTheme.headlineMedium,
+                  style: compact
+                      ? Theme.of(context).textTheme.headlineSmall
+                      : Theme.of(context).textTheme.headlineMedium,
                 ),
                 if (card.hint != null) ...[
-                  const SizedBox(height: 16),
+                  SizedBox(height: compact ? 8 : 16),
                   Text(
                     card.hint!,
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
@@ -1184,7 +1224,7 @@ class _McqMode extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        SizedBox(height: compact ? 10 : 16),
         if (desktopGrid)
           LayoutBuilder(
             builder: (context, constraints) {
@@ -1214,6 +1254,7 @@ class _McqMode extends StatelessWidget {
                         onTap: hasValidatedAnswer
                             ? null
                             : () => onSelect(index, options),
+                        compact: MediaQuery.sizeOf(context).width < 600,
                       ),
                     ),
                 ],
@@ -1232,6 +1273,7 @@ class _McqMode extends StatelessWidget {
                   selectedIndex == index &&
                   selectedIndex != correctIndex,
               onTap: hasValidatedAnswer ? null : () => onSelect(index, options),
+              compact: compact,
             ),
             const SizedBox(height: 10),
           ],
@@ -1278,6 +1320,7 @@ class _McqOptionTile extends StatelessWidget {
     required this.isWrong,
     required this.onTap,
     this.shortcutLabel,
+    this.compact = false,
   });
 
   final String text;
@@ -1286,6 +1329,7 @@ class _McqOptionTile extends StatelessWidget {
   final bool isWrong;
   final VoidCallback? onTap;
   final String? shortcutLabel;
+  final bool compact;
 
   static const double _padding = 18;
   static const double _borderWidth = 1;
@@ -1347,7 +1391,7 @@ class _McqOptionTile extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(20),
         child: Ink(
-          padding: const EdgeInsets.all(_padding),
+          padding: EdgeInsets.all(compact ? 12 : _padding),
           decoration: BoxDecoration(
             color: background,
             borderRadius: BorderRadius.circular(20),
@@ -1357,8 +1401,8 @@ class _McqOptionTile extends StatelessWidget {
             children: [
               if (shortcutLabel != null) ...[
                 Container(
-                  width: 32,
-                  height: 32,
+                  width: compact ? 28 : 32,
+                  height: compact ? 28 : 32,
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: foreground.withValues(alpha: 0.10),
@@ -1371,7 +1415,7 @@ class _McqOptionTile extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 14),
+                SizedBox(width: compact ? 10 : 14),
               ],
               Expanded(
                 child: Text(
@@ -1441,6 +1485,8 @@ class _ClozeMode extends StatelessWidget {
         theme.textTheme.titleLarge;
 
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         Card(
           child: Padding(
@@ -1742,6 +1788,8 @@ class _TextEntryMode extends StatelessWidget {
         : const Color(0xFFFBE7E4);
 
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         Card(
           child: Padding(

@@ -128,86 +128,74 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets(
-    'selecting a review advances immediately to the next card before save completes',
-    (tester) async {
-      final pendingSave = Completer<void>();
-      final controller = _FakeStudyController(
-        initialState: buildState([buildCard('a'), buildCard('b')]),
-        submitReviewImpl:
-            ({
-              required String cardId,
-              required ReviewResult result,
-              required bool wasCorrect,
-            }) {
-              return pendingSave.future;
-            },
-      );
+  testWidgets('a review is not advanced before local save completes', (
+    tester,
+  ) async {
+    final pendingSave = Completer<void>();
+    final controller = _FakeStudyController(
+      initialState: buildState([buildCard('a'), buildCard('b')]),
+      submitReviewImpl:
+          ({
+            required String cardId,
+            required ReviewResult result,
+            required bool wasCorrect,
+          }) {
+            return pendingSave.future;
+          },
+    );
 
-      await pumpStudyScreen(tester, controller: controller);
+    await pumpStudyScreen(tester, controller: controller);
 
-      expect(find.text('Question a'), findsOneWidget);
+    expect(find.text('Question a'), findsWidgets);
 
-      await tester.tap(find.text('Réponse a'));
-      await tester.pump();
-      await tester.tap(find.text('Correct'));
-      await tester.pump();
+    await tester.tap(find.text('Réponse a'));
+    await tester.pump();
+    await tester.tap(find.text('Correct'));
+    await tester.pump();
 
-      expect(find.text('Question b'), findsOneWidget);
-      expect(controller.submissions.length, 1);
+    expect(find.text('Question a'), findsWidgets);
+    expect(controller.submissions.length, 1);
 
-      pendingSave.complete();
-    },
-  );
+    pendingSave.complete();
+    await tester.pump();
+    expect(find.text('Question b'), findsOneWidget);
+  });
 
-  testWidgets(
-    'a failed save shows a retry snackbar without rewinding the session',
-    (tester) async {
-      var attempts = 0;
-      final controller = _FakeStudyController(
-        initialState: buildState([buildCard('a'), buildCard('b')]),
-        submitReviewImpl:
-            ({
-              required String cardId,
-              required ReviewResult result,
-              required bool wasCorrect,
-            }) async {
-              attempts += 1;
-              if (attempts == 1) {
-                throw Exception('network');
-              }
-            },
-      );
+  testWidgets('a failed save keeps the current card visible', (tester) async {
+    var attempts = 0;
+    final controller = _FakeStudyController(
+      initialState: buildState([buildCard('a'), buildCard('b')]),
+      submitReviewImpl:
+          ({
+            required String cardId,
+            required ReviewResult result,
+            required bool wasCorrect,
+          }) async {
+            attempts += 1;
+            if (attempts == 1) {
+              throw Exception('network');
+            }
+          },
+    );
 
-      await pumpStudyScreen(tester, controller: controller);
+    await pumpStudyScreen(tester, controller: controller);
 
-      await tester.tap(find.text('Réponse a'));
-      await tester.pump();
-      await tester.tap(find.text('Correct'));
-      await tester.pump();
+    await tester.tap(find.text('Réponse a'));
+    await tester.pump();
+    await tester.tap(find.text('Correct'));
+    await tester.pump();
 
-      expect(find.text('Question b'), findsOneWidget);
+    expect(find.text('Question a'), findsWidgets);
 
-      await tester.pump();
+    await tester.pump();
 
-      expect(
-        find.text(
-          'La carte suivante est déjà prête, mais une sauvegarde a échoué.',
-        ),
-        findsOneWidget,
-      );
-      expect(find.text('Réessayer'), findsOneWidget);
-
-      final retryAction = tester.widget<SnackBarAction>(
-        find.byType(SnackBarAction),
-      );
-      retryAction.onPressed();
-      await tester.pump();
-
-      expect(attempts, 2);
-      expect(controller.submissions.length, 2);
-    },
-  );
+    expect(
+      find.text('La sauvegarde locale a échoué. Réessaie.'),
+      findsOneWidget,
+    );
+    expect(attempts, 1);
+    expect(controller.submissions.length, 1);
+  });
 
   testWidgets('number shortcuts submit the selected review immediately', (
     tester,
@@ -510,4 +498,18 @@ class _FakeStudyController extends StudyController {
       wasCorrect: wasCorrect,
     );
   }
+
+  @override
+  Future<void> submitReviewIdempotent({
+    required String reviewId,
+    required String cardId,
+    required ReviewResult result,
+    required bool wasCorrect,
+    required TestMode playedMode,
+  }) => submitReview(
+    cardId: cardId,
+    result: result,
+    wasCorrect: wasCorrect,
+    playedMode: playedMode,
+  );
 }

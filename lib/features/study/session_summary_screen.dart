@@ -34,6 +34,11 @@ class SessionSummaryScreen extends StatelessWidget {
                         summary.deckTitle,
                         style: Theme.of(context).textTheme.bodyLarge,
                       ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${summary.totalCards} cartes · ${_formatDuration(summary.duration)}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
                       const SizedBox(height: 22),
                       Wrap(
                         spacing: 12,
@@ -69,13 +74,23 @@ class SessionSummaryScreen extends StatelessWidget {
                             icon: Icons.rocket_launch_rounded,
                           ),
                           StatCard(
-                            value: '${(summary.successRate * 100).round()}%',
-                            label: 'réussite',
+                            value:
+                                '${summary.correctCount}/${summary.totalCards}',
+                            label: 'précision objective',
                             icon: Icons.insights_rounded,
                           ),
                         ],
                       ),
                       const SizedBox(height: 22),
+                      if (summary.incorrectCount > 0)
+                        TextButton.icon(
+                          onPressed: () =>
+                              context.go('/study/errors', extra: summary),
+                          icon: const Icon(Icons.replay_rounded),
+                          label: Text(
+                            'Revoir mes erreurs (${summary.incorrectCount})',
+                          ),
+                        ),
                       FilledButton(
                         onPressed: () {
                           if (summary.collectionId != null) {
@@ -110,5 +125,12 @@ class SessionSummaryScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static String _formatDuration(Duration? duration) {
+    if (duration == null) return 'durée indisponible';
+    final minutes = duration.inMinutes;
+    final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '${minutes}m ${seconds}s';
   }
 }

@@ -28,10 +28,12 @@ class StudyRules {
 
   String? buildTrueFalseProposition(StudyCard card) {
     if (card.currentTestMode != TestMode.trueFalse) return null;
-    final pool = <String>[
-      if (card.correctAnswer.trim().isNotEmpty) card.correctAnswer,
-      ...card.wrongAnswers.where((answer) => answer.trim().isNotEmpty),
-    ];
+    final seen = <String>{};
+    final pool = <String>[];
+    for (final answer in [card.correctAnswer, ...card.wrongAnswers]) {
+      final normalized = normalizeAnswer(answer);
+      if (normalized.isNotEmpty && seen.add(normalized)) pool.add(answer);
+    }
     return pool.isEmpty ? null : pool[_random.nextInt(pool.length)];
   }
 
@@ -112,16 +114,52 @@ class StudyRules {
     deckTitle: state.deckTitle,
     totalCards: state.cards.length,
     reviewCounts: state.reviewCounts,
+    correctCount: state.correctCount,
+    incorrectCount: state.incorrectCount,
+    duration: state.startedAt == null || state.completedAt == null
+        ? state.activeDuration == Duration.zero
+            ? null
+            : state.activeDuration
+        : state.activeDuration == Duration.zero
+        ? state.completedAt!.difference(state.startedAt!)
+        : state.activeDuration,
+    incorrectCardIds: state.incorrectCardIds,
+    clozeCorrectGaps: state.clozeCorrectGaps,
+    clozeTotalGaps: state.clozeTotalGaps,
   );
   ReviewResult suggestedResult(bool? wasCorrect) =>
       wasCorrect == null || wasCorrect ? ReviewResult.good : ReviewResult.again;
 
-  StudySessionState advance(StudySessionState state, ReviewResult result) {
+  StudySessionState advance(
+    StudySessionState state,
+    ReviewResult result, {
+    bool? answerWasCorrect,
+    int? clozeCorrectGaps,
+    int? clozeTotalGaps,
+  }) {
     final updatedCounts = Map<ReviewResult, int>.from(state.reviewCounts)
       ..update(result, (value) => value + 1, ifAbsent: () => 1);
+    final correct = answerWasCorrect == true
+        ? state.correctCount + 1
+        : state.correctCount;
+    final incorrect = answerWasCorrect == false
+        ? state.incorrectCount + 1
+        : state.incorrectCount;
+    final incorrectIds = {...state.incorrectCardIds};
+    if (answerWasCorrect == false) incorrectIds.add(state.currentCard.id);
     final nextIndex = state.currentIndex + 1;
     if (nextIndex >= state.cards.length) {
-      return state.copyWith(reviewCounts: updatedCounts, isCompleted: true);
+      return state.copyWith(
+        reviewCounts: updatedCounts,
+        isCompleted: true,
+        completedAt: DateTime.now(),
+        answerValidatedAt: DateTime.now(),
+        correctCount: correct,
+        incorrectCount: incorrect,
+        incorrectCardIds: incorrectIds,
+        clozeCorrectGaps: state.clozeCorrectGaps + (clozeCorrectGaps ?? 0),
+        clozeTotalGaps: state.clozeTotalGaps + (clozeTotalGaps ?? 0),
+      );
     }
     final proposition = buildTrueFalseProposition(state.cards[nextIndex]);
     return state.copyWith(
@@ -133,7 +171,14 @@ class StudyRules {
       reviewCounts: updatedCounts,
       clearCorrectness: true,
       isCompleted: false,
+      correctCount: correct,
+      incorrectCount: incorrect,
+      incorrectCardIds: incorrectIds,
+      clozeCorrectGaps: state.clozeCorrectGaps + (clozeCorrectGaps ?? 0),
+      clozeTotalGaps: state.clozeTotalGaps + (clozeTotalGaps ?? 0),
+      answerValidatedAt: DateTime.now(),
       trueFalseProposition: proposition,
+      cardDisplayedAt: DateTime.now(),
       clearTrueFalseProposition: proposition == null,
     );
   }

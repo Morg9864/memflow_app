@@ -1,17 +1,21 @@
 import 'package:flutter/material.dart';
 
 import '../../domain/models/models.dart';
+import '../../domain/services/card_mode_service.dart';
 
 /// Shows a responsive mode picker.
 /// Returns the chosen [TestMode], or null for random.
 /// Returns nothing (pop with no value) if the user dismisses.
-Future<ModeChoice?> showModeSelectionSheet(BuildContext context) {
+Future<ModeChoice?> showModeSelectionSheet(
+  BuildContext context, {
+  StudyModeAvailability? availability,
+}) {
   final isDesktop = MediaQuery.sizeOf(context).width >= 720;
   if (isDesktop) {
     return showDialog<ModeChoice>(
       context: context,
       barrierDismissible: true,
-      builder: (_) => const _ModeSelectionDialog(),
+      builder: (_) => _ModeSelectionDialog(availability: availability),
     );
   }
 
@@ -21,7 +25,7 @@ Future<ModeChoice?> showModeSelectionSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
-    builder: (_) => const _ModeSelectionBottomSheet(),
+    builder: (_) => _ModeSelectionBottomSheet(availability: availability),
   );
 }
 
@@ -32,7 +36,9 @@ class ModeChoice {
 }
 
 class _ModeSelectionDialog extends StatelessWidget {
-  const _ModeSelectionDialog();
+  const _ModeSelectionDialog({this.availability});
+
+  final StudyModeAvailability? availability;
 
   @override
   Widget build(BuildContext context) {
@@ -42,28 +48,31 @@ class _ModeSelectionDialog extends StatelessWidget {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(32)),
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: 760, maxHeight: maxHeight),
-        child: const _ModeSelectionBody(isDialog: true),
+        child: _ModeSelectionBody(isDialog: true, availability: availability),
       ),
     );
   }
 }
 
 class _ModeSelectionBottomSheet extends StatelessWidget {
-  const _ModeSelectionBottomSheet();
+  const _ModeSelectionBottomSheet({this.availability});
+
+  final StudyModeAvailability? availability;
 
   @override
   Widget build(BuildContext context) {
-    return const SafeArea(
+    return SafeArea(
       top: false,
-      child: _ModeSelectionBody(isDialog: false),
+      child: _ModeSelectionBody(isDialog: false, availability: availability),
     );
   }
 }
 
 class _ModeSelectionBody extends StatelessWidget {
-  const _ModeSelectionBody({required this.isDialog});
+  const _ModeSelectionBody({required this.isDialog, this.availability});
 
   final bool isDialog;
+  final StudyModeAvailability? availability;
 
   static const _options = <_ModeOptionData>[
     _ModeOptionData(
@@ -171,7 +180,10 @@ class _ModeSelectionBody extends StatelessWidget {
                 ),
                 itemBuilder: (context, index) {
                   final option = _options[index];
-                  return _ModeOptionCard(option: option);
+                  return _ModeOptionCard(
+                    option: option,
+                    availability: availability,
+                  );
                 },
               ),
             ],
@@ -220,17 +232,25 @@ class _ModeOptionData {
 }
 
 class _ModeOptionCard extends StatelessWidget {
-  const _ModeOptionCard({required this.option});
+  const _ModeOptionCard({required this.option, this.availability});
 
   final _ModeOptionData option;
+  final StudyModeAvailability? availability;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final compatible = option.mode == null
+        ? availability?.total
+        : availability?.count(option.mode!);
+    final disabled = option.mode != null && compatible == 0;
     return Card(
+      color: disabled ? theme.colorScheme.surfaceContainerHighest : null,
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () => Navigator.pop(context, ModeChoice(mode: option.mode)),
+        onTap: disabled
+            ? null
+            : () => Navigator.pop(context, ModeChoice(mode: option.mode)),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -281,6 +301,17 @@ class _ModeOptionCard extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (compatible != null)
+                      Text(
+                        option.mode == null
+                            ? '$compatible cartes'
+                            : '$compatible / ${availability!.total} compatibles',
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: disabled
+                              ? theme.colorScheme.error
+                              : theme.colorScheme.primary,
+                        ),
+                      ),
                   ],
                 ),
               ),

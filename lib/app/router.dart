@@ -113,6 +113,17 @@ final routerProvider = Provider<GoRouter>((ref) {
         ),
       ),
       GoRoute(
+        path: '/study/errors',
+        builder: (context, state) {
+          final summary = state.extra as SessionSummary;
+          return StudyScreen(
+            collectionId: summary.collectionId,
+            deckId: summary.deckId,
+            errorCardIds: summary.incorrectCardIds,
+          );
+        },
+      ),
+      GoRoute(
         path: '/study/:deckId',
         builder: (context, state) =>
             StudyScreen(deckId: state.pathParameters['deckId']),
