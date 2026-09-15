@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../app/providers.dart';
+import '../data/sync/sync_service.dart';
 import '../domain/models/models.dart';
 import '../theme/app_theme.dart';
 import '../theme/theme_controller.dart';
@@ -35,6 +37,60 @@ class AppScaffold extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Demande une synchronisation puis laisse les streams SQLite rafraîchir les
+/// vues. La base locale reste la source de vérité pendant l'opération.
+class SyncRefreshIndicator extends ConsumerWidget {
+  const SyncRefreshIndicator({super.key, required this.child, this.onRefresh});
+
+  final Widget child;
+  final Future<void> Function()? onRefresh;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return RefreshIndicator(
+      onRefresh: () async {
+        try {
+          await ref.read(syncServiceProvider).syncNow();
+          await onRefresh?.call();
+        } catch (error) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Synchronisation impossible: $error')),
+            );
+          }
+        }
+      },
+      child: child,
+    );
+  }
+}
+
+/// Action explicite pour les formats tablette/desktop. Sur mobile, le geste
+/// pull-to-refresh est l'affordance principale.
+class SyncNowButton extends ConsumerWidget {
+  const SyncNowButton({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (MediaQuery.sizeOf(context).width < 700) {
+      return const SizedBox.shrink();
+    }
+    final status = ref.watch(syncStatusProvider).value;
+    final syncing = status?.state == SyncState.syncing;
+    return IconButton(
+      key: const ValueKey('sync-now-icon-button'),
+      tooltip: syncing ? 'Synchronisation en cours' : 'Synchroniser',
+      onPressed: syncing ? null : () => ref.read(syncServiceProvider).syncNow(),
+      icon: syncing
+          ? const SizedBox.square(
+              dimension: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.sync_rounded),
     );
   }
 }

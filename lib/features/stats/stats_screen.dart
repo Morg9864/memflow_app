@@ -47,100 +47,103 @@ class StatisticsScreen extends ConsumerWidget {
         location: GoRouterState.of(context).uri.path,
       ),
       child: stats.when(
-        data: (data) => ListView(
-          children: [
-            Row(
-              children: [
-                Text(
-                  'Statistiques',
-                  style: Theme.of(context).textTheme.displaySmall,
-                ),
-                const Spacer(),
-                const ThemeToggleButton(),
-              ],
-            ),
-            const SizedBox(height: 24),
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  child: StatCard(
-                    compact: true,
-                    value: '${data.streakDays}',
-                    label: 'série',
-                    icon: Icons.local_fire_department_rounded,
+        data: (data) => SyncRefreshIndicator(
+          child: ListView(
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Statistiques',
+                    style: Theme.of(context).textTheme.displaySmall,
                   ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: StatCard(
-                    compact: true,
-                    value: '${data.totalReviews}',
-                    label: 'cartes vues',
-                    icon: Icons.menu_book_rounded,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: StatCard(
-                    compact: true,
-                    value: '${(data.successRate * 100).round()}%',
-                    label: 'réussite',
-                    icon: Icons.show_chart_rounded,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(22),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Text(
-                          'Activité',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const Spacer(),
-                        Text('${data.studyDays} jours d’étude'),
-                      ],
+                  const Spacer(),
+                  const SyncNowButton(),
+                  const ThemeToggleButton(),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: StatCard(
+                      compact: true,
+                      value: '${data.streakDays}',
+                      label: 'série',
+                      icon: Icons.local_fire_department_rounded,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '14 derniers jours',
-                      style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: StatCard(
+                      compact: true,
+                      value: '${data.totalReviews}',
+                      label: 'cartes vues',
+                      icon: Icons.menu_book_rounded,
                     ),
-                    const SizedBox(height: 22),
-                    ActivityBarChart(days: data.heatmap),
-                  ],
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: StatCard(
+                      compact: true,
+                      value: '${(data.successRate * 100).round()}%',
+                      label: 'réussite',
+                      icon: Icons.show_chart_rounded,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(22),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Text(
+                            'Activité',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const Spacer(),
+                          Text('${data.studyDays} jours d’étude'),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '14 derniers jours',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 22),
+                      ActivityBarChart(days: data.heatmap),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-            _StatisticsDetails(data: data),
-            const SizedBox(height: 20),
-            const SectionLabel('Progression par niveau'),
-            const SizedBox(height: 12),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final cardWidth = (constraints.maxWidth - 12) / 2;
-                return Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    for (final item in data.levelProgress)
-                      SizedBox(
-                        width: cardWidth,
-                        child: _LevelProgressCard(item: item),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
+              const SizedBox(height: 20),
+              _StatisticsDetails(data: data),
+              const SizedBox(height: 20),
+              const SectionLabel('Progression par niveau'),
+              const SizedBox(height: 12),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final cardWidth = (constraints.maxWidth - 12) / 2;
+                  return Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: [
+                      for (final item in data.levelProgress)
+                        SizedBox(
+                          width: cardWidth,
+                          child: _LevelProgressCard(item: item),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
         ),
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Text(error.toString()),

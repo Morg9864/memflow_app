@@ -89,6 +89,7 @@ class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
               const Spacer(),
+              const SyncNowButton(),
               const ThemeToggleButton(),
             ],
           ),
@@ -132,7 +133,7 @@ class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
       );
     }
 
-    return RefreshIndicator(
+    return SyncRefreshIndicator(
       onRefresh: _controller.refresh,
       child: ListView.separated(
         controller: _scrollController,

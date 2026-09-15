@@ -318,6 +318,7 @@ class _CollectionDetailScreenState
                     icon: const Icon(Icons.arrow_back_rounded),
                   ),
                   const Spacer(),
+                  const SyncNowButton(),
                   const ThemeToggleButton(),
                   PopupMenuButton<_CollectionAction>(
                     enabled: !_busy,

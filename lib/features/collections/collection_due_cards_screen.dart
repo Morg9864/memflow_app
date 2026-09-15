@@ -154,6 +154,7 @@ class _CollectionDueCardsScreenState
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
               const Spacer(),
+              const SyncNowButton(),
               const ThemeToggleButton(),
             ],
           ),
@@ -201,7 +202,7 @@ class _CollectionDueCardsScreenState
       );
     }
 
-    return RefreshIndicator(
+    return SyncRefreshIndicator(
       onRefresh: _controller.refresh,
       child: ListView.separated(
         controller: _scrollController,
