@@ -19,6 +19,11 @@ String normalizeAnswer(String value) {
 /// The same placeholder syntax drives validation, rendering and solutions.
 final clozePlaceholderPattern = RegExp(r'\{\{([^{}]*\S[^{}]*)\}\}');
 
+String stripClozeTakeawayLabel(String text) => text.replaceFirst(
+      RegExp(r'^\s*à retenir\s*:\s*', caseSensitive: false),
+      '',
+    );
+
 enum ClozeIssue {
   missingText,
   missingPlaceholders,

@@ -62,7 +62,7 @@ class StudyRules {
   }
 
   List<ClozeToken> buildClozeTokens(StudyCard card) {
-    final source = card.clozeText ?? card.question;
+    final source = stripClozeTakeawayLabel(card.clozeText ?? card.question);
     final matches = clozePlaceholderPattern.allMatches(source).toList();
     if (matches.isEmpty) return [ClozeToken.text(source)];
     final tokens = <ClozeToken>[];
@@ -98,7 +98,7 @@ class StudyRules {
   }
 
   String buildClozeSolution(StudyCard card) {
-    final source = card.clozeText ?? card.question;
+    final source = stripClozeTakeawayLabel(card.clozeText ?? card.question);
     var gapIndex = 0;
     return source.replaceAllMapped(clozePlaceholderPattern, (match) {
       if (gapIndex >= card.clozeAnswers.length) {
