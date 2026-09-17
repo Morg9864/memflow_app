@@ -155,7 +155,6 @@ class _CollectionDueCardsScreenState
               ),
               const Spacer(),
               const SyncNowButton(),
-              const ThemeToggleButton(),
             ],
           ),
           const SizedBox(height: 8),

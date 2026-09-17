@@ -58,7 +58,6 @@ class StatisticsScreen extends ConsumerWidget {
                   ),
                   const Spacer(),
                   const SyncNowButton(),
-                  const ThemeToggleButton(),
                 ],
               ),
               const SizedBox(height: 24),

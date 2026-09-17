@@ -81,7 +81,7 @@ class SyncNowButton extends ConsumerWidget {
     }
     final status = ref.watch(syncStatusProvider).value;
     final syncing = status?.state == SyncState.syncing;
-    return IconButton(
+    return IconButton.filledTonal(
       key: const ValueKey('sync-now-icon-button'),
       tooltip: syncing ? 'Synchronisation en cours' : 'Synchroniser',
       onPressed: syncing ? null : () => ref.read(syncServiceProvider).syncNow(),
@@ -206,45 +206,63 @@ class StatCard extends StatelessWidget {
     required this.label,
     required this.icon,
     this.compact = false,
+    this.horizontal = false,
   });
 
   final String value;
   final String label;
   final IconData icon;
   final bool compact;
+  final bool horizontal;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final iconWidget = compact
+        ? IconTile(icon: icon, size: 30)
+        : IconTile(icon: icon);
+    final textWidget = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: compact
+              ? theme.textTheme.titleLarge?.copyWith(fontSize: 18)
+              : theme.textTheme.titleLarge,
+        ),
+        SizedBox(height: compact ? 2 : 4),
+        Text(
+          label,
+          maxLines: compact ? 2 : null,
+          overflow: compact ? TextOverflow.ellipsis : null,
+          style: compact
+              ? theme.textTheme.bodySmall?.copyWith(fontSize: 12)
+              : theme.textTheme.bodySmall,
+        ),
+      ],
+    );
     return Card(
       child: Padding(
-        padding: EdgeInsets.all(compact ? 12 : 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (compact)
-              IconTile(icon: icon, size: 34)
-            else
-              IconTile(icon: icon),
-            SizedBox(height: compact ? 10 : 16),
-            Text(
-              value,
-              style: compact
-                  ? theme.textTheme.titleLarge?.copyWith(fontSize: 20)
-                  : theme.textTheme.titleLarge,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: compact ? 2 : null,
-              overflow: compact ? TextOverflow.ellipsis : null,
-              style: compact
-                  ? theme.textTheme.bodySmall?.copyWith(fontSize: 12)
-                  : theme.textTheme.bodySmall,
-            ),
-          ],
-        ),
+        padding: EdgeInsets.all(compact ? 10 : 18),
+        child: horizontal
+            ? Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  iconWidget,
+                  SizedBox(width: compact ? 10 : 16),
+                  Expanded(child: textWidget),
+                ],
+              )
+            : Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  iconWidget,
+                  SizedBox(height: compact ? 6 : 16),
+                  textWidget,
+                ],
+              ),
       ),
     );
   }

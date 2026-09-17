@@ -68,8 +68,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 ),
                 const SizedBox(width: 8),
                 const SyncNowButton(),
-                const SizedBox(width: 8),
-                const ThemeToggleButton(),
               ],
             ),
             const SizedBox(height: 28),
@@ -142,27 +140,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 24),
             stats.when(
-              data: (data) => GridView.count(
-                crossAxisCount: 2,
+              data: (data) => GridView.builder(
                 shrinkWrap: true,
                 physics: const NeverScrollableScrollPhysics(),
-                mainAxisSpacing: 12,
-                crossAxisSpacing: 12,
-                // Les cartes contiennent une icône, une valeur et son libellé.
-                // Une cellule presque carrée évite de les comprimer sur mobile.
-                childAspectRatio: 1,
-                children: [
-                  StatCard(
-                    value: '${data.streakDays}j',
-                    label: 'de série',
-                    icon: Icons.local_fire_department_rounded,
-                  ),
-                  StatCard(
-                    value: '${data.dueCards}',
-                    label: 'à revoir',
-                    icon: Icons.schedule_rounded,
-                  ),
-                ],
+                itemCount: 2,
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  mainAxisExtent: 120,
+                  mainAxisSpacing: 12,
+                  crossAxisSpacing: 12,
+                ),
+                itemBuilder: (context, index) => index == 0
+                    ? StatCard(
+                        compact: true,
+                        horizontal: true,
+                        value: '${data.streakDays}j',
+                        label: 'de série',
+                        icon: Icons.local_fire_department_rounded,
+                      )
+                    : StatCard(
+                        compact: true,
+                        horizontal: true,
+                        value: '${data.dueCards}',
+                        label: 'à revoir',
+                        icon: Icons.schedule_rounded,
+                      ),
               ),
               loading: () => const SizedBox.shrink(),
               error: (error, stackTrace) => const SizedBox.shrink(),
@@ -189,25 +191,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   );
                 }
 
-                return LayoutBuilder(
-                  builder: (context, constraints) {
-                    final cardWidth = (constraints.maxWidth - 12) / 2;
-                    return Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        for (final item in items)
-                          SizedBox(
-                            width: cardWidth,
-                            child: CollectionCard(
-                              collection: item,
-                              onTap: () =>
-                                  context.push('/collection/${item.id}'),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
+                final activeItems = items
+                    .where((item) => !item.isDisabled)
+                    .toList();
+                final disabledItems = items
+                    .where((item) => item.isDisabled)
+                    .toList();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (activeItems.isNotEmpty) ...[
+                      _CollectionGrid(items: activeItems),
+                      if (disabledItems.isNotEmpty) const SizedBox(height: 28),
+                    ],
+                    if (disabledItems.isNotEmpty) ...[
+                      const SectionLabel('Désactivé(s)'),
+                      const SizedBox(height: 12),
+                      _CollectionGrid(items: disabledItems),
+                    ],
+                  ],
                 );
               },
               loading: () => const Padding(
@@ -219,6 +222,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _CollectionGrid extends StatelessWidget {
+  const _CollectionGrid({required this.items});
+
+  final List<CollectionListItem> items;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final cardWidth = (constraints.maxWidth - 12) / 2;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            for (final item in items)
+              SizedBox(
+                width: cardWidth,
+                child: CollectionCard(
+                  collection: item,
+                  onTap: () => context.push('/collection/${item.id}'),
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }

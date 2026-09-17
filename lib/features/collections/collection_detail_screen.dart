@@ -319,7 +319,6 @@ class _CollectionDetailScreenState
                   ),
                   const Spacer(),
                   const SyncNowButton(),
-                  const ThemeToggleButton(),
                   PopupMenuButton<_CollectionAction>(
                     enabled: !_busy,
                     icon: const Icon(Icons.more_vert_rounded),
@@ -523,24 +522,29 @@ class _CollectionDetailScreenState
               const SizedBox(height: 12),
               decks.when(
                 data: (deckItems) {
-                  final sortedDecks = _sortedDecks(deckItems);
+                  final activeDecks = _sortedDecks(
+                    deckItems.where((deck) => !deck.isDisabled).toList(),
+                  );
+                  final disabledDecks = _sortedDecks(
+                    deckItems.where((deck) => deck.isDisabled).toList(),
+                  );
                   return Column(
                     children: [
-                      for (final deck in sortedDecks) ...[
-                        DeckCard(
-                          deck: deck,
-                          onTap: item.isDisabled
-                              ? null
-                              : () => _launchStudy(deckId: deck.id),
-                          onDelete: _busy ? null : () => _deleteDeck(deck),
-                          onToggleDisabled: _busy
-                              ? null
-                              : () => _toggleDeckDisabled(deck),
-                          onViewCards: () => context.push(
-                            '/deck/${deck.id}/cards?name=${Uri.encodeComponent(deck.name)}',
-                          ),
+                      for (final deck in activeDecks) ...[
+                        _buildDeckCard(item, deck),
+                        const SizedBox(height: 12),
+                      ],
+                      if (disabledDecks.isNotEmpty) ...[
+                        if (activeDecks.isNotEmpty) const SizedBox(height: 12),
+                        const Align(
+                          alignment: Alignment.centerLeft,
+                          child: SectionLabel('Désactivé(s)'),
                         ),
                         const SizedBox(height: 12),
+                        for (final deck in disabledDecks) ...[
+                          _buildDeckCard(item, deck),
+                          const SizedBox(height: 12),
+                        ],
                       ],
                       FilledButton.tonalIcon(
                         onPressed: () => context.push('/import'),
@@ -562,6 +566,18 @@ class _CollectionDetailScreenState
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (error, stackTrace) => Text(error.toString()),
+      ),
+    );
+  }
+
+  Widget _buildDeckCard(CollectionListItem collection, DeckListItem deck) {
+    return DeckCard(
+      deck: deck,
+      onTap: collection.isDisabled ? null : () => _launchStudy(deckId: deck.id),
+      onDelete: _busy ? null : () => _deleteDeck(deck),
+      onToggleDisabled: _busy ? null : () => _toggleDeckDisabled(deck),
+      onViewCards: () => context.push(
+        '/deck/${deck.id}/cards?name=${Uri.encodeComponent(deck.name)}',
       ),
     );
   }

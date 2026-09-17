@@ -174,7 +174,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 style: Theme.of(context).textTheme.displaySmall,
               ),
               const Spacer(),
-              const ThemeToggleButton(),
             ],
           ),
           const SizedBox(height: 18),

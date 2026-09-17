@@ -176,7 +176,7 @@ class _ModeSelectionBody extends StatelessWidget {
                   crossAxisCount: crossAxisCount,
                   crossAxisSpacing: 14,
                   mainAxisSpacing: 14,
-                  mainAxisExtent: twoColumns ? 156 : 148,
+                  mainAxisExtent: twoColumns ? 184 : 172,
                 ),
                 itemBuilder: (context, index) {
                   final option = _options[index];
@@ -294,9 +294,9 @@ class _ModeOptionCard extends StatelessWidget {
                     Expanded(
                       child: Text(
                         option.description,
-                        maxLines: 2,
+                        maxLines: 3,
                         overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodySmall?.copyWith(
+                        style: theme.textTheme.bodyMedium?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
                       ),

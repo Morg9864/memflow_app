@@ -90,7 +90,6 @@ class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
               ),
               const Spacer(),
               const SyncNowButton(),
-              const ThemeToggleButton(),
             ],
           ),
           const SizedBox(height: 8),

@@ -1894,6 +1894,8 @@ class _TrueFalseMode extends StatelessWidget {
     final theme = Theme.of(context);
 
     return ListView(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
       children: [
         Card(
           child: Padding(
