@@ -112,6 +112,7 @@ migrate_working_dir/
 .local/
 CLAUDE.md
 AGENTS.md
+graphify-out/
 
 # metadata
 .metadata
