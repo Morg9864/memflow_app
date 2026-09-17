@@ -110,6 +110,8 @@ migrate_working_dir/
 .codex
 .claude
 .local/
+CLAUDE.md
+AGENTS.md
 
 # metadata
 .metadata
