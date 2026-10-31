@@ -27,8 +27,8 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | D1 | D | Tab shell route | Done | 112 pass + 27 skipped, analyzer at baseline, shell tests including sign-out state reset |
 | C1 | C | Study: layout | Done | 154 pass + 27 skipped, analyzer at baseline, all `study_*` captures OK, 13 protected functions byte-identical |
 | C2 | C | Study: answers and feedback | Done | 222 pass + 27 skipped, analyzer at baseline, 17 study functions compared with baseline: only 3 haptic lines differ |
-| C3 | C | Study: progress and ratings | In progress | |
-| C4 | C | Study: flashcards | Pending | |
+| C3 | C | Study: progress and ratings | Done | Pinned block 19% of 800px, analyzer at baseline, all `study_*` captures OK |
+| C4 | C | Study: flashcards | In progress | |
 | C5 | C | Mode sheet and session summary | Pending | |
 | B1 | B | Home | Done (with B2) | 170 pass + 27 skipped, analyzer at baseline, all `home_*` captures OK |
 | B2 | B | Collection card | Done (with B1) | 60-character titles shown in full at 320px and 2.0 text scale |
@@ -57,6 +57,9 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 ## Review notes for later tasks
 - C3: the pinned rating block covers about 40% of an 800px phone, which hides feedback until scrolling. It must shrink.
 - C4: on long flashcards nothing shows that more text exists below the pinned button.
+
+## Decisions needed from the product owner
+- Study header progress dots: `progressDots` is a per-card count (3 to 6, from repetitions), but dots light up by session position, so they carry no real information. Options: remove them, or show repetitions against a fixed target. Left unchanged for now.
 
 ## Known issues and blockers
 - Riverpod 3 retries failed stream providers by default, so error states may appear after a delay, with skeletons in the meantime. No app-wide `retry` config was added. To verify on a device.
