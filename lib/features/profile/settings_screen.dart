@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../theme/app_theme.dart';
 import '../../app/session_card_limit_controller.dart';
 import '../../app/providers.dart';
 import '../../widgets/ui.dart';
@@ -255,7 +256,8 @@ class _EditDialogState extends State<_EditDialog> {
           onPressed: _loading ? null : () => Navigator.of(context).pop(),
           child: const Text('Annuler'),
         ),
-        FilledButton(
+        FilledButton.tonal(
+          style: AppTheme.compactAction,
           onPressed: _loading ? null : _submit,
           child: _loading
               ? const SizedBox(
@@ -353,7 +355,11 @@ class _SessionCardLimitDialogState extends State<_SessionCardLimitDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Annuler'),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Enregistrer')),
+        FilledButton.tonal(
+          style: AppTheme.compactAction,
+          onPressed: _submit,
+          child: const Text('Enregistrer'),
+        ),
       ],
     );
   }
@@ -431,7 +437,8 @@ class _PasswordDialogState extends State<_PasswordDialog> {
           onPressed: _loading ? null : () => Navigator.of(context).pop(),
           child: const Text('Annuler'),
         ),
-        FilledButton(
+        FilledButton.tonal(
+          style: AppTheme.compactAction,
           onPressed: _loading ? null : _submit,
           child: _loading
               ? const SizedBox(

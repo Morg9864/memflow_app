@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../theme/app_theme.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
@@ -134,7 +135,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Annuler'),
           ),
-          FilledButton(
+          FilledButton.tonal(
+            style: AppTheme.compactAction,
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Restaurer'),
           ),
@@ -194,6 +196,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: FilledButton.tonalIcon(
+                  style: AppTheme.secondaryAction,
                   onPressed: _downloadTemplate,
                   icon: const Icon(Icons.download_rounded),
                   label: const Text('Télécharger le template CSV'),
@@ -238,6 +241,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                   children: [
                     Expanded(
                       child: FilledButton.tonalIcon(
+                        style: AppTheme.secondaryAction,
                         onPressed: _csvPrompt == null ? null : _copyPrompt,
                         icon: const Icon(Icons.content_copy_rounded),
                         label: const Text('Copier le prompt'),
@@ -246,6 +250,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: FilledButton.tonalIcon(
+                        style: AppTheme.secondaryAction,
                         onPressed: _csvPrompt == null ? null : _downloadPrompt,
                         icon: const Icon(Icons.download_rounded),
                         label: const Text('Télécharger le .md'),

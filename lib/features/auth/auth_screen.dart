@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../theme/app_theme.dart';
 import '../../app/providers.dart';
 import '../../domain/services/auth_service.dart';
 import '../../widgets/ui.dart';
@@ -83,7 +84,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
             onPressed: () => Navigator.pop(ctx, false),
             child: const Text('Annuler'),
           ),
-          FilledButton(
+          FilledButton.tonal(
+            style: AppTheme.compactAction,
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Envoyer'),
           ),

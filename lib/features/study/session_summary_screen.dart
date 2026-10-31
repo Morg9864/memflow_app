@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../theme/app_theme.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
 
@@ -103,6 +104,7 @@ class SessionSummaryScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 10),
                       FilledButton.tonal(
+                        style: AppTheme.secondaryAction,
                         onPressed: () {
                           final params = summary.deckId != null
                               ? '?deckId=${summary.deckId}'

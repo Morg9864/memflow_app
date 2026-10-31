@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../theme/app_theme.dart';
 import '../../app/app_version.dart';
 import '../../app/daily_goal_controller.dart';
 import '../../app/providers.dart';
@@ -41,7 +42,8 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('Annuler'),
           ),
-          FilledButton(
+          FilledButton.tonal(
+            style: AppTheme.compactAction,
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('Continuer'),
           ),
@@ -207,6 +209,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   FilledButton.tonalIcon(
+                    style: AppTheme.secondaryAction,
                     onPressed: _busy ? null : _exportCsv,
                     icon: const Icon(Icons.download_rounded),
                     label: const Text('Exporter les cartes en CSV'),
@@ -463,7 +466,11 @@ class _DailyGoalDialogState extends State<_DailyGoalDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Annuler'),
         ),
-        FilledButton(onPressed: _submit, child: const Text('Enregistrer')),
+        FilledButton.tonal(
+          style: AppTheme.compactAction,
+          onPressed: _submit,
+          child: const Text('Enregistrer'),
+        ),
       ],
     );
   }

@@ -77,6 +77,7 @@ class NotFoundScreen extends StatelessWidget {
                       child: const Text('Retour à l’accueil'),
                     ),
                     FilledButton.tonal(
+                      style: AppTheme.secondaryAction,
                       onPressed: () {
                         if (Navigator.of(context).canPop()) {
                           context.pop();

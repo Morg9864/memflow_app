@@ -208,6 +208,8 @@ DeckListItem _customDeck(
 }
 
 Future<void> _selectDeckSort(WidgetTester tester, String label) async {
+  await tester.ensureVisible(find.byTooltip('Trier les decks'));
+  await tester.pumpAndSettle();
   await tester.tap(find.byTooltip('Trier les decks'));
   await tester.pumpAndSettle();
   await tester.tap(find.text(label));

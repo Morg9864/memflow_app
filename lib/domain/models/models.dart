@@ -1,5 +1,3 @@
-import 'package:flutter/material.dart';
-
 enum TestMode {
   multipleChoice,
   classicFlashcard,
@@ -57,20 +55,6 @@ extension ReviewResultX on ReviewResult {
     ReviewResult.hard => 'Avec effort',
     ReviewResult.good => 'Je savais',
     ReviewResult.easy => 'Trop simple',
-  };
-
-  Color tone(ColorScheme scheme) => switch (this) {
-    ReviewResult.again => const Color(0xFFD94A3A),
-    ReviewResult.hard => const Color(0xFFE8792F),
-    ReviewResult.good => const Color(0xFF4D9461),
-    ReviewResult.easy => const Color(0xFF4D79B5),
-  };
-
-  Color background(ColorScheme scheme) => switch (this) {
-    ReviewResult.again => const Color(0xFFFBE7E4),
-    ReviewResult.hard => const Color(0xFFFCE9DC),
-    ReviewResult.good => const Color(0xFFEAF3E7),
-    ReviewResult.easy => const Color(0xFFEAF0F3),
   };
 }
 

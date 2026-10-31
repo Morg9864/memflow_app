@@ -694,9 +694,8 @@ class ReviewButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    final tone = result.tone(scheme);
-    final background = result.background(scheme);
+    final tone = result.tone;
+    final background = result.background;
     final borderColor = isSuggested ? tone : Colors.transparent;
 
     return FilledButton(
@@ -930,4 +929,20 @@ class EmptyState extends StatelessWidget {
       ),
     );
   }
+}
+
+extension ReviewResultColors on ReviewResult {
+  Color get tone => switch (this) {
+    ReviewResult.again => AppColors.error,
+    ReviewResult.hard => AppColors.ratingHard,
+    ReviewResult.good => AppColors.resultGood,
+    ReviewResult.easy => AppColors.ratingEasy,
+  };
+
+  Color get background => switch (this) {
+    ReviewResult.again => AppColors.resultBadSoft,
+    ReviewResult.hard => AppColors.primarySoft,
+    ReviewResult.good => AppColors.resultGoodSoft,
+    ReviewResult.easy => AppColors.ratingEasySoft,
+  };
 }

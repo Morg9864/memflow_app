@@ -22,8 +22,8 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | A1 | A | Bundle fonts, stop bundling `design/`, logo `cacheWidth` | Done | 95/95 tests, analyzer at baseline, font checksums verified, `design/` out of bundle |
 | F0 | F | Visual harness and "before" screenshots | Done | 78 PNGs from 26 states in `build/visual/before`, 46 OK and 32 with overflow or failed interaction; harness skipped by default |
 | A2 | A | Light-only, remove dark and Vivid | Done | 94 pass + 26 skipped, analyzer at baseline, overflow report unchanged |
-| A3 | A | Tokens and theme | In progress | |
-| A4 | A | Shared widgets, move single-screen widgets | Pending | |
+| A3 | A | Tokens and theme | Done | 98 pass + 26 skipped, analyzer at baseline, palette and text-slot tests added |
+| A4 | A | Shared widgets, move single-screen widgets | In progress | |
 | D1 | D | Tab shell route | Pending | |
 | C1 | C | Study: layout | Pending | |
 | C2 | C | Study: answers and feedback | Pending | |
@@ -50,6 +50,9 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 - Home overflows horizontally at default text scale: 79px on phone and 99px on small.
 - At 320x568, true/false and cloze controls can't be reached.
 - At 2.0 text scale, every study mode overflows 84px on the right.
+
+## Test changes to existing files
+- `collection_detail_screen_test.dart`: the `_selectDeckSort` helper now scrolls the sort button into view before tapping. The correctly sized "Voir les échéances" button pushed it off the 800x600 test surface. The sort assertions are unchanged.
 
 ## Known issues and blockers
 - F2 needs a physical device or emulator. None available at the start.

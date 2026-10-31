@@ -985,13 +985,13 @@ class _DesktopReviewPanel extends StatelessWidget {
     final theme = Theme.of(context);
     final resultIsCorrect = feedback.resultIsCorrect;
     final tone = switch (resultIsCorrect) {
-      true => const Color(0xFF245433),
-      false => const Color(0xFF8E2F24),
+      true => AppColors.resultGoodText,
+      false => AppColors.resultBadText,
       null => theme.colorScheme.onSurface,
     };
     final background = switch (resultIsCorrect) {
-      true => const Color(0xFFEAF3E7),
-      false => const Color(0xFFFBE7E4),
+      true => AppColors.resultGoodSoft,
+      false => AppColors.resultBadSoft,
       null => theme.colorScheme.surface,
     };
 
@@ -1364,21 +1364,21 @@ class _McqOptionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final borderColor = isCorrect
-        ? const Color(0xFF4D9461)
+        ? AppColors.resultGood
         : isWrong
-        ? const Color(0xFFD94A3A)
+        ? AppColors.resultBad
         : theme.dividerColor;
     final background = isCorrect
-        ? const Color(0xFFEAF3E7)
+        ? AppColors.resultGoodSoft
         : isWrong
-        ? const Color(0xFFFBE7E4)
+        ? AppColors.resultBadSoft
         : isSelected
         ? theme.colorScheme.primary.withValues(alpha: 0.1)
         : theme.cardTheme.color;
     final foreground = isCorrect
-        ? const Color(0xFF245433)
+        ? AppColors.resultGoodText
         : isWrong
-        ? const Color(0xFF8E2F24)
+        ? AppColors.resultBadText
         : isSelected
         ? theme.colorScheme.primary
         : theme.colorScheme.onSurface;
@@ -1475,11 +1475,11 @@ class _ClozeMode extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final feedbackTone = isCorrect == true
-        ? const Color(0xFF245433)
-        : const Color(0xFF8E2F24);
+        ? AppColors.resultGoodText
+        : AppColors.resultBadText;
     final feedbackBackground = isCorrect == true
-        ? const Color(0xFFEAF3E7)
-        : const Color(0xFFFBE7E4);
+        ? AppColors.resultGoodSoft
+        : AppColors.resultBadSoft;
     final promptStyle =
         theme.textTheme.headlineSmall?.copyWith(height: 1.5) ??
         theme.textTheme.titleLarge;
@@ -1657,9 +1657,7 @@ class _ClozeBlankChip extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final borderColor = isValidated
-        ? (isCorrect == true
-              ? const Color(0xFF4D9461)
-              : const Color(0xFFD94A3A))
+        ? (isCorrect == true ? AppColors.resultGood : AppColors.resultBad)
         : isActive
         ? theme.colorScheme.primary
         : isFilled
@@ -1667,8 +1665,8 @@ class _ClozeBlankChip extends StatelessWidget {
         : theme.dividerColor;
     final background = isValidated
         ? (isCorrect == true
-              ? const Color(0xFFEAF3E7)
-              : const Color(0xFFFBE7E4))
+              ? AppColors.resultGoodSoft
+              : AppColors.resultBadSoft)
         : isActive
         ? theme.colorScheme.primary.withValues(alpha: 0.14)
         : isFilled
@@ -1676,8 +1674,8 @@ class _ClozeBlankChip extends StatelessWidget {
         : theme.colorScheme.surface;
     final foreground = isValidated
         ? (isCorrect == true
-              ? const Color(0xFF245433)
-              : const Color(0xFF8E2F24))
+              ? AppColors.resultGoodText
+              : AppColors.resultBadText)
         : isFilled
         ? theme.colorScheme.onSurface
         : theme.colorScheme.onSurfaceVariant;
@@ -1781,11 +1779,11 @@ class _TextEntryMode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final feedbackTone = isCorrect == true
-        ? const Color(0xFF245433)
-        : const Color(0xFF8E2F24);
+        ? AppColors.resultGoodText
+        : AppColors.resultBadText;
     final feedbackBackground = isCorrect == true
-        ? const Color(0xFFEAF3E7)
-        : const Color(0xFFFBE7E4);
+        ? AppColors.resultGoodSoft
+        : AppColors.resultBadSoft;
 
     return ListView(
       shrinkWrap: true,
