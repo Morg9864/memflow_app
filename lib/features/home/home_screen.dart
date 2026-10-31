@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,10 +13,13 @@ final homeStatsProvider = StreamProvider<HomeStats>((ref) {
   return ref.watch(appRepositoryProvider).watchHomeStats();
 });
 
-final homeCollectionsProvider =
-    StreamProvider.family<List<CollectionListItem>, String>((ref, search) {
+final homeCollectionsProvider = StreamProvider.autoDispose
+    .family<List<CollectionListItem>, String>((ref, search) {
       return ref.watch(appRepositoryProvider).watchCollections(search: search);
     });
+
+const _searchDebounce = Duration(milliseconds: 250);
+const _wideBreakpoint = 600.0;
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -24,7 +29,26 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  final _searchController = TextEditingController();
+  Timer? _debounce;
   String _search = '';
+
+  // Résultats précédents, affichés pendant qu'une nouvelle recherche charge.
+  List<CollectionListItem>? _shown;
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  void _onSearchChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(_searchDebounce, () {
+      if (mounted) setState(() => _search = value.trim());
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,195 +56,66 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final collections = ref.watch(homeCollectionsProvider(_search));
     final displayName = ref.watch(displayNameProvider);
 
+    final fresh = collections.value;
+    if (fresh != null) _shown = fresh;
+    final items = fresh ?? _shown;
+
     return AppScaffold(
       child: SyncRefreshIndicator(
-        child: ListView(
-          children: [
-            Row(
-              children: [
-                RichText(
-                  text: TextSpan(
-                    style: Theme.of(context).textTheme.headlineMedium,
-                    children: [
-                      TextSpan(
-                        text: 'Mem',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: Theme.of(context).colorScheme.onSurface,
-                            ),
-                      ),
-                      TextSpan(
-                        text: 'Flow',
-                        style: Theme.of(context).textTheme.headlineMedium
-                            ?.copyWith(
-                              color: Theme.of(context).colorScheme.primary,
-                            ),
-                      ),
-                    ],
+        child: CustomScrollView(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            SliverToBoxAdapter(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const _Header(),
+                  const SizedBox(height: AppSpacing.xl),
+                  SectionLabel(
+                    displayName == null ? 'Bonjour' : 'Bonjour, $displayName',
                   ),
-                ),
-                const Spacer(),
-                IconButton.filledTonal(
-                  tooltip: 'Voir les statistiques',
-                  onPressed: () => context.go('/stats'),
-                  icon: const Icon(Icons.notifications_none_rounded),
-                ),
-                const SizedBox(width: 8),
-                const SyncNowButton(),
-              ],
-            ),
-            const SizedBox(height: 28),
-            stats.when(
-              data: (data) {
-                final due = data.dueCards;
-                final goalReached = due == 0;
-                final subtitle = goalReached
-                    ? 'Tout est à jour !'
-                    : '$due cartes à revoir';
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SectionLabel(
-                      displayName == null ? 'Bonjour' : 'Bonjour, $displayName',
+                  const SizedBox(height: AppSpacing.sm),
+                  stats.when(
+                    data: (data) => Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _HeroCard(dueCards: data.dueCards),
+                        const SizedBox(height: AppSpacing.md),
+                        _StatsRow(stats: data),
+                      ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      subtitle,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ],
-                );
-              },
-              loading: () => const LinearProgressIndicator(),
-              error: (error, stackTrace) => Text(error.toString()),
-            ),
-            const SizedBox(height: 24),
-            stats.when(
-              data: (data) {
-                final canStudy = data.dueCards > 0;
-                return Semantics(
-                  button: true,
-                  label: canStudy
-                      ? 'Commencer une session de ${data.dueCards} cartes'
-                      : 'Aucune carte à réviser aujourd’hui',
-                  child: SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      key: const ValueKey('home-study-cta'),
-                      onPressed: canStudy ? () => context.push('/study') : null,
-                      icon: Icon(
-                        canStudy
-                            ? Icons.play_arrow_rounded
-                            : Icons.check_circle_outline_rounded,
-                      ),
-                      label: Text(
-                        canStudy
-                            ? 'Étudier maintenant · ${data.dueCards} cartes'
-                            : 'Tout est à jour',
-                      ),
+                    loading: () => const _StatsSkeleton(),
+                    error: (error, stackTrace) => AppErrorState(
+                      onRetry: () => ref.invalidate(homeStatsProvider),
                     ),
                   ),
-                );
-              },
-              loading: () => const SizedBox(height: 56),
-              error: (error, stackTrace) => const SizedBox.shrink(),
-            ),
-            const SizedBox(height: 20),
-            TextField(
-              decoration: const InputDecoration(
-                hintText: 'Rechercher une collection',
-                prefixIcon: Icon(Icons.search_rounded),
-              ),
-              onChanged: (value) => setState(() => _search = value),
-            ),
-            const SizedBox(height: 24),
-            stats.when(
-              data: (data) => SizedBox(
-                height: 120,
-                child: GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: 2,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisExtent: 120,
-                    mainAxisSpacing: 12,
-                    crossAxisSpacing: 12,
+                  const SizedBox(height: AppSpacing.xl),
+                  TextField(
+                    controller: _searchController,
+                    decoration: const InputDecoration(
+                      hintText: 'Rechercher une collection',
+                      prefixIcon: Icon(Icons.search_rounded),
+                    ),
+                    onChanged: _onSearchChanged,
                   ),
-                  itemBuilder: (context, index) => index == 0
-                      ? StatCard(
-                          compact: true,
-                          horizontal: true,
-                          value: '${data.streakDays} j',
-                          label: 'de série',
-                          icon: Icons.local_fire_department_rounded,
-                        )
-                      : StatCard(
-                          compact: true,
-                          horizontal: true,
-                          value: '${data.dueCards}',
-                          label: 'à revoir',
-                          icon: Icons.schedule_rounded,
-                        ),
-                ),
+                  const SizedBox(height: AppSpacing.xl),
+                  const _CollectionsHeader(),
+                  const SizedBox(height: AppSpacing.md),
+                ],
               ),
-              loading: () => const SizedBox.shrink(),
-              error: (error, stackTrace) => const SizedBox.shrink(),
             ),
-            const SizedBox(height: 26),
-            Row(
-              children: [
-                const SectionLabel('Collections'),
-                const Spacer(),
-                TextButton(
-                  onPressed: () => context.go('/import'),
-                  child: const Text('Importer CSV'),
+            if (items != null)
+              _CollectionsSliver(items: items, search: _search)
+            else if (collections.hasError)
+              SliverToBoxAdapter(
+                child: AppErrorState(
+                  onRetry: () =>
+                      ref.invalidate(homeCollectionsProvider(_search)),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            collections.when(
-              data: (items) {
-                if (items.isEmpty) {
-                  return const EmptyState(
-                    title: 'Aucune collection',
-                    message:
-                        'Ajuste la recherche ou importe un nouveau jeu de cartes.',
-                  );
-                }
-
-                final activeItems = items
-                    .where((item) => !item.isDisabled)
-                    .toList();
-                final disabledItems = items
-                    .where((item) => item.isDisabled)
-                    .toList();
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (activeItems.isNotEmpty) ...[
-                      _CollectionGrid(items: activeItems),
-                      if (disabledItems.isNotEmpty) const SizedBox(height: 28),
-                    ],
-                    if (disabledItems.isNotEmpty) ...[
-                      const SectionLabel('Désactivé(s)'),
-                      const SizedBox(height: 12),
-                      _CollectionGrid(items: disabledItems),
-                    ],
-                  ],
-                );
-              },
-              loading: () => const Padding(
-                padding: EdgeInsets.all(24),
-                child: Center(child: CircularProgressIndicator()),
-              ),
-              error: (error, stackTrace) => Text(error.toString()),
-            ),
+              )
+            else
+              const SliverToBoxAdapter(child: _CollectionsSkeleton()),
           ],
         ),
       ),
@@ -228,29 +123,314 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-class _CollectionGrid extends StatelessWidget {
-  const _CollectionGrid({required this.items});
-
-  final List<CollectionListItem> items;
+class _Header extends StatelessWidget {
+  const _Header();
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardWidth = (constraints.maxWidth - 12) / 2;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: [
-            for (final item in items)
-              SizedBox(
-                width: cardWidth,
-                child: _CollectionCard(
-                  collection: item,
-                  onTap: () => context.push('/collection/${item.id}'),
-                ),
+    final theme = Theme.of(context);
+    final style = theme.textTheme.headlineMedium;
+    return Row(
+      children: [
+        Expanded(
+          // FittedBox: le logo rétrécit plutôt que de faire déborder la ligne.
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text.rich(
+              TextSpan(
+                style: style,
+                children: [
+                  TextSpan(
+                    text: 'Mem',
+                    style: style?.copyWith(color: theme.colorScheme.onSurface),
+                  ),
+                  TextSpan(
+                    text: 'Flow',
+                    style: style?.copyWith(color: theme.colorScheme.primary),
+                  ),
+                ],
               ),
-          ],
+              maxLines: 1,
+            ),
+          ),
+        ),
+        IconButton.filledTonal(
+          tooltip: 'Voir les statistiques',
+          onPressed: () => context.go('/stats'),
+          icon: const Icon(Icons.insights_rounded),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        const SyncNowButton(),
+      ],
+    );
+  }
+}
+
+class _HeroCard extends StatelessWidget {
+  const _HeroCard({required this.dueCards});
+
+  final int dueCards;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final upToDate = dueCards == 0;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: upToDate
+            ? Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline_rounded,
+                    size: 40,
+                    color: theme.colorScheme.primary,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text('Tout est à jour', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Aucune carte à réviser aujourd’hui.',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '$dueCards',
+                    style: theme.textTheme.displayLarge?.copyWith(
+                      color: theme.colorScheme.primary,
+                    ),
+                  ),
+                  Text(
+                    dueCards == 1 ? 'carte à revoir' : 'cartes à revoir',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Semantics(
+                    container: true,
+                    button: true,
+                    excludeSemantics: true,
+                    label: dueCards == 1
+                        ? 'Commencer une session de 1 carte'
+                        : 'Commencer une session de $dueCards cartes',
+                    onTap: () => context.push('/study'),
+                    child: Pressable(
+                      child: FilledButton.icon(
+                        key: const ValueKey('home-study-cta'),
+                        onPressed: () => context.push('/study'),
+                        icon: const Icon(Icons.play_arrow_rounded),
+                        label: const Text('Étudier maintenant'),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+}
+
+class _StatsRow extends StatelessWidget {
+  const _StatsRow({required this.stats});
+
+  final HomeStats stats;
+
+  @override
+  Widget build(BuildContext context) {
+    final streak = StatCard(
+      value: '${stats.streakDays} j',
+      label: 'de série',
+      icon: Icons.local_fire_department_rounded,
+    );
+    final success = StatCard(
+      value: '${(stats.successRate * 100).round()} %',
+      label: 'de réussite',
+      icon: Icons.task_alt_rounded,
+    );
+    // Au-delà d'un texte agrandi, deux colonnes ne tiennent plus: on empile.
+    final stack = MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3;
+    if (stack) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          streak,
+          const SizedBox(height: AppSpacing.md),
+          success,
+        ],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: streak),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: success),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionsHeader extends StatelessWidget {
+  const _CollectionsHeader();
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      alignment: WrapAlignment.spaceBetween,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        const SectionLabel('Collections'),
+        TextButton.icon(
+          onPressed: () => context.go('/import'),
+          icon: const Icon(Icons.upload_file_rounded),
+          label: const Text('Importer CSV'),
+        ),
+      ],
+    );
+  }
+}
+
+class _StatsSkeleton extends StatelessWidget {
+  const _StatsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Chargement',
+      child: const Column(
+        children: [
+          SkeletonBox(height: 190, radius: AppTheme.radiusMd),
+          SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              Expanded(
+                child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
+              ),
+              SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionsSkeleton extends StatelessWidget {
+  const _CollectionsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var i = 0; i < 3; i++) ...[
+          SkeletonBox(height: 104, radius: AppTheme.radiusMd),
+          SizedBox(height: AppSpacing.md),
+        ],
+      ],
+    );
+  }
+}
+
+/// Une entrée de la liste: soit une ligne de cartes, soit l'intertitre
+/// « Désactivé(s) ».
+class _Entry {
+  const _Entry.row(this.items) : disabledHeader = false;
+  const _Entry.header() : items = const [], disabledHeader = true;
+
+  final List<CollectionListItem> items;
+  final bool disabledHeader;
+}
+
+class _CollectionsSliver extends StatelessWidget {
+  const _CollectionsSliver({required this.items, required this.search});
+
+  final List<CollectionListItem> items;
+  final String search;
+
+  static List<_Entry> _rows(List<CollectionListItem> list, int columns) => [
+    for (var i = 0; i < list.length; i += columns)
+      _Entry.row(list.sublist(i, (i + columns).clamp(0, list.length))),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return SliverToBoxAdapter(
+        child: search.isEmpty
+            ? EmptyState(
+                title: 'Aucune collection',
+                message:
+                    'Importe un fichier CSV pour créer ta première '
+                    'collection.',
+                action: FilledButton.icon(
+                  onPressed: () => context.go('/import'),
+                  icon: const Icon(Icons.upload_file_rounded),
+                  label: const Text('Importer un fichier CSV'),
+                ),
+              )
+            : EmptyState(
+                icon: Icons.search_off_rounded,
+                title: 'Aucun résultat',
+                message: 'Aucune collection ne correspond à « $search ».',
+              ),
+      );
+    }
+
+    final columns = MediaQuery.sizeOf(context).width >= _wideBreakpoint ? 2 : 1;
+    final active = items.where((i) => !i.isDisabled).toList();
+    final disabled = items.where((i) => i.isDisabled).toList();
+    final entries = [
+      ..._rows(active, columns),
+      if (disabled.isNotEmpty) const _Entry.header(),
+      ..._rows(disabled, columns),
+    ];
+
+    return SliverList.builder(
+      itemCount: entries.length,
+      itemBuilder: (context, index) {
+        final entry = entries[index];
+        if (entry.disabledHeader) {
+          return const Padding(
+            padding: EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.md),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SectionLabel('Désactivé(s)'),
+            ),
+          );
+        }
+        final cards = [
+          for (final item in entry.items) _CollectionCard(collection: item),
+        ];
+        return Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: columns == 1
+              ? cards.first
+              : IntrinsicHeight(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: cards.first),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: cards.length > 1
+                            ? cards.last
+                            : const SizedBox.shrink(),
+                      ),
+                    ],
+                  ),
+                ),
         );
       },
     );
@@ -258,92 +438,117 @@ class _CollectionGrid extends StatelessWidget {
 }
 
 class _CollectionCard extends StatelessWidget {
-  const _CollectionCard({required this.collection, required this.onTap});
+  const _CollectionCard({required this.collection});
 
   final CollectionListItem collection;
-  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 240;
-        return Card(
-          child: Opacity(
-            opacity: collection.isDisabled ? 0.45 : 1,
+    final c = collection;
+    final summary = StringBuffer(
+      '${c.name}, ${c.cardsDone} sur ${c.totalCards} cartes faites',
+    );
+    if (c.dueCards > 0) summary.write(', ${c.dueCards} à revoir');
+    if (c.isDisabled) summary.write(', désactivée');
+
+    void open() => context.push('/collection/${c.id}');
+
+    return Semantics(
+      container: true,
+      button: true,
+      excludeSemantics: true,
+      label: summary.toString(),
+      onTap: open,
+      child: Pressable(
+        child: Opacity(
+          opacity: c.isDisabled ? 0.7 : 1,
+          child: Card(
             child: InkWell(
               borderRadius: AppTheme.radiusMd,
-              onTap: onTap,
+              onTap: open,
               child: Padding(
-                padding: EdgeInsets.all(compact ? 14 : 18),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: compact ? 36 : 42,
-                          height: compact ? 36 : 42,
-                          decoration: BoxDecoration(
-                            color: Color(
-                              collection.color,
-                            ).withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            collection.icon,
-                            style: TextStyle(fontSize: compact ? 18 : 20),
-                          ),
-                        ),
-                        const Spacer(),
-                        if (collection.isDisabled) ...[
-                          const DisabledBadge(label: 'Désactivée'),
-                          const SizedBox(width: 8),
-                        ],
-                        Icon(
-                          Icons.arrow_outward_rounded,
-                          size: compact ? 22 : 24,
-                          color: theme.colorScheme.primary,
-                        ),
-                      ],
-                    ),
-                    SizedBox(height: compact ? 12 : 24),
-                    Text(
-                      collection.name,
-                      maxLines: compact ? 2 : null,
-                      overflow: compact ? TextOverflow.ellipsis : null,
-                      style: theme.textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      compact
-                          ? '${collection.cardsDone}/${collection.totalCards} faites'
-                          : '${collection.cardsDone} / ${collection.totalCards} cartes faites',
-                      maxLines: compact ? 1 : null,
-                      overflow: compact ? TextOverflow.ellipsis : null,
-                      style: theme.textTheme.bodySmall,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${collection.dueCards} à revoir',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: theme.colorScheme.primary,
+                    Container(
+                      key: ValueKey('collection-tile-${c.id}'),
+                      width: 44,
+                      height: 44,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Color(c.color).withValues(alpha: 0.15),
+                        borderRadius: AppTheme.radiusSm,
+                      ),
+                      child: Text(
+                        c.icon,
+                        textScaler: TextScaler.noScaling,
+                        style: const TextStyle(fontSize: 22),
                       ),
                     ),
-                    SizedBox(height: compact ? 10 : 12),
-                    ProgressPill(value: collection.progress),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (c.isDisabled) ...[
+                            const DisabledBadge(label: 'Désactivée'),
+                            const SizedBox(height: AppSpacing.xs),
+                          ],
+                          Text(c.name, style: theme.textTheme.titleMedium),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            '${c.cardsDone} / ${c.totalCards} cartes faites',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                          if (c.dueCards > 0 && !c.isDisabled) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: theme.colorScheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    '${c.dueCards} à revoir',
+                                    style: theme.textTheme.bodySmall?.copyWith(
+                                      color: theme.colorScheme.onSurface,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                          const SizedBox(height: AppSpacing.md),
+                          ProgressPill(
+                            value: c.progress,
+                            semanticsLabel: 'Progression de ${c.name}',
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
             ),
           ),
-        );
-      },
+        ),
+      ),
     );
   }
 }
