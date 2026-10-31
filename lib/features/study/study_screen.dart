@@ -13,6 +13,7 @@ import '../../app/app_scaffold_messenger.dart';
 import '../../app/session_card_limit_controller.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import '../../domain/services/card_mode_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 import 'mode_selection_sheet.dart';
