@@ -302,6 +302,9 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           const SizedBox(height: AppSpacing.lg),
           Card(
             child: ExpansionTile(
+              expansionAnimationStyle: MediaQuery.disableAnimationsOf(context)
+                  ? AnimationStyle.noAnimation
+                  : null,
               tilePadding: const EdgeInsets.symmetric(
                 horizontal: AppSpacing.lg,
               ),

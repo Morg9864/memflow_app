@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 import 'package:flutter/material.dart';
 
 class AppColors {
@@ -40,6 +41,66 @@ class AppMotion {
 
   static Duration of(BuildContext context, Duration d) =>
       MediaQuery.disableAnimationsOf(context) ? Duration.zero : d;
+}
+
+/// Fondu + léger glissement vers le haut (16 px max) en `AppMotion.standard`.
+/// Sous réduction des animations, la page apparaît sans mouvement.
+class _FadeUpPageTransitionsBuilder extends PageTransitionsBuilder {
+  const _FadeUpPageTransitionsBuilder();
+
+  @override
+  Duration get transitionDuration => AppMotion.standard;
+
+  @override
+  Duration get reverseTransitionDuration => AppMotion.standard;
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    if (MediaQuery.disableAnimationsOf(context)) return child;
+    final curved = animation.drive(CurveTween(curve: AppMotion.standardCurve));
+    return FadeTransition(
+      opacity: curved,
+      child: AnimatedBuilder(
+        animation: curved,
+        child: child,
+        builder: (context, child) => Transform.translate(
+          offset: Offset(0, 16 * (1 - curved.value)),
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
+/// Cupertino, sans mouvement sous réduction des animations : les animations
+/// figées suppriment le glissement mais gardent le geste de retour par le bord.
+class _AppCupertinoPageTransitionsBuilder
+    extends CupertinoPageTransitionsBuilder {
+  const _AppCupertinoPageTransitionsBuilder();
+
+  @override
+  Widget buildTransitions<T>(
+    PageRoute<T> route,
+    BuildContext context,
+    Animation<double> animation,
+    Animation<double> secondaryAnimation,
+    Widget child,
+  ) {
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    return super.buildTransitions(
+      route,
+      context,
+      reduced ? kAlwaysCompleteAnimation : animation,
+      reduced ? kAlwaysDismissedAnimation : secondaryAnimation,
+      child,
+    );
+  }
 }
 
 class AppTheme {
@@ -167,6 +228,17 @@ class AppTheme {
 
     return base.copyWith(
       textTheme: textTheme,
+      // iOS/macOS gardent Cupertino: le geste de retour par le bord en dépend.
+      pageTransitionsTheme: const PageTransitionsTheme(
+        builders: {
+          TargetPlatform.android: _FadeUpPageTransitionsBuilder(),
+          TargetPlatform.linux: _FadeUpPageTransitionsBuilder(),
+          TargetPlatform.windows: _FadeUpPageTransitionsBuilder(),
+          TargetPlatform.fuchsia: _FadeUpPageTransitionsBuilder(),
+          TargetPlatform.iOS: _AppCupertinoPageTransitionsBuilder(),
+          TargetPlatform.macOS: _AppCupertinoPageTransitionsBuilder(),
+        },
+      ),
       cardTheme: CardThemeData(
         margin: EdgeInsets.zero,
         color: scheme.surface,

@@ -20,6 +20,7 @@ import '../features/stats/stats_screen.dart';
 import '../features/study/session_summary_screen.dart';
 import '../features/study/study_screen.dart';
 import '../domain/models/models.dart';
+import '../theme/app_theme.dart';
 import '../widgets/ui.dart';
 import 'providers.dart';
 
@@ -199,17 +200,56 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Hôte des quatre onglets: possède la barre de navigation.
-class TabShell extends StatelessWidget {
+/// Hôte des quatre onglets: possède la barre de navigation. Un changement
+/// d'onglet fait un fondu léger (`fast`) du corps; la pile des onglets n'est
+/// pas reconstruite, donc l'état de chaque onglet est conservé.
+class TabShell extends StatefulWidget {
   const TabShell({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
+  State<TabShell> createState() => _TabShellState();
+}
+
+class _TabShellState extends State<TabShell>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _fade = AnimationController(
+    vsync: this,
+    duration: AppMotion.fast,
+    value: 1,
+  );
+  late final Animation<double> _opacity = _fade.drive(
+    CurveTween(curve: AppMotion.standardCurve),
+  );
+
+  @override
+  void didUpdateWidget(TabShell oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.navigationShell.currentIndex ==
+        widget.navigationShell.currentIndex) {
+      return;
+    }
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _fade.value = 1;
+    } else {
+      _fade.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _fade.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: navigationShell,
-      bottomNavigationBar: AppBottomNav(navigationShell: navigationShell),
+      body: FadeTransition(opacity: _opacity, child: widget.navigationShell),
+      bottomNavigationBar: AppBottomNav(
+        navigationShell: widget.navigationShell,
+      ),
     );
   }
 }
