@@ -20,8 +20,8 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | Task | Agent | Scope | Status | Validation |
 |---|---|---|---|---|
 | A1 | A | Bundle fonts, stop bundling `design/`, logo `cacheWidth` | Done | 95/95 tests, analyzer at baseline, font checksums verified, `design/` out of bundle |
-| F0 | F | Visual harness and "before" screenshots | In progress | |
-| A2 | A | Light-only, remove dark and Vivid | Pending | |
+| F0 | F | Visual harness and "before" screenshots | Done | 78 PNGs from 26 states in `build/visual/before`, 46 OK and 32 with overflow or failed interaction; harness skipped by default |
+| A2 | A | Light-only, remove dark and Vivid | In progress | |
 | A3 | A | Tokens and theme | Pending | |
 | A4 | A | Shared widgets, move single-screen widgets | Pending | |
 | D1 | D | Tab shell route | Pending | |
@@ -40,6 +40,15 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | D2 | D | Motion and performance pass | Pending | |
 | F1 | F | Accessibility and regression tests | Pending | |
 | F2 | F | Profile-mode measurements | Blocked: needs a device | |
+
+## Audit corrections
+- Audit defect 3 was partly wrong. `Theme.of` merges a default text geometry, so `titleSmall` and `labelSmall` are not null and colours do apply. The real defect is that those slots have no font family, so they use the platform font instead of Outfit. The A3 fix (define every slot) is unchanged.
+
+## Before-state evidence (`build/visual/before/report.txt`)
+- Session summary overflows at every viewport: 230px, 621px and 1263px.
+- Home overflows horizontally at default text scale: 79px on phone and 99px on small.
+- At 320x568, true/false and cloze controls can't be reached.
+- At 2.0 text scale, every study mode overflows 84px on the right.
 
 ## Known issues and blockers
 - F2 needs a physical device or emulator. None available at the start.
