@@ -28,15 +28,15 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | C1 | C | Study: layout | Done | 154 pass + 27 skipped, analyzer at baseline, all `study_*` captures OK, 13 protected functions byte-identical |
 | C2 | C | Study: answers and feedback | Done | 222 pass + 27 skipped, analyzer at baseline, 17 study functions compared with baseline: only 3 haptic lines differ |
 | C3 | C | Study: progress and ratings | Done | Pinned block 19% of 800px, analyzer at baseline, all `study_*` captures OK |
-| C4 | C | Study: flashcards | In progress | |
+| C4 | C | Study: flashcards | Interrupted by usage limit, not merged | Check for partial work in `.claude/worktrees/agent-a4860043d326a261a` |
 | C5 | C | Mode sheet and session summary | Pending | |
 | B1 | B | Home | Done (with B2) | 170 pass + 27 skipped, analyzer at baseline, all `home_*` captures OK |
 | B2 | B | Collection card | Done (with B1) | 60-character titles shown in full at 320px and 2.0 text scale |
 | B3 | B | Collection detail and lists | Done | Analyzer at baseline, `collection_detail__*` OK. Deck rows stay eager (two existing tests rely on it); title text scale capped at 1.4 to prevent mid-word breaks |
 | E1 | E | Statistics | Done | 190 pass + 27 skipped, analyzer at baseline, all `stats_*` captures OK, full-length view reviewed |
 | E2 | E | CSV import | Done | 235 pass + 28 skipped, analyzer at baseline, preview state added to harness and reviewed, import failure wording checked against the transaction |
-| E3 | E | Profile and settings | In progress | |
-| E4 | E | Auth, legal, not found | In progress | |
+| E3 | E | Profile and settings | Done | Analyzer at baseline, `profile__*` and `settings__*` OK with a signed-in user. PNGs not reviewed by Opus |
+| E4 | E | Auth, legal, not found | Done | Analyzer at baseline, `auth__*` and `not_found__*` OK. PNGs not reviewed by Opus; logo missing in `auth__phone` and `auth__small` captures, cause unverified |
 | D2 | D | Motion and performance pass | Pending | |
 | F1 | F | Accessibility and regression tests | Pending | |
 | F2 | F | Profile-mode measurements | Blocked: needs a device | |
@@ -62,6 +62,9 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 - Study header progress dots: `progressDots` is a per-card count (3 to 6, from repetitions), but dots light up by session position, so they carry no real information. Options: remove them, or show repetitions against a fixed target. Left unchanged for now.
 
 ## Known issues and blockers
+- Work paused on the usage limit. Remaining: C4 (restart or review the partial worktree), C5, D2, F1, F2, final review.
+- Forgot-password shows the "lien envoyé" snackbar even if the request failed. Out of scope, to report.
+- At 2.0 text scale, the wrapped "Se connecter" label is left-aligned in its button.
 - Riverpod 3 retries failed stream providers by default, so error states may appear after a delay, with skeletons in the meantime. No app-wide `retry` config was added. To verify on a device.
 - F2 needs a physical device or emulator. None available at the start.
 - Out of scope, to report and not fix:
