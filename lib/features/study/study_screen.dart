@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart' show SchedulerPhase;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -777,11 +778,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                       onReview: _applyReview,
                       showKeyboardHint: _isDesktopPlatform(),
                     );
-                    final isFlashcard =
-                        mode == TestMode.classicFlashcard ||
-                        mode == TestMode.reversedFlashcard;
-                    final isFlashFront = isFlashcard && !state.revealed;
-
                     return Center(
                       child: ConstrainedBox(
                         constraints: BoxConstraints(maxWidth: maxWidth),
@@ -827,7 +823,6 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                                         key: const Key('desktop-study-content'),
                                         child: _StudyScrollArea(
                                           resetKey: card.id,
-                                          centered: isFlashFront,
                                           maxContentWidth: usesReviewPanel
                                               ? double.infinity
                                               : AppTheme.contentMaxWidth,
@@ -948,13 +943,11 @@ class _StudyReviewIntent extends Intent {
 class _StudyScrollArea extends StatefulWidget {
   const _StudyScrollArea({
     required this.resetKey,
-    required this.centered,
     required this.maxContentWidth,
     required this.children,
   });
 
   final Object resetKey;
-  final bool centered;
   final double maxContentWidth;
   final List<Widget> children;
 
@@ -962,8 +955,26 @@ class _StudyScrollArea extends StatefulWidget {
   State<_StudyScrollArea> createState() => _StudyScrollAreaState();
 }
 
+/// Indique aux descendants si la zone défilante déborde (le glissement
+/// vertical y fait défiler au lieu de révéler la carte).
+class _StudyOverflow extends InheritedNotifier<ValueNotifier<bool>> {
+  const _StudyOverflow({
+    required ValueNotifier<bool> canScroll,
+    required super.child,
+  }) : super(notifier: canScroll);
+
+  static bool of(BuildContext context) =>
+      context
+          .dependOnInheritedWidgetOfExactType<_StudyOverflow>()
+          ?.notifier
+          ?.value ??
+      false;
+}
+
 class _StudyScrollAreaState extends State<_StudyScrollArea> {
   final ScrollController _scrollController = ScrollController();
+  final ValueNotifier<bool> _canScroll = ValueNotifier(false);
+  final ValueNotifier<bool> _moreBelow = ValueNotifier(false);
 
   @override
   void didUpdateWidget(_StudyScrollArea oldWidget) {
@@ -978,29 +989,100 @@ class _StudyScrollAreaState extends State<_StudyScrollArea> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _canScroll.dispose();
+    _moreBelow.dispose();
     super.dispose();
+  }
+
+  void _set(ValueNotifier<bool> notifier, bool value) {
+    if (notifier.value == value) return;
+    // Une notification peut tomber pendant le layout (ensureVisible...).
+    final binding = WidgetsBinding.instance;
+    if (binding.schedulerPhase == SchedulerPhase.persistentCallbacks) {
+      binding.addPostFrameCallback((_) {
+        if (mounted) notifier.value = value;
+      });
+    } else {
+      notifier.value = value;
+    }
+  }
+
+  bool _onMetrics(ViewportNotificationMixin n, ScrollMetrics m) {
+    // Ignore nested scrollables, such as the free-text field.
+    if (n.depth != 0) return false;
+    final scrollable = m.maxScrollExtent > 1;
+    _set(_canScroll, scrollable);
+    _set(_moreBelow, scrollable && m.pixels < m.maxScrollExtent - 1);
+    return false;
   }
 
   @override
   Widget build(BuildContext context) {
+    final background = Theme.of(context).scaffoldBackgroundColor;
     return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        controller: _scrollController,
-        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(minHeight: constraints.maxHeight),
-          child: Align(
-            alignment: widget.centered ? Alignment.center : Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(maxWidth: widget.maxContentWidth),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: widget.children,
+      builder: (context, constraints) => Stack(
+        fit: StackFit.expand,
+        children: [
+          NotificationListener<ScrollMetricsNotification>(
+            onNotification: (n) => _onMetrics(n, n.metrics),
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (n) => _onMetrics(n, n.metrics),
+              child: SingleChildScrollView(
+                controller: _scrollController,
+                keyboardDismissBehavior:
+                    ScrollViewKeyboardDismissBehavior.onDrag,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                  child: Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: widget.maxContentWidth,
+                      ),
+                      child: _StudyOverflow(
+                        canScroll: _canScroll,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: widget.children,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
+          // Dégradé discret : il reste du contenu sous le bord visible.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            height: 36,
+            child: IgnorePointer(
+              child: ExcludeSemantics(
+                child: ValueListenableBuilder<bool>(
+                  valueListenable: _moreBelow,
+                  builder: (context, more, child) => AnimatedOpacity(
+                    key: const Key('study-scroll-fade'),
+                    opacity: more ? 1 : 0,
+                    duration: AppMotion.of(context, AppMotion.fast),
+                    child: child,
+                  ),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [background.withValues(alpha: 0), background],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1287,7 +1369,7 @@ class _DesktopReviewPanel extends StatelessWidget {
   }
 }
 
-class _FlashcardMode extends StatelessWidget {
+class _FlashcardMode extends StatefulWidget {
   const _FlashcardMode({
     super.key,
     required this.card,
@@ -1302,78 +1384,166 @@ class _FlashcardMode extends StatelessWidget {
   final bool showInlineAnswer;
 
   @override
-  Widget build(BuildContext context) {
-    if (!revealed) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Center(child: SectionLabel(reversed ? 'Concept' : 'Question')),
-          const SizedBox(height: 18),
-          Text(
-            reversed ? card.correctAnswer : card.question,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.headlineMedium,
-          ),
-          if (card.hint != null) ...[
-            const SizedBox(height: 18),
-            Text(
-              card.hint!,
-              textAlign: TextAlign.center,
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic),
-            ),
-          ],
-          const SizedBox(height: 28),
-          Text(
-            'Glisse vers le haut',
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
-      );
-    }
+  State<_FlashcardMode> createState() => _FlashcardModeState();
+}
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionLabel('Question'),
-                const SizedBox(height: 12),
-                Text(
-                  reversed ? card.correctAnswer : card.question,
-                  style: Theme.of(context).textTheme.titleLarge,
-                ),
-                if (showInlineAnswer) ...[
-                  const SizedBox(height: 18),
-                  const Divider(),
-                  const SizedBox(height: 18),
-                  SectionLabel(reversed ? 'Concept visé' : 'Réponse'),
-                  const SizedBox(height: 12),
-                  Text(
-                    reversed ? card.question : card.correctAnswer,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  if (card.explanation != null) ...[
-                    const SizedBox(height: 18),
-                    Text(
-                      card.explanation!,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
-                ],
+class _FlashcardModeState extends State<_FlashcardMode>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _flip = AnimationController(
+    vsync: this,
+    duration: AppMotion.flip,
+    value: widget.revealed ? 1 : 0,
+  );
+
+  @override
+  void didUpdateWidget(_FlashcardMode oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.revealed == widget.revealed) return;
+    final target = widget.revealed ? 1.0 : 0.0;
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _flip.value = target;
+    } else {
+      _flip.animateTo(target);
+    }
+  }
+
+  @override
+  void dispose() {
+    _flip.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final reduced = MediaQuery.disableAnimationsOf(context);
+    final height = MediaQuery.sizeOf(context).height;
+    final minHeight = (height * 0.42).clamp(240.0, 420.0);
+
+    // Une seule face est construite : le lecteur d'écran ne voit jamais les
+    // deux, ni le texte miroir.
+    final flipper = AnimatedBuilder(
+      animation: _flip,
+      builder: (context, _) {
+        final v = _flip.value;
+        if (reduced || v == 0 || v == 1) {
+          return v >= 0.5 ? _back(minHeight) : _front(minHeight);
+        }
+        final t = AppMotion.standardCurve.transform(v);
+        final showBack = t >= 0.5;
+        return Transform(
+          alignment: Alignment.center,
+          transform: Matrix4.identity()
+            ..setEntry(3, 2, 0.001)
+            ..rotateY(t * math.pi),
+          child: showBack
+              ? Transform(
+                  alignment: Alignment.center,
+                  transform: Matrix4.rotationY(math.pi),
+                  child: _back(minHeight),
+                )
+              : _front(minHeight),
+        );
+      },
+    );
+
+    final box = RepaintBoundary(child: flipper);
+    if (reduced) return box;
+    // Le changement de hauteur entre les faces a lieu à mi-course.
+    return AnimatedSize(
+      duration: AppMotion.flip ~/ 2,
+      curve: AppMotion.standardCurve,
+      alignment: Alignment.topCenter,
+      child: box,
+    );
+  }
+
+  Widget _front(double minHeight) {
+    final theme = Theme.of(context);
+    final text = widget.reversed
+        ? widget.card.correctAnswer
+        : widget.card.question;
+    final hint = widget.card.hint;
+    // Le glissement ne révèle que si le contenu ne défile pas.
+    final overflows = _StudyOverflow.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: minHeight),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Center(
+                child: SectionLabel(widget.reversed ? 'Concept' : 'Question'),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                text,
+                textAlign: TextAlign.center,
+                style: questionTextStyle(theme.textTheme, text),
+              ),
+              if (hint != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                _HintLine(hint: hint),
               ],
-            ),
+              const SizedBox(height: AppSpacing.lg),
+              Visibility(
+                visible: !overflows,
+                maintainSize: true,
+                maintainAnimation: true,
+                maintainState: true,
+                child: Text(
+                  'Glisse vers le haut',
+                  key: const Key('flash-swipe-hint'),
+                  textAlign: TextAlign.center,
+                  style: theme.textTheme.bodySmall,
+                ),
+              ),
+            ],
           ),
         ),
-      ],
+      ),
+    );
+  }
+
+  Widget _back(double minHeight) {
+    final theme = Theme.of(context);
+    final card = widget.card;
+    final reversed = widget.reversed;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.xl),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: minHeight),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionLabel('Question'),
+              const SizedBox(height: 12),
+              Text(
+                reversed ? card.correctAnswer : card.question,
+                style: theme.textTheme.titleLarge,
+              ),
+              if (widget.showInlineAnswer) ...[
+                const SizedBox(height: 18),
+                const Divider(),
+                const SizedBox(height: 18),
+                SectionLabel(reversed ? 'Concept visé' : 'Réponse'),
+                const SizedBox(height: 12),
+                Text(
+                  reversed ? card.question : card.correctAnswer,
+                  style: theme.textTheme.headlineMedium,
+                ),
+                if (card.explanation != null) ...[
+                  const SizedBox(height: 18),
+                  Text(card.explanation!, style: theme.textTheme.bodyLarge),
+                ],
+              ],
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
