@@ -639,7 +639,8 @@ void main() {
             } catch (e) {
               note('INTERACT FAILED: $e');
             }
-            for (var i = 0; i < 5; i++) {
+            // Laisse finir l'ondulation et le défilement vers le feedback.
+            for (var i = 0; i < 15; i++) {
               await tester.pump(const Duration(milliseconds: 100));
             }
             drain();
