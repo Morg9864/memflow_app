@@ -2344,7 +2344,7 @@ class _ClozeBlankChip extends StatelessWidget {
             border: Border.all(color: borderColor),
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 76, minHeight: 44),
+            constraints: const BoxConstraints(minWidth: 76, minHeight: 46),
             child: Center(
               widthFactor: 1,
               heightFactor: 1,

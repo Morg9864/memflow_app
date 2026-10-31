@@ -248,9 +248,9 @@ class _EditDialogState extends State<_EditDialog> {
             const SizedBox(height: 12),
             Text(
               _error!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.resultBadText),
             ),
           ],
         ],
@@ -436,9 +436,9 @@ class _PasswordDialogState extends State<_PasswordDialog> {
             const SizedBox(height: 12),
             Text(
               _error!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Theme.of(context).colorScheme.error,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: AppColors.resultBadText),
             ),
           ],
         ],

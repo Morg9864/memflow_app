@@ -35,7 +35,7 @@ class AuthErrorText extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final color = theme.colorScheme.error;
+    const color = AppColors.resultBadText;
     return Semantics(
       liveRegion: true,
       container: true,

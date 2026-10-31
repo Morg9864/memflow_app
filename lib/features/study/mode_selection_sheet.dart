@@ -25,6 +25,9 @@ Future<ModeChoice?> showModeSelectionSheet(
     isScrollControlled: true,
     showDragHandle: true,
     useSafeArea: true,
+    sheetAnimationStyle: MediaQuery.disableAnimationsOf(context)
+        ? AnimationStyle.noAnimation
+        : null,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),

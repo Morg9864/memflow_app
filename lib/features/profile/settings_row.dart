@@ -82,7 +82,7 @@ class SettingsRow extends StatelessWidget {
       minTileHeight: 56,
       leading: leading ?? Icon(icon, size: 24),
       iconColor: destructive ? scheme.error : scheme.onSurfaceVariant,
-      textColor: destructive ? scheme.error : scheme.onSurface,
+      textColor: destructive ? AppColors.resultBadText : scheme.onSurface,
       title: Text(title),
       subtitle: subtitle == null ? null : Text(subtitle!),
       trailing: trailing,

@@ -543,7 +543,13 @@ class _MenuRow extends StatelessWidget {
         Icon(icon, size: 20, color: color),
         const SizedBox(width: AppSpacing.md),
         Expanded(
-          child: Text(label, style: TextStyle(color: color)),
+          child: Text(
+            label,
+            // Rouge d'erreur en texte: 4.2:1 seulement, on prend le ton foncé.
+            style: TextStyle(
+              color: destructive ? AppColors.resultBadText : null,
+            ),
+          ),
         ),
       ],
     );

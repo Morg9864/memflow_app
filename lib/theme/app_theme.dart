@@ -139,6 +139,14 @@ class AppTheme {
     ),
   );
 
+  /// ButtonStyle has no textAlign: a label that wraps (large text) would hug
+  /// the left edge of its button. One builder centres every button kind.
+  static Widget _centerLabel(
+    BuildContext context,
+    Set<WidgetState> states,
+    Widget? child,
+  ) => DefaultTextStyle.merge(textAlign: TextAlign.center, child: child!);
+
   static ThemeData light() => _light;
 
   static final ThemeData _light = _buildTheme(
@@ -280,6 +288,8 @@ class AppTheme {
         border: inputBorder(scheme.outlineVariant),
         enabledBorder: inputBorder(scheme.outlineVariant),
         focusedBorder: inputBorder(scheme.primary, 1.4),
+        // Error red as text is only 4:1 on these surfaces; the border keeps it.
+        errorStyle: const TextStyle(color: AppColors.resultBadText),
         errorBorder: inputBorder(scheme.error),
         focusedErrorBorder: inputBorder(scheme.error, 1.4),
       ),
@@ -292,7 +302,7 @@ class AppTheme {
           ),
           shape: buttonShape,
           textStyle: outfit(19, weight: FontWeight.w700),
-        ),
+        ).copyWith(foregroundBuilder: _centerLabel),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
@@ -301,7 +311,7 @@ class AppTheme {
           foregroundColor: scheme.onSurface,
           side: BorderSide(color: scheme.outlineVariant),
           textStyle: outfit(16, weight: FontWeight.w600),
-        ),
+        ).copyWith(foregroundBuilder: _centerLabel),
       ),
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
@@ -309,7 +319,7 @@ class AppTheme {
           foregroundColor: scheme.onSurface,
           iconColor: scheme.primary,
           textStyle: outfit(15, weight: FontWeight.w600),
-        ),
+        ).copyWith(foregroundBuilder: _centerLabel),
       ),
       iconButtonTheme: IconButtonThemeData(
         style: IconButton.styleFrom(minimumSize: const Size(48, 48)),
