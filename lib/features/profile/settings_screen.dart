@@ -259,13 +259,7 @@ class _EditDialogState extends State<_EditDialog> {
         FilledButton.tonal(
           style: AppTheme.compactAction,
           onPressed: _loading ? null : _submit,
-          child: _loading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Enregistrer'),
+          child: _loading ? const ButtonSpinner() : const Text('Enregistrer'),
         ),
       ],
     );
@@ -440,13 +434,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
         FilledButton.tonal(
           style: AppTheme.compactAction,
           onPressed: _loading ? null : _submit,
-          child: _loading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Text('Enregistrer'),
+          child: _loading ? const ButtonSpinner() : const Text('Enregistrer'),
         ),
       ],
     );

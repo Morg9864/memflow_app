@@ -23,8 +23,8 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | F0 | F | Visual harness and "before" screenshots | Done | 78 PNGs from 26 states in `build/visual/before`, 46 OK and 32 with overflow or failed interaction; harness skipped by default |
 | A2 | A | Light-only, remove dark and Vivid | Done | 94 pass + 26 skipped, analyzer at baseline, overflow report unchanged |
 | A3 | A | Tokens and theme | Done | 98 pass + 26 skipped, analyzer at baseline, palette and text-slot tests added |
-| A4 | A | Shared widgets, move single-screen widgets | In progress | |
-| D1 | D | Tab shell route | Pending | |
+| A4 | A | Shared widgets, move single-screen widgets | Done | 105 pass + 26 skipped, analyzer at baseline, overflow report unchanged, `ui.dart` 948 to 478 lines |
+| D1 | D | Tab shell route | In progress | |
 | C1 | C | Study: layout | Pending | |
 | C2 | C | Study: answers and feedback | Pending | |
 | C3 | C | Study: progress and ratings | Pending | |

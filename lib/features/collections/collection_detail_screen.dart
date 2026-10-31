@@ -617,3 +617,184 @@ class _CollectionDetailScreenState
 }
 
 enum _CollectionAction { toggleDisabled, delete }
+
+class DeckCard extends StatelessWidget {
+  const DeckCard({
+    super.key,
+    required this.deck,
+    required this.onTap,
+    this.onDelete,
+    this.onViewCards,
+    this.onToggleDisabled,
+  });
+
+  final DeckListItem deck;
+  final VoidCallback? onTap;
+  final VoidCallback? onDelete;
+  final VoidCallback? onViewCards;
+  final VoidCallback? onToggleDisabled;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final hasOptions =
+        onDelete != null || onViewCards != null || onToggleDisabled != null;
+    final isUnavailable = deck.isDisabled || onTap == null;
+    return Card(
+      child: InkWell(
+        onTap: isUnavailable ? null : onTap,
+        borderRadius: AppTheme.radiusMd,
+        child: Opacity(
+          opacity: isUnavailable ? 0.45 : 1,
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  alignment: Alignment.center,
+                  child: Text(deck.icon, style: const TextStyle(fontSize: 20)),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Flexible(
+                            child: Text(
+                              deck.name,
+                              style: theme.textTheme.titleMedium,
+                            ),
+                          ),
+                          if (deck.isDisabled) ...[
+                            const SizedBox(width: 8),
+                            const DisabledBadge(label: 'Désactivé'),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        '${deck.cardsDone} / ${deck.totalCards} cartes faites • ${deck.difficulty.label}',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${deck.dueCards} à revoir',
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: theme.colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      ProgressPill(value: deck.progress),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                if (hasOptions)
+                  PopupMenuButton<_DeckAction>(
+                    icon: const Icon(Icons.more_vert_rounded),
+                    onSelected: (action) {
+                      switch (action) {
+                        case _DeckAction.viewCards:
+                          onViewCards?.call();
+                        case _DeckAction.toggleDisabled:
+                          onToggleDisabled?.call();
+                        case _DeckAction.delete:
+                          onDelete?.call();
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      if (onViewCards != null)
+                        const PopupMenuItem(
+                          value: _DeckAction.viewCards,
+                          child: Row(
+                            children: [
+                              Icon(Icons.list_rounded, size: 20),
+                              SizedBox(width: 12),
+                              Text('Voir les cartes'),
+                            ],
+                          ),
+                        ),
+                      if (onToggleDisabled != null)
+                        PopupMenuItem(
+                          value: _DeckAction.toggleDisabled,
+                          child: Row(
+                            children: [
+                              Icon(
+                                deck.isDisabled
+                                    ? Icons.visibility_rounded
+                                    : Icons.visibility_off_rounded,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                deck.isDisabled
+                                    ? 'Réactiver le deck'
+                                    : 'Désactiver le deck',
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (onDelete != null)
+                        PopupMenuItem(
+                          value: _DeckAction.delete,
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.delete_outline_rounded,
+                                color: theme.colorScheme.error,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 12),
+                              Text(
+                                'Supprimer le deck',
+                                style: TextStyle(
+                                  color: theme.colorScheme.error,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  )
+                else
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withValues(
+                            alpha: 0.1,
+                          ),
+                          borderRadius: BorderRadius.circular(999),
+                        ),
+                        child: Text(
+                          deck.badgeLabel,
+                          style: theme.textTheme.bodySmall,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      const Icon(Icons.chevron_right_rounded),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _DeckAction { viewCards, delete, toggleDisabled }

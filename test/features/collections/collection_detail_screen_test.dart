@@ -9,7 +9,6 @@ import 'package:memflow/domain/models/models.dart';
 import 'package:memflow/domain/services/card_mode_service.dart';
 import 'package:memflow/domain/services/spaced_repetition_service.dart';
 import 'package:memflow/features/collections/collection_detail_screen.dart';
-import 'package:memflow/widgets/ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 

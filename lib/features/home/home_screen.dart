@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 
 final homeStatsProvider = StreamProvider<HomeStats>((ref) {
@@ -146,13 +147,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   shrinkWrap: true,
                   physics: const NeverScrollableScrollPhysics(),
                   itemCount: 2,
-                  gridDelegate:
-                      const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisExtent: 120,
-                        mainAxisSpacing: 12,
-                        crossAxisSpacing: 12,
-                      ),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisExtent: 120,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                  ),
                   itemBuilder: (context, index) => index == 0
                       ? StatCard(
                           compact: true,
@@ -247,12 +247,103 @@ class _CollectionGrid extends StatelessWidget {
             for (final item in items)
               SizedBox(
                 width: cardWidth,
-                child: CollectionCard(
+                child: _CollectionCard(
                   collection: item,
                   onTap: () => context.push('/collection/${item.id}'),
                 ),
               ),
           ],
+        );
+      },
+    );
+  }
+}
+
+class _CollectionCard extends StatelessWidget {
+  const _CollectionCard({required this.collection, required this.onTap});
+
+  final CollectionListItem collection;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 240;
+        return Card(
+          child: Opacity(
+            opacity: collection.isDisabled ? 0.45 : 1,
+            child: InkWell(
+              borderRadius: AppTheme.radiusMd,
+              onTap: onTap,
+              child: Padding(
+                padding: EdgeInsets.all(compact ? 14 : 18),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: compact ? 36 : 42,
+                          height: compact ? 36 : 42,
+                          decoration: BoxDecoration(
+                            color: Color(
+                              collection.color,
+                            ).withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            collection.icon,
+                            style: TextStyle(fontSize: compact ? 18 : 20),
+                          ),
+                        ),
+                        const Spacer(),
+                        if (collection.isDisabled) ...[
+                          const DisabledBadge(label: 'Désactivée'),
+                          const SizedBox(width: 8),
+                        ],
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: compact ? 22 : 24,
+                          color: theme.colorScheme.primary,
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: compact ? 12 : 24),
+                    Text(
+                      collection.name,
+                      maxLines: compact ? 2 : null,
+                      overflow: compact ? TextOverflow.ellipsis : null,
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      compact
+                          ? '${collection.cardsDone}/${collection.totalCards} faites'
+                          : '${collection.cardsDone} / ${collection.totalCards} cartes faites',
+                      maxLines: compact ? 1 : null,
+                      overflow: compact ? TextOverflow.ellipsis : null,
+                      style: theme.textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${collection.dueCards} à revoir',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    SizedBox(height: compact ? 10 : 12),
+                    ProgressPill(value: collection.progress),
+                  ],
+                ),
+              ),
+            ),
+          ),
         );
       },
     );

@@ -783,7 +783,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                StudyProgressHeader(
+                                _StudyProgressHeader(
                                   title: state.deckTitle,
                                   currentIndex: state.currentIndex,
                                   total: state.cards.length,
@@ -913,7 +913,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
       childAspectRatio: 1.55,
       children: [
         for (final result in ReviewResult.values)
-          ReviewButton(
+          _ReviewButton(
             result: result,
             isSuggested: result == suggested,
             onPressed: () => _applyReview(result),
@@ -1051,7 +1051,7 @@ class _DesktopReviewPanel extends StatelessWidget {
                   ),
                   itemBuilder: (context, index) {
                     final result = ReviewResult.values[index];
-                    return ReviewButton(
+                    return _ReviewButton(
                       result: result,
                       isSuggested: result == suggested,
                       compact: true,
@@ -1971,4 +1971,184 @@ class _TrueFalseMode extends StatelessWidget {
       ],
     );
   }
+}
+
+class _LevelBadge extends StatelessWidget {
+  const _LevelBadge({required this.level});
+
+  final int level;
+
+  @override
+  Widget build(BuildContext context) {
+    final meta = switch (level) {
+      1 => ('Basique', Icons.visibility_rounded),
+      2 => ('Intermédiaire', Icons.auto_awesome_mosaic_rounded),
+      3 => ('Actif', Icons.bolt_rounded),
+      _ => ('Avancé', Icons.psychology_alt_rounded),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(18),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(meta.$2, size: 16),
+          const SizedBox(width: 8),
+          Text('${meta.$1}, Niv. $level'),
+        ],
+      ),
+    );
+  }
+}
+
+class _StudyProgressHeader extends StatelessWidget {
+  const _StudyProgressHeader({
+    required this.title,
+    required this.currentIndex,
+    required this.total,
+    required this.level,
+    required this.progressDots,
+    this.onClose,
+  });
+
+  final String title;
+  final int currentIndex;
+  final int total;
+  final int level;
+  final int progressDots;
+  final VoidCallback? onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            IconButton(
+              tooltip: 'Quitter la session',
+              onPressed: onClose,
+              icon: const Icon(Icons.close_rounded),
+            ),
+            Expanded(
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            const SizedBox(width: 48),
+          ],
+        ),
+        const SizedBox(height: 12),
+        ProgressPill(value: total == 0 ? 0 : (currentIndex + 1) / total),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Text('${currentIndex + 1}/$total'),
+            const SizedBox(width: 12),
+            _LevelBadge(level: level),
+            const Spacer(),
+            Row(
+              children: List.generate(
+                progressDots,
+                (index) => Container(
+                  width: 8,
+                  height: 8,
+                  margin: const EdgeInsets.only(left: 6),
+                  decoration: BoxDecoration(
+                    color: index <= currentIndex
+                        ? Theme.of(context).colorScheme.primary
+                        : Theme.of(context).dividerColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _ReviewButton extends StatelessWidget {
+  const _ReviewButton({
+    required this.result,
+    required this.onPressed,
+    this.isSuggested = false,
+    this.compact = false,
+  });
+
+  final ReviewResult result;
+  final VoidCallback? onPressed;
+  final bool isSuggested;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final tone = result.tone;
+    final background = result.background;
+    final borderColor = isSuggested ? tone : Colors.transparent;
+
+    return FilledButton(
+      onPressed: onPressed,
+      style: FilledButton.styleFrom(
+        minimumSize: Size.fromHeight(compact ? 72 : 88),
+        padding: EdgeInsets.all(compact ? 12 : 16),
+        backgroundColor: background,
+        foregroundColor: tone,
+        disabledBackgroundColor: background.withValues(alpha: 0.55),
+        disabledForegroundColor: tone.withValues(alpha: 0.55),
+        elevation: 0,
+        tapTargetSize: MaterialTapTargetSize.padded,
+        alignment: Alignment.centerLeft,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: BorderSide(color: borderColor, width: isSuggested ? 1.5 : 1),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            result.label,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontSize: compact ? 15 : null,
+              color: tone,
+            ),
+          ),
+          SizedBox(height: compact ? 3 : 6),
+          Text(
+            result.description,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: compact ? 11 : null,
+              color: tone,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+extension _ReviewResultColors on ReviewResult {
+  Color get tone => switch (this) {
+    ReviewResult.again => AppColors.error,
+    ReviewResult.hard => AppColors.ratingHard,
+    ReviewResult.good => AppColors.resultGood,
+    ReviewResult.easy => AppColors.ratingEasy,
+  };
+
+  Color get background => switch (this) {
+    ReviewResult.again => AppColors.resultBadSoft,
+    ReviewResult.hard => AppColors.primarySoft,
+    ReviewResult.good => AppColors.resultGoodSoft,
+    ReviewResult.easy => AppColors.ratingEasySoft,
+  };
 }
