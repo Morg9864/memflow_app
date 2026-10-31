@@ -12,7 +12,10 @@ import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
 
 class ImportScreen extends ConsumerStatefulWidget {
-  const ImportScreen({super.key});
+  const ImportScreen({super.key, @visibleForTesting this.pickFiles});
+
+  /// Test seam: replaces the static `FilePicker.pickFiles` call.
+  final Future<FilePickerResult?> Function()? pickFiles;
 
   @override
   ConsumerState<ImportScreen> createState() => _ImportScreenState();
@@ -21,6 +24,10 @@ class ImportScreen extends ConsumerStatefulWidget {
 class _ImportScreenState extends ConsumerState<ImportScreen> {
   CsvImportPreview? _preview;
   bool _isBusy = false;
+  bool _isImporting = false;
+  bool _readFailed = false;
+  bool _importFailed = false;
+  String? _fileName;
   String? _csvPrompt;
 
   @override
@@ -39,34 +46,61 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     setState(() => _csvPrompt = prompt);
   }
 
+  void _snack(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   Future<void> _pickFile() async {
-    final result = await FilePicker.pickFiles(
-      withData: true,
-      type: FileType.custom,
-      allowedExtensions: const ['csv', 'txt'],
-    );
-    if (result == null || result.files.isEmpty) {
+    final FilePickerResult? result;
+    try {
+      result =
+          await (widget.pickFiles?.call() ??
+              FilePicker.pickFiles(
+                withData: true,
+                type: FileType.custom,
+                allowedExtensions: const ['csv', 'txt'],
+              ));
+    } catch (_) {
+      _snack('Impossible d’ouvrir le sélecteur de fichiers.');
+      return;
+    }
+    if (result == null || result.files.isEmpty || !mounted) {
       return;
     }
     final file = result.files.single;
     final bytes = file.bytes;
-    if (bytes == null) {
-      return;
+    CsvImportPreview? preview;
+    if (bytes != null) {
+      try {
+        preview = ref.read(csvImportServiceProvider).parse(bytes);
+      } catch (_) {
+        preview = null;
+      }
     }
     setState(() {
-      _preview = ref.read(csvImportServiceProvider).parse(bytes);
+      _preview = preview;
+      _fileName = file.name;
+      _readFailed = preview == null;
+      _importFailed = false;
     });
   }
 
   Future<void> _downloadTemplate() async {
-    final template = ref.read(csvExportServiceProvider).buildTemplate();
-    await FilePicker.saveFile(
-      dialogTitle: 'Télécharger le template CSV',
-      fileName: 'memflow_template.csv',
-      type: FileType.custom,
-      allowedExtensions: const ['csv'],
-      bytes: utf8.encode(template),
-    );
+    try {
+      final template = ref.read(csvExportServiceProvider).buildTemplate();
+      await FilePicker.saveFile(
+        dialogTitle: 'Télécharger le template CSV',
+        fileName: 'memflow_template.csv',
+        type: FileType.custom,
+        allowedExtensions: const ['csv'],
+        bytes: utf8.encode(template),
+      );
+    } catch (_) {
+      _snack('Impossible d’enregistrer le template.');
+    }
   }
 
   Future<void> _downloadBackup() async {
@@ -81,6 +115,8 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
         allowedExtensions: const ['csv'],
         bytes: utf8.encode(csv),
       );
+    } catch (_) {
+      _snack('Impossible d’enregistrer la sauvegarde.');
     } finally {
       if (mounted) {
         setState(() => _isBusy = false);
@@ -93,13 +129,17 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     if (prompt == null) {
       return;
     }
-    await FilePicker.saveFile(
-      dialogTitle: 'Télécharger le prompt CSV Memflow',
-      fileName: 'prompt_csv_memflow_neutre.md',
-      type: FileType.custom,
-      allowedExtensions: const ['md'],
-      bytes: utf8.encode(prompt),
-    );
+    try {
+      await FilePicker.saveFile(
+        dialogTitle: 'Télécharger le prompt CSV Memflow',
+        fileName: 'prompt_csv_memflow_neutre.md',
+        type: FileType.custom,
+        allowedExtensions: const ['md'],
+        bytes: utf8.encode(prompt),
+      );
+    } catch (_) {
+      _snack('Impossible d’enregistrer le prompt.');
+    }
   }
 
   Future<void> _copyPrompt() async {
@@ -118,7 +158,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
 
   Future<void> _confirmImport() async {
     final preview = _preview;
-    if (preview == null || preview.cards.isEmpty) {
+    if (preview == null || preview.cards.isEmpty || _isImporting) {
       return;
     }
     final shouldImport = await showDialog<bool>(
@@ -146,226 +186,418 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     if (shouldImport != true || !mounted) {
       return;
     }
-    setState(() => _isBusy = true);
+    setState(() {
+      _isImporting = true;
+      _importFailed = false;
+    });
     try {
       await ref.read(appRepositoryProvider).importCards(preview);
       if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
       context.go('/');
-      ScaffoldMessenger.of(context).showSnackBar(
+      messenger.showSnackBar(
         SnackBar(content: Text('${preview.cards.length} cartes importées.')),
       );
+    } catch (_) {
+      if (mounted) setState(() => _importFailed = true);
     } finally {
       if (mounted) {
-        setState(() => _isBusy = false);
+        setState(() => _isImporting = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final preview = _preview;
+    final Widget state;
+    if (_readFailed) {
+      state = const _MessageCard(
+        key: ValueKey('unreadable'),
+        title: 'Impossible de lire ce fichier.',
+        message:
+            'Vérifie que c’est bien un fichier CSV ou TXT, puis choisis-en un autre.',
+      );
+    } else if (preview == null) {
+      state = Padding(
+        key: const ValueKey('idle'),
+        padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+        child: Text(
+          'Aucun fichier chargé. Choisis un fichier pour prévisualiser les cartes détectées et les erreurs.',
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      );
+    } else {
+      state = _PreviewCard(
+        key: ValueKey(preview),
+        preview: preview,
+        fileName: _fileName,
+        isImporting: _isImporting,
+        importFailed: _importFailed,
+        onConfirm: _confirmImport,
+      );
+    }
     return AppScaffold(
       child: ListView(
         children: [
-          Row(
-            children: [
-              Text(
-                'Import CSV',
-                style: Theme.of(context).textTheme.displaySmall,
+          Text('Import CSV', style: theme.textTheme.displaySmall),
+          const SizedBox(height: AppSpacing.lg),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const IconTile(icon: Icons.upload_file_rounded),
+                      const SizedBox(width: AppSpacing.md),
+                      Expanded(
+                        child: Text(
+                          'Importer des cartes',
+                          style: theme.textTheme.titleLarge,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    'Fichiers CSV ou TXT, séparés par ; , ou tabulation, avec ou sans ligne d’en-tête.',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SizedBox(
+                    width: double.infinity,
+                    child: Pressable(
+                      enabled: !_isImporting,
+                      child: FilledButton.icon(
+                        onPressed: _isImporting ? null : _pickFile,
+                        icon: const Icon(Icons.upload_file_rounded),
+                        label: const Text('Importer un fichier CSV'),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const Spacer(),
-            ],
+            ),
           ),
-          const SizedBox(height: 18),
-          Text(
-            'Accepte les fichiers avec ou sans header, séparés par ; , ou tabulation.',
-            style: Theme.of(context).textTheme.bodyLarge,
+          const SizedBox(height: AppSpacing.lg),
+          AnimatedSwitcher(
+            duration: AppMotion.of(context, AppMotion.standard),
+            switchInCurve: AppMotion.standardCurve,
+            child: state,
           ),
-          const SizedBox(height: 20),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: _isBusy ? null : _pickFile,
-                  icon: const Icon(Icons.upload_file_rounded),
-                  label: const Text('Importer un fichier CSV'),
-                ),
+          const SizedBox(height: AppSpacing.lg),
+          Card(
+            child: ExpansionTile(
+              tilePadding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.lg,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: FilledButton.tonalIcon(
+              childrenPadding: const EdgeInsets.fromLTRB(
+                AppSpacing.lg,
+                0,
+                AppSpacing.lg,
+                AppSpacing.lg,
+              ),
+              title: Text(
+                'Options avancées',
+                style: theme.textTheme.titleLarge,
+              ),
+              children: [
+                FilledButton.tonalIcon(
                   style: AppTheme.secondaryAction,
                   onPressed: _downloadTemplate,
                   icon: const Icon(Icons.download_rounded),
                   label: const Text('Télécharger le template CSV'),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: _isBusy ? null : _downloadBackup,
-              icon: const Icon(Icons.save_alt_rounded),
-              label: const Text('Sauvegarder toutes mes cartes'),
-            ),
-          ),
-          const SizedBox(height: 22),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'Format recommandé : collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
-          ),
-          const SizedBox(height: 22),
-          Card(
-            child: ExpansionTile(
-              tilePadding: const EdgeInsets.symmetric(horizontal: 20),
-              childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
-              title: Text(
-                'Prompt CSV Memflow',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              subtitle: Text(
-                'Déplie cette section pour lire, copier ou télécharger le prompt complet.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        style: AppTheme.secondaryAction,
-                        onPressed: _csvPrompt == null ? null : _copyPrompt,
-                        icon: const Icon(Icons.content_copy_rounded),
-                        label: const Text('Copier le prompt'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton.tonalIcon(
-                        style: AppTheme.secondaryAction,
-                        onPressed: _csvPrompt == null ? null : _downloadPrompt,
-                        icon: const Icon(Icons.download_rounded),
-                        label: const Text('Télécharger le .md'),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: AppSpacing.md),
+                FilledButton.tonalIcon(
+                  style: AppTheme.secondaryAction,
+                  onPressed: _isBusy ? null : _downloadBackup,
+                  icon: _isBusy
+                      ? const ButtonSpinner()
+                      : const Icon(Icons.save_alt_rounded),
+                  label: const Text('Sauvegarder toutes mes cartes'),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: AppSpacing.lg),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: SelectableText(
+                    'Format recommandé : collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level;tags;source;cloze_text;accepted_answers;cloze_answers;cloze_word_bank',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Prompt CSV Memflow',
+                    style: theme.textTheme.titleMedium,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Lis, copie ou télécharge le prompt complet.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                FilledButton.tonalIcon(
+                  style: AppTheme.secondaryAction,
+                  onPressed: _csvPrompt == null ? null : _copyPrompt,
+                  icon: const Icon(Icons.content_copy_rounded),
+                  label: const Text('Copier le prompt'),
+                ),
+                const SizedBox(height: AppSpacing.md),
+                FilledButton.tonalIcon(
+                  style: AppTheme.secondaryAction,
+                  onPressed: _csvPrompt == null ? null : _downloadPrompt,
+                  icon: const Icon(Icons.download_rounded),
+                  label: const Text('Télécharger le .md'),
+                ),
+                const SizedBox(height: AppSpacing.lg),
                 Container(
                   width: double.infinity,
                   constraints: const BoxConstraints(maxHeight: 360),
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(AppSpacing.md),
                   decoration: BoxDecoration(
-                    color: Theme.of(
-                      context,
-                    ).colorScheme.primary.withValues(alpha: 0.05),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Theme.of(context).dividerColor),
+                    color: AppColors.surfaceSoft,
+                    borderRadius: AppTheme.radiusSm,
+                    border: Border.all(color: theme.dividerColor),
                   ),
                   child: _csvPrompt == null
                       ? const Center(child: CircularProgressIndicator())
                       : SingleChildScrollView(
                           child: SelectableText(
                             _csvPrompt!,
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: theme.textTheme.bodySmall,
                           ),
                         ),
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 22),
-          if (_preview == null)
-            const EmptyState(
-              title: 'Aucun fichier chargé',
-              message:
-                  'Charge un fichier pour prévisualiser les cartes détectées et les erreurs.',
-            )
-          else
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Prévisualisation',
-                      style: Theme.of(context).textTheme.titleLarge,
+        ],
+      ),
+    );
+  }
+}
+
+/// Error-tone message: icon plus text, never colour alone.
+class _MessageCard extends StatelessWidget {
+  const _MessageCard({super.key, required this.title, required this.message});
+
+  final String title;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: const BoxDecoration(
+        color: AppColors.resultBadSoft,
+        borderRadius: AppTheme.radiusMd,
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.error_outline_rounded, color: AppColors.error),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    color: AppColors.resultBadText,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  message,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: AppColors.resultBadText,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SummaryRow extends StatelessWidget {
+  const _SummaryRow({required this.icon, required this.text, this.color});
+
+  final IconData icon;
+  final String text;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 20, color: color ?? theme.colorScheme.onSurface),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(child: Text(text, style: theme.textTheme.bodyLarge)),
+        ],
+      ),
+    );
+  }
+}
+
+class _PreviewCard extends StatelessWidget {
+  const _PreviewCard({
+    super.key,
+    required this.preview,
+    required this.fileName,
+    required this.isImporting,
+    required this.importFailed,
+    required this.onConfirm,
+  });
+
+  static const _maxIssues = 20;
+
+  final CsvImportPreview preview;
+  final String? fileName;
+  final bool isImporting;
+  final bool importFailed;
+  final VoidCallback onConfirm;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final issues = preview.issues;
+    final hasIssues = issues.isNotEmpty;
+    final noCards = preview.cards.isEmpty;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Prévisualisation', style: theme.textTheme.titleLarge),
+            if (fileName != null && fileName!.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(fileName!, style: theme.textTheme.bodySmall, maxLines: 2),
+            ],
+            const SizedBox(height: AppSpacing.md),
+            _SummaryRow(
+              icon: Icons.check_circle_outline_rounded,
+              text: '${preview.cards.length} cartes détectées',
+            ),
+            _SummaryRow(
+              icon: hasIssues
+                  ? Icons.warning_amber_rounded
+                  : Icons.check_circle_outline_rounded,
+              color: hasIssues ? AppColors.error : null,
+              text: '${issues.length} lignes invalides',
+            ),
+            Text(
+              'Séparateur : ${preview.delimiter == '\t' ? 'tabulation' : preview.delimiter}'
+              ' · Header : ${preview.withHeader ? 'oui' : 'non'}',
+              style: theme.textTheme.bodySmall,
+            ),
+            if (noCards) ...[
+              const SizedBox(height: AppSpacing.lg),
+              const _MessageCard(
+                title: 'Aucune carte exploitable',
+                message:
+                    'Aucune carte n’a pu être lue dans ce fichier. Vérifie le séparateur et que chaque ligne contient au moins une question et sa bonne réponse.',
+              ),
+            ],
+            if (hasIssues) ...[
+              const SizedBox(height: AppSpacing.lg),
+              const SectionLabel('Erreurs'),
+              const SizedBox(height: AppSpacing.sm),
+              for (final issue in issues.take(_maxIssues))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                  child: Text(
+                    'Ligne ${issue.rowNumber} : ${issue.message}',
+                    style: theme.textTheme.bodyMedium,
+                  ),
+                ),
+              if (issues.length > _maxIssues)
+                Text(
+                  'et ${issues.length - _maxIssues} autres lignes',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+            if (!noCards) ...[
+              const SizedBox(height: AppSpacing.lg),
+              const SectionLabel('Aperçu'),
+              const SizedBox(height: AppSpacing.sm),
+              for (final card in preview.cards.take(4))
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                      borderRadius: AppTheme.radiusSm,
                     ),
-                    const SizedBox(height: 14),
-                    Text('${_preview!.cards.length} cartes détectées'),
-                    Text('${_preview!.issues.length} lignes invalides'),
-                    Text(
-                      'Séparateur : ${_preview!.delimiter == '\t' ? 'tabulation' : _preview!.delimiter}',
-                    ),
-                    Text('Header : ${_preview!.withHeader ? 'oui' : 'non'}'),
-                    const SizedBox(height: 18),
-                    if (_preview!.issues.isNotEmpty) ...[
-                      const SectionLabel('Erreurs'),
-                      const SizedBox(height: 10),
-                      for (final issue in _preview!.issues)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 8),
-                          child: Text(
-                            'Ligne ${issue.rowNumber} : ${issue.message}',
-                          ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${card.collection} • ${card.deck}',
+                          style: theme.textTheme.labelMedium,
                         ),
-                      const SizedBox(height: 14),
-                    ],
-                    if (_preview!.cards.isNotEmpty) ...[
-                      const SectionLabel('Aperçu'),
-                      const SizedBox(height: 10),
-                      for (final card in _preview!.cards.take(4))
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: Theme.of(
-                                context,
-                              ).colorScheme.primary.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  '${card.collection} • ${card.deck}',
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.labelMedium,
-                                ),
-                                const SizedBox(height: 6),
-                                Text(
-                                  card.question,
-                                  style: Theme.of(
-                                    context,
-                                  ).textTheme.titleMedium,
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                    ],
-                    const SizedBox(height: 8),
-                    FilledButton(
-                      onPressed: _isBusy || _preview!.cards.isEmpty
-                          ? null
-                          : _confirmImport,
-                      child: Text(
-                        _isBusy ? 'Import en cours...' : 'Confirmer l’import',
-                      ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(card.question, style: theme.textTheme.titleMedium),
+                      ],
                     ),
-                  ],
+                  ),
+                ),
+              if (importFailed) ...[
+                const _MessageCard(
+                  title: 'L’import a échoué.',
+                  message: 'Tes données n’ont pas été modifiées.',
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ],
+              SizedBox(
+                width: double.infinity,
+                child: Pressable(
+                  enabled: !isImporting,
+                  child: FilledButton(
+                    onPressed: isImporting ? null : onConfirm,
+                    child: isImporting
+                        ? const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ButtonSpinner(),
+                              SizedBox(width: AppSpacing.sm),
+                              Flexible(child: Text('Import en cours...')),
+                            ],
+                          )
+                        : Text(
+                            importFailed ? 'Réessayer' : 'Confirmer l’import',
+                          ),
+                  ),
                 ),
               ),
-            ),
-        ],
+            ],
+          ],
+        ),
       ),
     );
   }
