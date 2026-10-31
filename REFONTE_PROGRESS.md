@@ -30,9 +30,9 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | C3 | C | Study: progress and ratings | Pending | |
 | C4 | C | Study: flashcards | Pending | |
 | C5 | C | Mode sheet and session summary | Pending | |
-| B1 | B | Home | In progress (with B2) | |
-| B2 | B | Collection card | In progress (with B1) | |
-| B3 | B | Collection detail and lists | Pending | |
+| B1 | B | Home | Done (with B2) | 170 pass + 27 skipped, analyzer at baseline, all `home_*` captures OK |
+| B2 | B | Collection card | Done (with B1) | 60-character titles shown in full at 320px and 2.0 text scale |
+| B3 | B | Collection detail and lists | In progress | |
 | E1 | E | Statistics | In progress | |
 | E2 | E | CSV import | Pending | |
 | E3 | E | Profile and settings | Pending | |
