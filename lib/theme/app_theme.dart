@@ -2,31 +2,16 @@ import 'package:flutter/material.dart';
 
 class AppColors {
   static const backgroundLight = Color(0xFFFDF9F4);
-  static const backgroundDark = Color(0xFF130E0B);
   static const surfaceLight = Color(0xFFFFFFFF);
-  static const surfaceDark = Color(0xFF241A14);
   static const surfaceSoftLight = Color(0xFFFBF6EF);
-  static const surfaceSoftDark = Color(0xFF2C2118);
   static const borderLight = Color(0xFFE8DED3);
-  static const borderDark = Color(0xFF403027);
   static const textLight = Color(0xFF1E1715);
-  static const textDark = Color(0xFFF6EFE8);
   static const mutedLight = Color(0xFF7C6C61);
-  static const mutedDark = Color(0xFFB9A99B);
   static const primary = Color(0xFFDE7935);
-  static const primaryDark = Color(0xFFF09B57);
   static const primarySoft = Color(0xFFFCE9DC);
   static const redSoft = Color(0xFFFBE7E4);
   static const greenSoft = Color(0xFFEAF3E7);
   static const blueSoft = Color(0xFFEAF0F3);
-  static const backgroundVivid = Color(0xFFF5FBFF);
-  static const borderVivid = Color(0xFFB8C6E3);
-  static const textVivid = Color(0xFF101828);
-  static const mutedVivid = Color(0xFF475467);
-  static const primaryVivid = Color(0xFF245BFF);
-  static const secondaryVivid = Color(0xFFE03F8F);
-  static const tertiaryVivid = Color(0xFF00A887);
-  static const vividSoft = Color(0xFFE8EEFF);
 }
 
 class AppTheme {
@@ -34,27 +19,11 @@ class AppTheme {
   static const BorderRadius radiusSm = BorderRadius.all(Radius.circular(14));
   static const BorderRadius radiusMd = BorderRadius.all(Radius.circular(22));
   static const BorderRadius radiusLg = BorderRadius.all(Radius.circular(30));
-  static const vividColorScheme = ColorScheme.light(
-    primary: AppColors.primaryVivid,
-    onPrimary: Colors.white,
-    secondary: AppColors.secondaryVivid,
-    onSecondary: AppColors.textVivid,
-    secondaryContainer: AppColors.secondaryVivid,
-    onSecondaryContainer: AppColors.textVivid,
-    tertiary: AppColors.tertiaryVivid,
-    onTertiary: Colors.white,
-    surface: Colors.white,
-    onSurface: AppColors.textVivid,
-    onSurfaceVariant: AppColors.mutedVivid,
-    outline: AppColors.borderVivid,
-    outlineVariant: AppColors.borderVivid,
-    surfaceContainerHighest: AppColors.vividSoft,
-    error: Color(0xFFD92D20),
-    onError: Colors.white,
-  );
 
-  static ThemeData light() {
-    final base = ThemeData(
+  static ThemeData light() => _light;
+
+  static final ThemeData _light = _buildTheme(
+    ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.backgroundLight,
@@ -74,47 +43,8 @@ class AppTheme {
         error: Color(0xFFD94A3A),
         onError: Colors.white,
       ),
-    );
-
-    return _buildTheme(base);
-  }
-
-  static ThemeData dark() {
-    final base = ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.dark,
-      scaffoldBackgroundColor: AppColors.backgroundDark,
-      colorScheme: const ColorScheme.dark(
-        primary: AppColors.primaryDark,
-        onPrimary: Color(0xFF1A1410),
-        surface: AppColors.surfaceDark,
-        onSurface: AppColors.textDark,
-        secondary: AppColors.primaryDark,
-        onSecondary: Color(0xFF1A1410),
-        secondaryContainer: AppColors.primaryDark,
-        onSecondaryContainer: Color(0xFF1A1410),
-        onSurfaceVariant: AppColors.mutedDark,
-        outline: AppColors.borderDark,
-        outlineVariant: AppColors.borderDark,
-        surfaceContainerHighest: Color(0xFF3A2A21),
-        error: Color(0xFFE07B70),
-        onError: Color(0xFF1A1410),
-      ),
-    );
-
-    return _buildTheme(base);
-  }
-
-  static ThemeData vivid() {
-    final base = ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-      scaffoldBackgroundColor: AppColors.backgroundVivid,
-      colorScheme: vividColorScheme,
-    );
-
-    return _buildTheme(base);
-  }
+    ),
+  );
 
   static ThemeData _buildTheme(ThemeData base) {
     final scheme = base.colorScheme;

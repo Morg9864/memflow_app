@@ -33,7 +33,6 @@ import 'package:memflow/features/study/study_screen.dart';
 import 'package:memflow/app/providers.dart';
 import 'package:memflow/data/sync/sync_service.dart';
 import 'package:memflow/theme/app_theme.dart';
-import 'package:memflow/theme/theme_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _label = String.fromEnvironment('VISUAL_OUT');

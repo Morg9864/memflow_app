@@ -46,7 +46,7 @@ lib/
     repositories/  requêtes métier au-dessus de la base locale
   domain/     modèles immuables et services métier purs
   features/   un dossier par écran/fonctionnalité
-  theme/      thèmes et contrôleur d'apparence
+  theme/      thème clair unique (`AppTheme.light()`)
   widgets/    composants UI partagés (ui.dart)
 ```
 
@@ -304,7 +304,7 @@ Accueil, Stats, Importer, Profil.
 | `/session-summary` | Bilan | Récapitulatif de fin de session |
 | `/stats` | Statistiques | Série, cartes vues, réussite, activité 14 jours, répartition par niveau |
 | `/import` | Import CSV | Chargement, prévisualisation, prompt IA, template |
-| `/profile` | Profil | Objectif quotidien, thème, export CSV, version, liens légaux, déconnexion, suppression de compte |
+| `/profile` | Profil | Objectif quotidien, export CSV, version, liens légaux, déconnexion, suppression de compte |
 | `/settings` | Paramètres du compte | Nom d'affichage, email, mot de passe, cartes par session |
 | `/legal/:doc` | Documents légaux | Confidentialité, CGU, mentions légales |
 | _(inconnue)_ | 404 | Page dédiée avec le chemin demandé et un retour à l'accueil |
@@ -426,17 +426,17 @@ Flutter.
 Style « papier chaud » : fond crème, cartes blanches, accent orange, grands
 arrondis, beaucoup de blanc.
 
-Quatre thèmes : **Système**, **Clair**, **Sombre** et **Vivid** — ce dernier est
-une palette bleue/magenta à contraste élevé, techniquement un thème clair. Le
-choix est persisté et accessible depuis n'importe quel écran via le bouton
-palette.
+Une seule identité visuelle : le thème **clair**. Il n'existe ni thème sombre,
+ni thème « Vivid », ni mode suivant le système, ni sélecteur de thème. L'app est
+forcée en clair (`ThemeMode.light`), y compris sur un téléphone en mode sombre :
+écran de lancement Android, `UIUserInterfaceStyle = Light` sur iOS. Une ancienne
+valeur `theme_preference` en `shared_preferences` est simplement ignorée.
 
 Typographie : **Lora** (serif) pour les titres, **Outfit** pour le texte et les
 libellés, chargées par `google_fonts`.
 
 Les couleurs sémantiques de correction (vert réussite, rouge erreur, orange
-difficile, bleu facile) sont définies en dur et **identiques en clair et en
-sombre** — un choix assumé pour que le vert reste le vert.
+difficile, bleu facile) sont définies en dur dans le thème clair.
 
 Le contenu est contraint à 920 px de large et centré : sur grand écran, l'app ne
 s'étire pas, elle se centre. `AppScaffold` applique cette contrainte partout.
@@ -449,11 +449,10 @@ widget y entre dès qu'il est utilisé par deux écrans, sinon il reste privé �
 
 ## 11. Réglages persistés
 
-Trois réglages en `shared_preferences`, chacun avec son contrôleur Riverpod :
+Deux réglages en `shared_preferences`, chacun avec son contrôleur Riverpod :
 
 | Réglage | Défaut | Bornes | Où le modifier |
 |---|---|---|---|
-| Thème | Système | — | Bouton palette, profil |
 | Objectif quotidien | 20 | 1–999 | Profil |
 | Cartes par session | 12 | 1–999 | Paramètres |
 
@@ -512,7 +511,7 @@ dart run build_runner build
   situation exacte d'un utilisateur déconnecté : import, révision, suppression et
   statistiques doivent fonctionner à l'identique ;
 - le **rendu des écrans sensibles** (session d'étude en mobile/tablette/desktop,
-  détail de collection, thème vivid, route inconnue).
+  détail de collection, route inconnue).
 
 La règle : les services de `domain/` sont testés sans Flutter ni base ; la couche
 données l'est sur `AppDatabase.memory()` ; les écrans le sont par `testWidgets`

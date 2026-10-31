@@ -15,8 +15,6 @@ enum DeckDifficulty { facile, moyen, difficile, avance }
 
 enum DeckStatus { nouveau, maitrise, dues }
 
-enum ThemePreference { system, light, dark, vivid }
-
 enum SyncEntityType { collection, deck, flashcard, reviewLog }
 
 enum SyncOperation { upsert, delete }
@@ -90,22 +88,6 @@ extension DeckStatusX on DeckStatus {
     DeckStatus.nouveau => 'Nouveau',
     DeckStatus.maitrise => 'Maîtrisé',
     DeckStatus.dues => 'Dues',
-  };
-}
-
-extension ThemePreferenceX on ThemePreference {
-  ThemeMode get themeMode => switch (this) {
-    ThemePreference.system => ThemeMode.system,
-    ThemePreference.light => ThemeMode.light,
-    ThemePreference.dark => ThemeMode.dark,
-    ThemePreference.vivid => ThemeMode.light,
-  };
-
-  String get label => switch (this) {
-    ThemePreference.system => 'Système',
-    ThemePreference.light => 'Clair',
-    ThemePreference.dark => 'Sombre',
-    ThemePreference.vivid => 'Vivid',
   };
 }
 

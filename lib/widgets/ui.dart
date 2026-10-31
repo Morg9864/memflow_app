@@ -6,7 +6,6 @@ import '../app/providers.dart';
 import '../data/sync/sync_service.dart';
 import '../domain/models/models.dart';
 import '../theme/app_theme.dart';
-import '../theme/theme_controller.dart';
 
 class AppScaffold extends StatelessWidget {
   const AppScaffold({
@@ -140,49 +139,6 @@ class AppBottomNav extends StatelessWidget {
       ],
     );
   }
-}
-
-class ThemeToggleButton extends ConsumerWidget {
-  const ThemeToggleButton({super.key});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final preference = ref.watch(themeControllerProvider);
-    final scheme = Theme.of(context).colorScheme;
-    return PopupMenuButton<ThemePreference>(
-      tooltip: 'Choisir le thème',
-      icon: const Icon(Icons.palette_outlined),
-      style: IconButton.styleFrom(
-        backgroundColor: scheme.secondaryContainer,
-        foregroundColor: scheme.onSecondaryContainer,
-      ),
-      onSelected: (value) =>
-          ref.read(themeControllerProvider.notifier).setPreference(value),
-      itemBuilder: (_) => ThemePreference.values
-          .map(
-            (value) => PopupMenuItem(
-              value: value,
-              child: Row(
-                children: [
-                  Icon(_themeIcon(value), size: 20),
-                  const SizedBox(width: 12),
-                  Expanded(child: Text(value.label)),
-                  if (value == preference)
-                    const Icon(Icons.check_rounded, size: 20),
-                ],
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-
-  IconData _themeIcon(ThemePreference preference) => switch (preference) {
-    ThemePreference.system => Icons.brightness_auto_rounded,
-    ThemePreference.light => Icons.light_mode_rounded,
-    ThemePreference.dark => Icons.dark_mode_rounded,
-    ThemePreference.vivid => Icons.palette_rounded,
-  };
 }
 
 class SectionLabel extends StatelessWidget {

@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:memflow/domain/models/models.dart';
 import 'package:memflow/features/stats/stats_screen.dart';
-import 'package:memflow/theme/theme_controller.dart';
+import 'package:memflow/app/providers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

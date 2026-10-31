@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../theme/theme_controller.dart';
+import 'providers.dart';
 
 class SessionCardLimitController extends Notifier<int> {
   static const _key = 'session_card_limit';

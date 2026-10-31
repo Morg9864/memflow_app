@@ -5,7 +5,6 @@ import 'package:go_router/go_router.dart';
 import 'package:memflow/app/providers.dart';
 import 'package:memflow/data/sync/sync_service.dart';
 import 'package:memflow/features/profile/profile_screen.dart';
-import 'package:memflow/theme/theme_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {

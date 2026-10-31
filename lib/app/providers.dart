@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app_bootstrap.dart';
@@ -12,6 +13,10 @@ import '../domain/services/card_mode_service.dart';
 import '../domain/services/csv_export_service.dart';
 import '../domain/services/csv_import_service.dart';
 import '../domain/services/spaced_repetition_service.dart';
+
+final sharedPreferencesProvider = Provider<SharedPreferences>((ref) {
+  throw UnimplementedError('SharedPreferences override is missing.');
+});
 
 final appEnvironmentProvider = Provider<AppEnvironment>((ref) {
   throw UnimplementedError(

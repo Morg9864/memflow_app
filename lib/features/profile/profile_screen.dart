@@ -10,8 +10,6 @@ import '../../app/app_version.dart';
 import '../../app/daily_goal_controller.dart';
 import '../../app/providers.dart';
 import '../../data/sync/sync_service.dart';
-import '../../domain/models/models.dart';
-import '../../theme/theme_controller.dart';
 import '../../widgets/ui.dart';
 import '../legal/legal_document_screen.dart';
 
@@ -149,7 +147,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themePreference = ref.watch(themeControllerProvider);
     final user = ref.watch(currentUserProvider);
     final displayName = ref.watch(displayNameProvider);
     final dailyGoal = ref.watch(dailyGoalProvider);
@@ -159,13 +156,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
       ),
       child: ListView(
         children: [
-          Row(
-            children: [
-              Text('Profil', style: Theme.of(context).textTheme.displaySmall),
-              const Spacer(),
-              const ThemeToggleButton(),
-            ],
-          ),
+          Text('Profil', style: Theme.of(context).textTheme.displaySmall),
           const SizedBox(height: 24),
           Card(
             child: Padding(
@@ -203,33 +194,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SectionLabel('Thème'),
-                  const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 10,
-                    children: ThemePreference.values
-                        .map(
-                          (preference) => ChoiceChip(
-                            label: Text(preference.label),
-                            selected: themePreference == preference,
-                            onSelected: (_) => ref
-                                .read(themeControllerProvider.notifier)
-                                .setPreference(preference),
-                          ),
-                        )
-                        .toList(),
                   ),
                 ],
               ),

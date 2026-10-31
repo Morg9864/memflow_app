@@ -9,7 +9,6 @@ import 'package:sentry_flutter/sentry_flutter.dart';
 import 'app/app_bootstrap.dart';
 import 'app/memflow_app.dart';
 import 'app/providers.dart';
-import 'theme/theme_controller.dart';
 
 /// Optional: without it the app still runs, but crashes are only visible
 /// locally (see [_runGuarded]) instead of being reported remotely.

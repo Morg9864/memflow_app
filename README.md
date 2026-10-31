@@ -38,7 +38,7 @@ MemFlow est une application de révision pensée pour rester fluide sans connexi
 - `Import / export CSV` pour alimenter rapidement vos jeux de cartes.
 - `Prompt IA intégré` dans l'écran d'import, consultable, copiable et téléchargeable.
 - `Statistiques de progression` pour suivre la série, le taux de réussite et l'activité.
-- `Thèmes clair et sombre` avec une UI cohérente sur tous les écrans.
+- `Thème clair unique` avec une UI cohérente sur tous les écrans.
 
 ## Interface
 
@@ -199,7 +199,7 @@ lib/
   data/       base locale Drift, moteur de synchronisation, repositories
   domain/     modèles et services métier
   features/   home, collections, study, import, stats, profile
-  theme/      thèmes et contrôleur d'apparence
+  theme/      thème clair
   widgets/    composants UI réutilisables
 ```
 

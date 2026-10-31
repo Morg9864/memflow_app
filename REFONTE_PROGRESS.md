@@ -21,8 +21,8 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 |---|---|---|---|---|
 | A1 | A | Bundle fonts, stop bundling `design/`, logo `cacheWidth` | Done | 95/95 tests, analyzer at baseline, font checksums verified, `design/` out of bundle |
 | F0 | F | Visual harness and "before" screenshots | Done | 78 PNGs from 26 states in `build/visual/before`, 46 OK and 32 with overflow or failed interaction; harness skipped by default |
-| A2 | A | Light-only, remove dark and Vivid | In progress | |
-| A3 | A | Tokens and theme | Pending | |
+| A2 | A | Light-only, remove dark and Vivid | Done | 94 pass + 26 skipped, analyzer at baseline, overflow report unchanged |
+| A3 | A | Tokens and theme | In progress | |
 | A4 | A | Shared widgets, move single-screen widgets | Pending | |
 | D1 | D | Tab shell route | Pending | |
 | C1 | C | Study: layout | Pending | |
@@ -42,7 +42,8 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | F2 | F | Profile-mode measurements | Blocked: needs a device | |
 
 ## Audit corrections
-- Audit defect 3 was partly wrong. `Theme.of` merges a default text geometry, so `titleSmall` and `labelSmall` are not null and colours do apply. The real defect is that those slots have no font family, so they use the platform font instead of Outfit. The A3 fix (define every slot) is unchanged.
+- Audit defect 3 was partly wrong. `Theme.of` merges a default text geometry, so `titleSmall` and `labelSmall` are not null and colours do apply. The real defect is that those slots have no font family, so they use the platform font instead of Outfit. Text in those slots with no explicit colour also rendered white in the harness (for example the profile sync title), so it may be invisible on devices too. The A3 fix (define every slot) is unchanged.
+- Audit defect 4 was incomplete. `filledButtonTheme` sets `backgroundColor`, which also overrides the tonal variant, so the theme must stop setting it as well as changing `secondaryContainer`.
 
 ## Before-state evidence (`build/visual/before/report.txt`)
 - Session summary overflows at every viewport: 230px, 621px and 1263px.
@@ -57,6 +58,7 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
   - `/study/errors` and `/session-summary` crash on direct links (null `extra`).
   - The email-change success message names the current address, while the dialog says the new one.
   - `sqlite3` is imported without being a direct dependency.
+  - `md/instructions.md` still describes dark and light themes. Left as the historical original brief.
 
 ## Remaining work
 All tasks above not marked done.
