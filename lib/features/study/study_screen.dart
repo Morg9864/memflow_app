@@ -668,13 +668,18 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                         ? _desktopMaxWidth
                         : AppTheme.contentMaxWidth;
 
+                    final switcherKey = ValueKey('${mode.name}-${card.id}');
                     final modeContent = AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 220),
+                      duration: AppMotion.of(context, AppMotion.standard),
+                      switchInCurve: AppMotion.standardCurve,
+                      switchOutCurve: AppMotion.standardCurve,
+                      transitionBuilder: MediaQuery.disableAnimationsOf(context)
+                          ? (child, _) => child
+                          : _cardTransition,
+                      layoutBuilder: _cardLayout,
                       child: switch (mode) {
                         TestMode.multipleChoice => _McqMode(
-                          key: ValueKey(
-                            'mcq-${card.id}-${state.hasValidatedAnswer}',
-                          ),
+                          key: switcherKey,
                           card: card,
                           options: options,
                           selectedIndex: state.selectedOptionIndex,
@@ -684,9 +689,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                           onSelect: _selectOption,
                         ),
                         TestMode.cloze => _ClozeMode(
-                          key: ValueKey(
-                            'cloze-${card.id}-${state.hasValidatedAnswer}',
-                          ),
+                          key: switcherKey,
                           prompt: card.question,
                           tokens: clozeTokens,
                           selectedWords: _clozeSelections,
@@ -701,12 +704,9 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                           showInlineFeedback: !usesReviewPanel,
                           onGapTap: _selectClozeGap,
                           onWordTap: _fillClozeGap,
-                          onSubmit: () => _submitTextAnswer(isCloze: true),
                         ),
                         TestMode.freeText => _TextEntryMode(
-                          key: ValueKey(
-                            'free-${card.id}-${state.hasValidatedAnswer}',
-                          ),
+                          key: switcherKey,
                           title: 'Saisie libre',
                           prompt: card.question,
                           hint: card.hint,
@@ -717,13 +717,9 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                           answerText: card.correctAnswer,
                           explanation: card.explanation,
                           showInlineFeedback: !usesReviewPanel,
-                          actionLabel: 'Vérifier',
-                          onSubmit: () => _submitTextAnswer(isCloze: false),
                         ),
                         TestMode.trueFalse => _TrueFalseMode(
-                          key: ValueKey(
-                            'tf-${card.id}-${state.hasValidatedAnswer}',
-                          ),
+                          key: switcherKey,
                           card: card,
                           proposition: trueFalseProposition,
                           propositionIsCorrect: _controller
@@ -750,15 +746,34 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                           },
                         ),
                         _ => _FlashcardMode(
-                          key: ValueKey('flash-${card.id}-${state.revealed}'),
+                          key: switcherKey,
                           card: card,
                           revealed: state.revealed,
                           reversed: mode == TestMode.reversedFlashcard,
                           showInlineAnswer: !usesReviewPanel,
-                          onReveal: _reveal,
                         ),
                       },
                     );
+
+                    // Les notes de lecture longues gardent la priorité sur
+                    // les boutons : épinglés seulement si l'écran est assez
+                    // haut et le texte pas trop grand.
+                    final pinsReview =
+                        showsReview &&
+                        !usesReviewPanel &&
+                        MediaQuery.sizeOf(context).height >= 640 &&
+                        MediaQuery.textScalerOf(context).scale(10) / 10 <= 1.3;
+                    final inlineReview =
+                        showsReview && !usesReviewPanel && !pinsReview;
+                    final reviewControls = _ReviewControls(
+                      suggested: suggested,
+                      onReview: _applyReview,
+                      showKeyboardHint: _isDesktopPlatform(),
+                    );
+                    final isFlashcard =
+                        mode == TestMode.classicFlashcard ||
+                        mode == TestMode.reversedFlashcard;
+                    final isFlashFront = isFlashcard && !state.revealed;
 
                     return Center(
                       child: ConstrainedBox(
@@ -797,84 +812,50 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                                       : 24,
                                 ),
                                 Expanded(
-                                  child: usesReviewPanel
-                                      ? Row(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.stretch,
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      Expanded(
+                                        key: const Key('desktop-study-content'),
+                                        child: _StudyScrollArea(
+                                          resetKey: card.id,
+                                          centered: isFlashFront,
+                                          maxContentWidth: usesReviewPanel
+                                              ? double.infinity
+                                              : AppTheme.contentMaxWidth,
                                           children: [
-                                            Expanded(
-                                              key: const Key(
-                                                'desktop-study-content',
-                                              ),
-                                              child: modeContent,
-                                            ),
-                                            const SizedBox(width: 24),
-                                            SizedBox(
-                                              width: _desktopReviewPanelWidth,
-                                              child: _DesktopReviewPanel(
-                                                feedback: _reviewFeedback(
-                                                  mode: mode,
-                                                  card: card,
-                                                  state: state,
-                                                  clozeSolution: clozeSolution,
-                                                ),
-                                                suggested: suggested,
-                                                onReview: _applyReview,
-                                              ),
-                                            ),
+                                            modeContent,
+                                            if (inlineReview) ...[
+                                              const SizedBox(height: 18),
+                                              reviewControls,
+                                            ],
                                           ],
-                                        )
-                                      : showsReview
-                                      ? SingleChildScrollView(
-                                          physics:
-                                              const ClampingScrollPhysics(),
-                                          child: Align(
-                                            alignment: Alignment.topCenter,
-                                            child: ConstrainedBox(
-                                              constraints: const BoxConstraints(
-                                                maxWidth:
-                                                    AppTheme.contentMaxWidth,
-                                              ),
-                                              child: Column(
-                                                crossAxisAlignment:
-                                                    CrossAxisAlignment.stretch,
-                                                children: [
-                                                  modeContent,
-                                                  if (showsReview) ...[
-                                                    const SizedBox(height: 18),
-                                                    const SectionLabel(
-                                                      'Comment tu t’en es sorti ?',
-                                                    ),
-                                                    const SizedBox(height: 12),
-                                                    _buildInlineReviewGrid(
-                                                      context,
-                                                      suggested,
-                                                    ),
-                                                    if (_isDesktopPlatform())
-                                                      const _KeyboardHint(),
-                                                  ] else if (_isDesktopPlatform() &&
-                                                      mode ==
-                                                          TestMode
-                                                              .multipleChoice)
-                                                    const _KeyboardHint(
-                                                      label:
-                                                          'Clavier : 1–4 pour choisir une réponse',
-                                                    ),
-                                                ],
-                                              ),
+                                        ),
+                                      ),
+                                      if (usesReviewPanel) ...[
+                                        const SizedBox(width: 24),
+                                        SizedBox(
+                                          width: _desktopReviewPanelWidth,
+                                          child: _DesktopReviewPanel(
+                                            feedback: _reviewFeedback(
+                                              mode: mode,
+                                              card: card,
+                                              state: state,
+                                              clozeSolution: clozeSolution,
                                             ),
-                                          ),
-                                        )
-                                      : Align(
-                                          alignment: Alignment.topCenter,
-                                          child: ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                              maxWidth:
-                                                  AppTheme.contentMaxWidth,
-                                            ),
-                                            child: modeContent,
+                                            suggested: suggested,
+                                            onReview: _applyReview,
                                           ),
                                         ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                                _StudyActionArea(
+                                  constrained: !usesReviewPanel,
+                                  primary: _primaryAction(mode, state),
+                                  review: pinsReview ? reviewControls : null,
                                 ),
                               ],
                             ),
@@ -892,6 +873,26 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
     );
   }
 
+  static Widget _cardTransition(Widget child, Animation<double> animation) {
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0.04, 0),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+
+  static Widget _cardLayout(Widget? current, List<Widget> previous) {
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: <Widget>[...previous, ?current],
+    );
+  }
+
   bool _needsReviewButtons(TestMode mode, StudySessionState state) {
     if (mode == TestMode.multipleChoice ||
         mode == TestMode.cloze ||
@@ -902,24 +903,27 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
     return state.revealed;
   }
 
-  Widget _buildInlineReviewGrid(BuildContext context, ReviewResult suggested) {
-    return GridView.count(
-      key: const Key('inline-review-controls'),
-      crossAxisCount: MediaQuery.sizeOf(context).width > 700 ? 4 : 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      crossAxisSpacing: 12,
-      mainAxisSpacing: 12,
-      childAspectRatio: 1.55,
-      children: [
-        for (final result in ReviewResult.values)
-          _ReviewButton(
-            result: result,
-            isSuggested: result == suggested,
-            onPressed: () => _applyReview(result),
-          ),
-      ],
-    );
+  /// Action principale épinglée avant la réponse (libellé + callback).
+  (String, VoidCallback)? _primaryAction(
+    TestMode mode,
+    StudySessionState state,
+  ) {
+    if (mode == TestMode.classicFlashcard ||
+        mode == TestMode.reversedFlashcard) {
+      return state.revealed ? null : ('Révéler la réponse', _reveal);
+    }
+    if (state.hasValidatedAnswer) return null;
+    return switch (mode) {
+      TestMode.cloze => (
+        'Valider ma réponse',
+        () => _submitTextAnswer(isCloze: true),
+      ),
+      TestMode.freeText => (
+        'Vérifier',
+        () => _submitTextAnswer(isCloze: false),
+      ),
+      _ => null,
+    };
   }
 }
 
@@ -933,12 +937,202 @@ class _StudyReviewIntent extends Intent {
   final ReviewResult result;
 }
 
-class _KeyboardHint extends StatelessWidget {
-  const _KeyboardHint({
-    this.label = 'Clavier : 1 Encore · 2 Difficile · 3 Correct · 4 Facile',
+/// Zone défilante unique : le même arbre pour tous les états de la carte.
+class _StudyScrollArea extends StatefulWidget {
+  const _StudyScrollArea({
+    required this.resetKey,
+    required this.centered,
+    required this.maxContentWidth,
+    required this.children,
   });
 
-  final String label;
+  final Object resetKey;
+  final bool centered;
+  final double maxContentWidth;
+  final List<Widget> children;
+
+  @override
+  State<_StudyScrollArea> createState() => _StudyScrollAreaState();
+}
+
+class _StudyScrollAreaState extends State<_StudyScrollArea> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(_StudyScrollArea oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.resetKey != widget.resetKey &&
+        _scrollController.hasClients &&
+        _scrollController.offset != 0) {
+      _scrollController.jumpTo(0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        controller: _scrollController,
+        keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: constraints.maxHeight),
+          child: Align(
+            alignment: widget.centered ? Alignment.center : Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: widget.maxContentWidth),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                mainAxisSize: MainAxisSize.min,
+                children: widget.children,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Zone d'action épinglée sous le contenu : action principale avant la
+/// réponse, ou contrôles de notation une fois répondu. Vide sinon.
+class _StudyActionArea extends StatelessWidget {
+  const _StudyActionArea({
+    required this.constrained,
+    required this.primary,
+    required this.review,
+  });
+
+  final bool constrained;
+  final (String, VoidCallback)? primary;
+  final Widget? review;
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget? content =
+        review ??
+        (primary == null
+            ? null
+            : SizedBox(
+                width: double.infinity,
+                child: FilledButton(
+                  onPressed: primary!.$2,
+                  child: Text(primary!.$1),
+                ),
+              ));
+    if (content == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: constrained ? AppTheme.contentMaxWidth : double.infinity,
+          ),
+          child: content,
+        ),
+      ),
+    );
+  }
+}
+
+class _ReviewControls extends StatelessWidget {
+  const _ReviewControls({
+    required this.suggested,
+    required this.onReview,
+    required this.showKeyboardHint,
+  });
+
+  final ReviewResult suggested;
+  final ValueChanged<ReviewResult> onReview;
+  final bool showKeyboardHint;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SectionLabel('Comment tu t’en es sorti ?'),
+        const SizedBox(height: 12),
+        _ReviewGrid(
+          key: const Key('inline-review-controls'),
+          suggested: suggested,
+          onReview: onReview,
+          columns: MediaQuery.sizeOf(context).width > 700 ? 4 : 2,
+        ),
+        if (showKeyboardHint) const _KeyboardHint(),
+      ],
+    );
+  }
+}
+
+/// Boutons de notation : les hauteurs suivent le contenu (texte agrandi).
+class _ReviewGrid extends StatelessWidget {
+  const _ReviewGrid({
+    super.key,
+    required this.suggested,
+    required this.onReview,
+    required this.columns,
+    this.compact = false,
+    this.spacing = 12,
+  });
+
+  final ReviewResult suggested;
+  final ValueChanged<ReviewResult> onReview;
+  final int columns;
+  final bool compact;
+  final double spacing;
+
+  @override
+  Widget build(BuildContext context) {
+    const results = ReviewResult.values;
+    final rows = (results.length / columns).ceil();
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var row = 0; row < rows; row++) ...[
+          if (row > 0) SizedBox(height: spacing),
+          IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                for (var col = 0; col < columns; col++) ...[
+                  if (col > 0) SizedBox(width: spacing),
+                  Expanded(
+                    child: Builder(
+                      builder: (context) {
+                        final index = row * columns + col;
+                        if (index >= results.length) {
+                          return const SizedBox.shrink();
+                        }
+                        final result = results[index];
+                        return _ReviewButton(
+                          result: result,
+                          isSuggested: result == suggested,
+                          compact: compact,
+                          onPressed: () => onReview(result),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+class _KeyboardHint extends StatelessWidget {
+  const _KeyboardHint();
 
   @override
   Widget build(BuildContext context) {
@@ -946,7 +1140,7 @@ class _KeyboardHint extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(top: 12),
       child: Text(
-        label,
+        'Clavier : 1 Encore · 2 Difficile · 3 Correct · 4 Facile',
         style: theme.textTheme.bodySmall?.copyWith(
           color: theme.colorScheme.onSurfaceVariant,
         ),
@@ -1032,35 +1226,27 @@ class _DesktopReviewPanel extends StatelessWidget {
             ),
           ),
           const Divider(height: 1),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionLabel('Comment tu t’en es sorti ?'),
-                const SizedBox(height: 12),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: ReviewResult.values.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 10,
-                    mainAxisSpacing: 10,
-                    mainAxisExtent: 90,
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height * 0.5,
+            ),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const SectionLabel('Comment tu t’en es sorti ?'),
+                  const SizedBox(height: 12),
+                  _ReviewGrid(
+                    suggested: suggested,
+                    onReview: onReview,
+                    columns: 2,
+                    compact: true,
+                    spacing: 10,
                   ),
-                  itemBuilder: (context, index) {
-                    final result = ReviewResult.values[index];
-                    return _ReviewButton(
-                      result: result,
-                      isSuggested: result == suggested,
-                      compact: true,
-                      onPressed: () => onReview(result),
-                    );
-                  },
-                ),
-                const _KeyboardHint(),
-              ],
+                  const _KeyboardHint(),
+                ],
+              ),
             ),
           ),
         ],
@@ -1076,57 +1262,50 @@ class _FlashcardMode extends StatelessWidget {
     required this.revealed,
     required this.reversed,
     required this.showInlineAnswer,
-    required this.onReveal,
   });
 
   final StudyCard card;
   final bool revealed;
   final bool reversed;
   final bool showInlineAnswer;
-  final VoidCallback onReveal;
 
   @override
   Widget build(BuildContext context) {
     if (!revealed) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            SectionLabel(reversed ? 'Concept' : 'Question'),
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(child: SectionLabel(reversed ? 'Concept' : 'Question')),
+          const SizedBox(height: 18),
+          Text(
+            reversed ? card.correctAnswer : card.question,
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.headlineMedium,
+          ),
+          if (card.hint != null) ...[
             const SizedBox(height: 18),
             Text(
-              reversed ? card.correctAnswer : card.question,
+              card.hint!,
               textAlign: TextAlign.center,
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-            if (card.hint != null) ...[
-              const SizedBox(height: 18),
-              Text(
-                card.hint!,
-                textAlign: TextAlign.center,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic),
-              ),
-            ],
-            const SizedBox(height: 28),
-            Text(
-              'Glisse vers le haut',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 12),
-            FilledButton(
-              onPressed: onReveal,
-              child: const Text('Révéler la réponse'),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontStyle: FontStyle.italic),
             ),
           ],
-        ),
+          const SizedBox(height: 28),
+          Text(
+            'Glisse vers le haut',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
       );
     }
 
-    return ListView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Card(
           child: Padding(
@@ -1193,9 +1372,9 @@ class _McqMode extends StatelessWidget {
     final correctIndex = options.indexWhere(
       (item) => item == card.correctAnswer,
     );
-    return ListView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Card(
           child: Padding(
@@ -1452,7 +1631,6 @@ class _ClozeMode extends StatelessWidget {
     required this.showInlineFeedback,
     required this.onGapTap,
     required this.onWordTap,
-    required this.onSubmit,
   });
 
   final String prompt;
@@ -1469,7 +1647,6 @@ class _ClozeMode extends StatelessWidget {
   final bool showInlineFeedback;
   final void Function(int gapIndex) onGapTap;
   final void Function(String word) onWordTap;
-  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
@@ -1484,9 +1661,9 @@ class _ClozeMode extends StatelessWidget {
         theme.textTheme.headlineSmall?.copyWith(height: 1.5) ??
         theme.textTheme.titleLarge;
 
-    return ListView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Card(
           child: Padding(
@@ -1585,11 +1762,6 @@ class _ClozeMode extends StatelessWidget {
                         ),
                     ],
                   ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: hasValidated ? null : onSubmit,
-                  child: const Text('Valider ma réponse'),
-                ),
               ],
             ),
           ),
@@ -1759,8 +1931,6 @@ class _TextEntryMode extends StatelessWidget {
     required this.answerText,
     required this.explanation,
     required this.showInlineFeedback,
-    required this.actionLabel,
-    required this.onSubmit,
   });
 
   final String title;
@@ -1773,8 +1943,6 @@ class _TextEntryMode extends StatelessWidget {
   final String answerText;
   final String? explanation;
   final bool showInlineFeedback;
-  final String actionLabel;
-  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
@@ -1785,9 +1953,9 @@ class _TextEntryMode extends StatelessWidget {
         ? AppColors.resultGoodSoft
         : AppColors.resultBadSoft;
 
-    return ListView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Card(
           child: Padding(
@@ -1812,11 +1980,6 @@ class _TextEntryMode extends StatelessWidget {
                   controller: controller,
                   enabled: !hasValidated,
                   decoration: const InputDecoration(hintText: 'Ta réponse'),
-                ),
-                const SizedBox(height: 14),
-                FilledButton(
-                  onPressed: hasValidated ? null : onSubmit,
-                  child: Text(actionLabel),
                 ),
               ],
             ),
@@ -1891,9 +2054,9 @@ class _TrueFalseMode extends StatelessWidget {
     final correctIndex = propositionIsCorrect ? 0 : 1;
     final theme = Theme.of(context);
 
-    return ListView(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
         Card(
           child: Padding(
@@ -1997,7 +2160,13 @@ class _LevelBadge extends StatelessWidget {
         children: [
           Icon(meta.$2, size: 16),
           const SizedBox(width: 8),
-          Text('${meta.$1}, Niv. $level'),
+          Flexible(
+            child: Text(
+              '${meta.$1}, Niv. $level',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ],
       ),
     );
@@ -2023,6 +2192,41 @@ class _StudyProgressHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Clavier ouvert : la seconde ligne cède la place au champ de saisie.
+    final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+    final secondRow = keyboardOpen
+        ? const SizedBox(width: double.infinity)
+        : Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Row(
+              children: [
+                Text('${currentIndex + 1}/$total'),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _LevelBadge(level: level),
+                  ),
+                ),
+                Row(
+                  children: List.generate(
+                    progressDots,
+                    (index) => Container(
+                      width: 8,
+                      height: 8,
+                      margin: const EdgeInsets.only(left: 6),
+                      decoration: BoxDecoration(
+                        color: index <= currentIndex
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).dividerColor,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2037,6 +2241,8 @@ class _StudyProgressHeader extends StatelessWidget {
               child: Text(
                 title,
                 textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
@@ -2045,31 +2251,16 @@ class _StudyProgressHeader extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         ProgressPill(value: total == 0 ? 0 : (currentIndex + 1) / total),
-        const SizedBox(height: 12),
-        Row(
-          children: [
-            Text('${currentIndex + 1}/$total'),
-            const SizedBox(width: 12),
-            _LevelBadge(level: level),
-            const Spacer(),
-            Row(
-              children: List.generate(
-                progressDots,
-                (index) => Container(
-                  width: 8,
-                  height: 8,
-                  margin: const EdgeInsets.only(left: 6),
-                  decoration: BoxDecoration(
-                    color: index <= currentIndex
-                        ? Theme.of(context).colorScheme.primary
-                        : Theme.of(context).dividerColor,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
+        // AnimatedSize assert quand la durée est nulle : on le saute alors.
+        if (MediaQuery.disableAnimationsOf(context))
+          secondRow
+        else
+          AnimatedSize(
+            duration: AppMotion.standard,
+            curve: AppMotion.standardCurve,
+            alignment: Alignment.topCenter,
+            child: secondRow,
+          ),
       ],
     );
   }

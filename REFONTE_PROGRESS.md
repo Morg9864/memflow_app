@@ -25,15 +25,15 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | A3 | A | Tokens and theme | Done | 98 pass + 26 skipped, analyzer at baseline, palette and text-slot tests added |
 | A4 | A | Shared widgets, move single-screen widgets | Done | 105 pass + 26 skipped, analyzer at baseline, overflow report unchanged, `ui.dart` 948 to 478 lines |
 | D1 | D | Tab shell route | Done | 112 pass + 27 skipped, analyzer at baseline, shell tests including sign-out state reset |
-| C1 | C | Study: layout | In progress | |
-| C2 | C | Study: answers and feedback | Pending | |
+| C1 | C | Study: layout | Done | 154 pass + 27 skipped, analyzer at baseline, all `study_*` captures OK, 13 protected functions byte-identical |
+| C2 | C | Study: answers and feedback | In progress | |
 | C3 | C | Study: progress and ratings | Pending | |
 | C4 | C | Study: flashcards | Pending | |
 | C5 | C | Mode sheet and session summary | Pending | |
-| B1 | B | Home | Pending | |
-| B2 | B | Collection card | Pending | |
+| B1 | B | Home | In progress (with B2) | |
+| B2 | B | Collection card | In progress (with B1) | |
 | B3 | B | Collection detail and lists | Pending | |
-| E1 | E | Statistics | Pending | |
+| E1 | E | Statistics | In progress | |
 | E2 | E | CSV import | Pending | |
 | E3 | E | Profile and settings | Pending | |
 | E4 | E | Auth, legal, not found | Pending | |
@@ -53,6 +53,10 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 
 ## Test changes to existing files
 - `collection_detail_screen_test.dart`: the `_selectDeckSort` helper now scrolls the sort button into view before tapping. The correctly sized "Voir les échéances" button pushed it off the 800x600 test surface. The sort assertions are unchanged.
+
+## Review notes for later tasks
+- C3: the pinned rating block covers about 40% of an 800px phone, which hides feedback until scrolling. It must shrink.
+- C4: on long flashcards nothing shows that more text exists below the pinned button.
 
 ## Known issues and blockers
 - F2 needs a physical device or emulator. None available at the start.

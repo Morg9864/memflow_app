@@ -183,7 +183,7 @@ class StatCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(value, style: theme.textTheme.titleLarge?.copyWith()),
+        Text(value, style: theme.textTheme.titleLarge),
         SizedBox(height: compact ? 2 : AppSpacing.xs),
         Text(
           label,

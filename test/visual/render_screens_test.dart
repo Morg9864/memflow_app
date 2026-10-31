@@ -471,15 +471,15 @@ List<_State> _states() => [
     TestMode.cloze,
     _card(TestMode.cloze),
     interact: (t) async {
-      await t.tap(find.text('_____').first);
+      await _tap(t, find.text('_____'));
       await t.pump();
-      await t.tap(find.text('mitochondrie').last);
+      await _tap(t, find.text('mitochondrie').last);
       await t.pump();
-      await t.tap(find.text('_____').first);
+      await _tap(t, find.text('_____'));
       await t.pump();
-      await t.tap(find.text('glycolyse'));
+      await _tap(t, find.text('glycolyse'));
       await t.pump();
-      await t.tap(find.text('Valider ma réponse'));
+      await _tapText(t, 'Valider ma réponse');
     },
   ),
   _State('session_summary', () => SessionSummaryScreen(summary: _summary)),
