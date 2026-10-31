@@ -733,14 +733,11 @@ class _DecksHeader extends StatelessWidget {
     final count = deckCount;
     return Row(
       children: [
-        const Flexible(child: SectionLabel('Decks')),
-        const Spacer(),
+        const Expanded(child: SectionLabel('Decks')),
         if (count != null)
-          Flexible(
-            child: Text(
-              count == 1 ? '1 deck' : '$count decks',
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+          Text(
+            count == 1 ? '1 deck' : '$count decks',
+            style: Theme.of(context).textTheme.bodySmall,
           ),
         const SizedBox(width: AppSpacing.sm),
         PopupMenuButton<(_DeckSortField, _SortDirection)>(

@@ -32,11 +32,11 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | C5 | C | Mode sheet and session summary | Pending | |
 | B1 | B | Home | Done (with B2) | 170 pass + 27 skipped, analyzer at baseline, all `home_*` captures OK |
 | B2 | B | Collection card | Done (with B1) | 60-character titles shown in full at 320px and 2.0 text scale |
-| B3 | B | Collection detail and lists | In progress | |
+| B3 | B | Collection detail and lists | Done | Analyzer at baseline, `collection_detail__*` OK. Deck rows stay eager (two existing tests rely on it); title text scale capped at 1.4 to prevent mid-word breaks |
 | E1 | E | Statistics | Done | 190 pass + 27 skipped, analyzer at baseline, all `stats_*` captures OK, full-length view reviewed |
 | E2 | E | CSV import | Done | 235 pass + 28 skipped, analyzer at baseline, preview state added to harness and reviewed, import failure wording checked against the transaction |
 | E3 | E | Profile and settings | In progress | |
-| E4 | E | Auth, legal, not found | Pending | |
+| E4 | E | Auth, legal, not found | In progress | |
 | D2 | D | Motion and performance pass | Pending | |
 | F1 | F | Accessibility and regression tests | Pending | |
 | F2 | F | Profile-mode measurements | Blocked: needs a device | |

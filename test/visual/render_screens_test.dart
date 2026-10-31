@@ -579,6 +579,9 @@ void main() {
 
   for (final state in _states()) {
     testWidgets('render ${state.name}', (tester) async {
+      // Le mode test dessine les ombres en trait noir plein : on les rend
+      // vraiment pour que les captures correspondent à l'app.
+      debugDisableShadows = false;
       for (final (vpName, size, textScale) in _viewports) {
         final line = '${state.name}__$vpName';
         String? problem;
@@ -694,6 +697,7 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         tester.takeException();
       }
+      debugDisableShadows = true;
       addTearDown(() {
         tester.view.resetPhysicalSize();
         tester.view.resetDevicePixelRatio();
