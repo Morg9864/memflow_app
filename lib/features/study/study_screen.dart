@@ -210,6 +210,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
   void _selectOption(int index, List<String> options) {
     final state = _state;
     if (state == null || state.hasValidatedAnswer) return;
+    unawaited(HapticFeedback.lightImpact());
     final isCorrect = _controller.evaluateMultipleChoice(
       state.currentCard,
       index,
@@ -227,6 +228,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
   void _submitTextAnswer({required bool isCloze}) {
     final state = _state;
     if (state == null || state.hasValidatedAnswer) return;
+    unawaited(HapticFeedback.lightImpact());
     if (isCloze) {
       final isCorrect = _controller.evaluateCloze(
         state.currentCard,
@@ -423,6 +425,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
   void _reveal() {
     final state = _state;
     if (state == null) return;
+    unawaited(HapticFeedback.lightImpact());
     setState(() => _state = state.copyWith(revealed: true));
   }
 
@@ -499,6 +502,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
             : 'Réponse attendue',
         answer: card.correctAnswer,
         explanation: card.explanation,
+        resultIsCorrect: state.currentAnswerWasCorrect,
       ),
       TestMode.cloze => _ReviewFeedback(
         label: state.currentAnswerWasCorrect == true
@@ -518,6 +522,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
         label: 'Réponse correcte',
         answer: card.correctAnswer,
         explanation: card.explanation,
+        resultIsCorrect: state.currentAnswerWasCorrect,
       ),
       TestMode.reversedFlashcard => _ReviewFeedback(
         label: 'Concept visé',
@@ -717,6 +722,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                           answerText: card.correctAnswer,
                           explanation: card.explanation,
                           showInlineFeedback: !usesReviewPanel,
+                          onSubmit: () => _submitTextAnswer(isCloze: false),
                         ),
                         TestMode.trueFalse => _TrueFalseMode(
                           key: switcherKey,
@@ -731,6 +737,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                           hasValidatedAnswer: state.hasValidatedAnswer,
                           showInlineFeedback: !usesReviewPanel,
                           onSelect: (index) {
+                            unawaited(HapticFeedback.lightImpact());
                             final correct = _controller.evaluateTrueFalse(
                               card,
                               trueFalseProposition,
@@ -1177,17 +1184,9 @@ class _DesktopReviewPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final resultIsCorrect = feedback.resultIsCorrect;
-    final tone = switch (resultIsCorrect) {
-      true => AppColors.resultGoodText,
-      false => AppColors.resultBadText,
-      null => theme.colorScheme.onSurface,
-    };
-    final background = switch (resultIsCorrect) {
-      true => AppColors.resultGoodSoft,
-      false => AppColors.resultBadSoft,
-      null => theme.colorScheme.surface,
-    };
+    final resultTone = _ResultTone.of(theme, feedback.resultIsCorrect);
+    final tone = resultTone.text;
+    final background = resultTone.background;
 
     return Card(
       key: const Key('desktop-review-panel'),
@@ -1204,9 +1203,21 @@ class _DesktopReviewPanel extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      feedback.label.toUpperCase(),
-                      style: theme.textTheme.labelMedium?.copyWith(color: tone),
+                    Row(
+                      children: [
+                        if (resultTone.icon != null) ...[
+                          Icon(resultTone.icon, size: 18, color: tone),
+                          const SizedBox(width: AppSpacing.sm),
+                        ],
+                        Expanded(
+                          child: Text(
+                            feedback.label.toUpperCase(),
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: tone,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 12),
                     Text(
@@ -1346,6 +1357,263 @@ class _FlashcardMode extends StatelessWidget {
   }
 }
 
+/// Taille du texte de la question selon sa longueur : les questions courtes
+/// gagnent en présence, les longues restent lisibles sans prendre l'écran.
+@visibleForTesting
+TextStyle questionTextStyle(TextTheme theme, String text) {
+  final length = text.trim().length;
+  return (length < 90
+      ? theme.headlineMedium
+      : length < 200
+      ? theme.headlineSmall
+      : theme.titleLarge)!;
+}
+
+/// Couleurs et icône d'un résultat de réponse (vrai, faux, neutre).
+class _ResultTone {
+  const _ResultTone({
+    required this.text,
+    required this.background,
+    required this.border,
+    required this.icon,
+  });
+
+  final Color text;
+  final Color background;
+  final Color border;
+  final IconData? icon;
+
+  factory _ResultTone.of(ThemeData theme, bool? correct) => switch (correct) {
+    true => const _ResultTone(
+      text: AppColors.resultGoodText,
+      background: AppColors.resultGoodSoft,
+      border: AppColors.resultGood,
+      icon: Icons.check_circle_rounded,
+    ),
+    false => const _ResultTone(
+      text: AppColors.resultBadText,
+      background: AppColors.resultBadSoft,
+      border: AppColors.resultBad,
+      icon: Icons.cancel_rounded,
+    ),
+    null => _ResultTone(
+      text: theme.colorScheme.onSurface,
+      background: theme.colorScheme.surface,
+      border: theme.colorScheme.outlineVariant,
+      icon: null,
+    ),
+  };
+}
+
+/// Bloc question commun à QCM, vrai/faux, saisie libre et trous.
+class _QuestionCard extends StatelessWidget {
+  const _QuestionCard({
+    required this.label,
+    required this.question,
+    this.hint,
+    this.body,
+  });
+
+  final String label;
+  final String question;
+  final String? hint;
+  final Widget? body;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    return Card(
+      child: Padding(
+        padding: EdgeInsets.all(compact ? AppSpacing.lg : AppSpacing.xl),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionLabel(label),
+            SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
+            Text(question, style: questionTextStyle(theme.textTheme, question)),
+            if (hint != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              _HintLine(hint: hint!),
+            ],
+            if (body != null) ...[
+              SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
+              body!,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HintLine extends StatelessWidget {
+  const _HintLine({required this.hint});
+
+  final String hint;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color = theme.colorScheme.onSurfaceVariant;
+    return Semantics(
+      label: 'Indice : $hint',
+      excludeSemantics: true,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.only(top: 3),
+            child: Icon(
+              Icons.lightbulb_outline_rounded,
+              size: 16,
+              color: color,
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
+            child: Text(
+              hint,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                fontFamily: 'Lora',
+                fontStyle: FontStyle.italic,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Retour après validation : label, bonne réponse, explication. Apparition
+/// courte (fondu + hauteur, explication un temps après) puis, si la carte est
+/// masquée par la zone épinglée, défilement jusqu'à elle.
+class _FeedbackCard extends StatefulWidget {
+  const _FeedbackCard({
+    required this.resultIsCorrect,
+    required this.label,
+    required this.answer,
+    required this.explanation,
+  });
+
+  final bool? resultIsCorrect;
+  final String label;
+  final String answer;
+  final String? explanation;
+
+  @override
+  State<_FeedbackCard> createState() => _FeedbackCardState();
+}
+
+class _FeedbackCardState extends State<_FeedbackCard> {
+  @override
+  void initState() {
+    super.initState();
+    // Sans animation la carte a déjà sa taille finale ; sinon on attend la
+    // fin de l'apparition (onEnd) pour viser la bonne position.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && MediaQuery.disableAnimationsOf(context)) _bringIntoView();
+    });
+  }
+
+  void _bringIntoView() {
+    if (!mounted) return;
+    final viewport = Scrollable.maybeOf(context)?.position.viewportDimension;
+    final height = (context.findRenderObject() as RenderBox?)?.size.height;
+    // Une carte plus haute que l'écran reste alignée sur son début.
+    final tooTall = viewport != null && height != null && height > viewport;
+    Scrollable.ensureVisible(
+      context,
+      duration: AppMotion.of(context, AppMotion.standard),
+      curve: AppMotion.standardCurve,
+      alignment: 0,
+      alignmentPolicy: tooTall
+          ? ScrollPositionAlignmentPolicy.explicit
+          : ScrollPositionAlignmentPolicy.keepVisibleAtEnd,
+    );
+  }
+
+  Widget _card(BuildContext context, double progress) {
+    final theme = Theme.of(context);
+    final tone = _ResultTone.of(theme, widget.resultIsCorrect);
+    final explanation = widget.explanation;
+    final explanationOpacity = ((progress - 0.5) * 2).clamp(0.0, 1.0);
+    return Card(
+      color: tone.background,
+      shape: RoundedRectangleBorder(
+        borderRadius: AppTheme.radiusMd,
+        side: BorderSide(color: tone.border),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (tone.icon != null) ...[
+                  Icon(tone.icon, size: 18, color: tone.text),
+                  const SizedBox(width: AppSpacing.sm),
+                ],
+                Expanded(
+                  child: Semantics(
+                    header: true,
+                    child: Text(
+                      widget.label.toUpperCase(),
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: tone.text,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              widget.answer,
+              style: theme.textTheme.titleLarge?.copyWith(color: tone.text),
+            ),
+            if (explanation != null) ...[
+              const SizedBox(height: 14),
+              Opacity(
+                opacity: explanationOpacity,
+                child: Text(
+                  explanation,
+                  style: theme.textTheme.bodyLarge?.copyWith(color: tone.text),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Pas d'AnimatedSize ici : il lève une assertion avec une durée nulle.
+    if (MediaQuery.disableAnimationsOf(context)) return _card(context, 1);
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: AppMotion.standard,
+      curve: AppMotion.standardCurve,
+      onEnd: _bringIntoView,
+      builder: (context, t, _) => Opacity(
+        opacity: t,
+        child: ClipRect(
+          child: Align(
+            alignment: Alignment.topCenter,
+            heightFactor: t,
+            child: SizedBox(width: double.infinity, child: _card(context, t)),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _McqMode extends StatelessWidget {
   const _McqMode({
     super.key,
@@ -1372,38 +1640,34 @@ class _McqMode extends StatelessWidget {
     final correctIndex = options.indexWhere(
       (item) => item == card.correctAnswer,
     );
+    final answeredCorrectly = selectedIndex == correctIndex;
+    _McqOptionTile tile(int index, {bool reserveCaption = false}) {
+      return _McqOptionTile(
+        text: options[index],
+        shortcutLabel: String.fromCharCode(65 + index),
+        isSelected: selectedIndex == index,
+        validated: hasValidatedAnswer,
+        isCorrect: hasValidatedAnswer && index == correctIndex,
+        isWrong:
+            hasValidatedAnswer &&
+            selectedIndex == index &&
+            selectedIndex != correctIndex,
+        onTap: hasValidatedAnswer ? null : () => onSelect(index, options),
+        compact: compact,
+        reserveCaption: reserveCaption,
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Card(
-          child: Padding(
-            padding: EdgeInsets.all(compact ? 16 : 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionLabel('Question'),
-                SizedBox(height: compact ? 8 : 14),
-                Text(
-                  card.question,
-                  style: compact
-                      ? Theme.of(context).textTheme.headlineSmall
-                      : Theme.of(context).textTheme.headlineMedium,
-                ),
-                if (card.hint != null) ...[
-                  SizedBox(height: compact ? 8 : 16),
-                  Text(
-                    card.hint!,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ),
+        _QuestionCard(
+          label: 'Question',
+          question: card.question,
+          hint: card.hint,
         ),
-        SizedBox(height: compact ? 10 : 16),
+        SizedBox(height: compact ? 10 : AppSpacing.lg),
         if (desktopGrid)
           LayoutBuilder(
             builder: (context, constraints) {
@@ -1421,20 +1685,7 @@ class _McqMode extends StatelessWidget {
                     SizedBox(
                       width: optionWidth,
                       height: optionHeight,
-                      child: _McqOptionTile(
-                        text: options[index],
-                        shortcutLabel: String.fromCharCode(65 + index),
-                        isSelected: selectedIndex == index,
-                        isCorrect: hasValidatedAnswer && index == correctIndex,
-                        isWrong:
-                            hasValidatedAnswer &&
-                            selectedIndex == index &&
-                            selectedIndex != correctIndex,
-                        onTap: hasValidatedAnswer
-                            ? null
-                            : () => onSelect(index, options),
-                        compact: MediaQuery.sizeOf(context).width < 600,
-                      ),
+                      child: tile(index, reserveCaption: true),
                     ),
                 ],
               );
@@ -1442,48 +1693,16 @@ class _McqMode extends StatelessWidget {
           )
         else
           for (var index = 0; index < options.length; index++) ...[
-            _McqOptionTile(
-              text: options[index],
-              shortcutLabel: String.fromCharCode(65 + index),
-              isSelected: selectedIndex == index,
-              isCorrect: hasValidatedAnswer && index == correctIndex,
-              isWrong:
-                  hasValidatedAnswer &&
-                  selectedIndex == index &&
-                  selectedIndex != correctIndex,
-              onTap: hasValidatedAnswer ? null : () => onSelect(index, options),
-              compact: compact,
-            ),
+            tile(index),
             const SizedBox(height: 10),
           ],
         if (hasValidatedAnswer && showInlineFeedback) ...[
-          const SizedBox(height: 8),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  SectionLabel(
-                    selectedIndex == correctIndex
-                        ? 'Bonne réponse'
-                        : 'Réponse attendue',
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    card.correctAnswer,
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  if (card.explanation != null) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      card.explanation!,
-                      style: Theme.of(context).textTheme.bodyLarge,
-                    ),
-                  ],
-                ],
-              ),
-            ),
+          const SizedBox(height: AppSpacing.sm),
+          _FeedbackCard(
+            resultIsCorrect: answeredCorrectly,
+            label: answeredCorrectly ? 'Bonne réponse' : 'Réponse attendue',
+            answer: card.correctAnswer,
+            explanation: card.explanation,
           ),
         ],
       ],
@@ -1498,23 +1717,46 @@ class _McqOptionTile extends StatelessWidget {
     required this.isCorrect,
     required this.isWrong,
     required this.onTap,
+    this.validated = false,
     this.shortcutLabel,
     this.compact = false,
+    this.reserveCaption = false,
   });
 
   final String text;
   final bool isSelected;
   final bool isCorrect;
   final bool isWrong;
+  final bool validated;
   final VoidCallback? onTap;
   final String? shortcutLabel;
   final bool compact;
 
+  /// Garde la place de la légende « Ta réponse » (grille à hauteur fixe).
+  final bool reserveCaption;
+
   static const double _padding = 18;
   static const double _borderWidth = 1;
+  static const double _captionGap = 2;
+
+  static double _captionHeight(BuildContext context) {
+    // Mesuré (et non calculé) : la hauteur de ligne réelle est arrondie.
+    final painter = TextPainter(
+      text: TextSpan(
+        text: 'Ta réponse',
+        style: Theme.of(context).textTheme.bodySmall,
+      ),
+      textDirection: Directionality.of(context),
+      textScaler: MediaQuery.textScalerOf(context),
+    )..layout();
+    final height = painter.height;
+    painter.dispose();
+    return height;
+  }
 
   /// Hauteur commune à toutes les bulles d'une grille : celle de l'option la
-  /// plus longue, pour que la grille reste régulière quel que soit le texte.
+  /// plus longue (plus la légende « Ta réponse »), pour que la grille reste
+  /// régulière quel que soit le texte et ne bouge pas à la validation.
   static double uniformHeight(
     BuildContext context,
     List<String> options,
@@ -1536,77 +1778,145 @@ class _McqOptionTile extends StatelessWidget {
       tallest = math.max(tallest, painter.height);
       painter.dispose();
     }
-    return tallest + (_padding + _borderWidth) * 2;
+    return tallest +
+        _captionGap +
+        _captionHeight(context) +
+        (_padding + _borderWidth) * 2;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
+    final isChosen = validated && isSelected;
+    final isQuiet = validated && !isCorrect && !isWrong;
     final borderColor = isCorrect
         ? AppColors.resultGood
         : isWrong
         ? AppColors.resultBad
+        : isSelected
+        ? scheme.primary
         : theme.dividerColor;
     final background = isCorrect
         ? AppColors.resultGoodSoft
         : isWrong
         ? AppColors.resultBadSoft
         : isSelected
-        ? theme.colorScheme.primary.withValues(alpha: 0.1)
-        : theme.cardTheme.color;
+        ? AppColors.primarySoft
+        : theme.cardTheme.color ?? scheme.surface;
     final foreground = isCorrect
         ? AppColors.resultGoodText
         : isWrong
         ? AppColors.resultBadText
-        : isSelected
-        ? theme.colorScheme.primary
-        : theme.colorScheme.onSurface;
+        : isQuiet
+        ? scheme.onSurfaceVariant
+        : scheme.onSurface;
+    final badgeColor = isSelected && !validated
+        ? scheme.primary.withValues(alpha: 0.2)
+        : foreground.withValues(alpha: 0.10);
+    final status = [
+      if (isCorrect) 'bonne réponse',
+      if (isWrong) 'mauvaise réponse',
+      if (isChosen) 'ta réponse',
+    ];
+    final base = shortcutLabel == null ? text : '$shortcutLabel. $text';
+    final reduceMotion = MediaQuery.disableAnimationsOf(context);
+
+    final Widget caption = isChosen
+        ? Padding(
+            padding: const EdgeInsets.only(top: _captionGap),
+            child: Text(
+              'Ta réponse',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: foreground,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          )
+        : reserveCaption
+        ? SizedBox(height: _captionGap + _captionHeight(context))
+        : const SizedBox.shrink();
+
     return Semantics(
       button: true,
       enabled: onTap != null,
       selected: isSelected,
-      label: shortcutLabel == null ? text : '$shortcutLabel. $text',
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(20),
-        child: Ink(
-          padding: EdgeInsets.all(compact ? 12 : _padding),
+      label: status.isEmpty ? base : '$base, ${status.join(', ')}',
+      onTap: onTap,
+      excludeSemantics: true,
+      child: Pressable(
+        enabled: onTap != null,
+        child: AnimatedContainer(
+          duration: AppMotion.of(context, AppMotion.fast),
+          curve: AppMotion.standardCurve,
+          constraints: const BoxConstraints(minHeight: 48),
           decoration: BoxDecoration(
             color: background,
-            borderRadius: BorderRadius.circular(20),
+            borderRadius: AppTheme.radiusButton,
             border: Border.all(color: borderColor, width: _borderWidth),
           ),
-          child: Row(
-            children: [
-              if (shortcutLabel != null) ...[
-                Container(
-                  width: compact ? 28 : 32,
-                  height: compact ? 28 : 32,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: foreground.withValues(alpha: 0.10),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    shortcutLabel!,
-                    style: theme.textTheme.titleSmall?.copyWith(
-                      color: foreground,
+          child: Material(
+            type: MaterialType.transparency,
+            child: InkWell(
+              onTap: onTap,
+              borderRadius: AppTheme.radiusButton,
+              child: Padding(
+                padding: EdgeInsets.all(compact ? 12 : _padding),
+                child: Row(
+                  children: [
+                    if (shortcutLabel != null) ...[
+                      Container(
+                        width: compact ? 28 : 32,
+                        height: compact ? 28 : 32,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: badgeColor,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          shortcutLabel!,
+                          style: theme.textTheme.titleSmall?.copyWith(
+                            color: foreground,
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: compact ? 10 : 14),
+                    ],
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            text,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              color: foreground,
+                            ),
+                          ),
+                          if (reduceMotion || reserveCaption)
+                            caption
+                          else
+                            AnimatedSize(
+                              duration: AppMotion.fast,
+                              curve: AppMotion.standardCurve,
+                              alignment: Alignment.topLeft,
+                              child: caption,
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-                SizedBox(width: compact ? 10 : 14),
-              ],
-              Expanded(
-                child: Text(
-                  text,
-                  style: theme.textTheme.bodyLarge?.copyWith(color: foreground),
+                    if (isCorrect)
+                      Icon(
+                        Icons.check_circle_rounded,
+                        color: foreground,
+                        size: 22,
+                      )
+                    else if (isWrong)
+                      Icon(Icons.cancel_rounded, color: foreground, size: 22),
+                  ],
                 ),
               ),
-              if (isCorrect)
-                Icon(Icons.check_circle_rounded, color: foreground, size: 22)
-              else if (isWrong)
-                Icon(Icons.cancel_rounded, color: foreground, size: 22),
-            ],
+            ),
           ),
         ),
       ),
@@ -1651,12 +1961,6 @@ class _ClozeMode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final feedbackTone = isCorrect == true
-        ? AppColors.resultGoodText
-        : AppColors.resultBadText;
-    final feedbackBackground = isCorrect == true
-        ? AppColors.resultGoodSoft
-        : AppColors.resultBadSoft;
     final promptStyle =
         theme.textTheme.headlineSmall?.copyWith(height: 1.5) ??
         theme.textTheme.titleLarge;
@@ -1665,75 +1969,58 @@ class _ClozeMode extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionLabel('Question'),
-                const SizedBox(height: 12),
-                Text(prompt, style: theme.textTheme.titleMedium),
-                const SizedBox(height: 22),
-                const SectionLabel('Complète le texte'),
-                const SizedBox(height: 14),
-                Text.rich(
-                  TextSpan(
-                    style: promptStyle,
-                    children: [
-                      for (final token in tokens)
-                        if (!token.isGap)
-                          TextSpan(text: token.text)
-                        else
-                          WidgetSpan(
-                            alignment: PlaceholderAlignment.middle,
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 4,
-                              ),
-                              child: _ClozeBlankChip(
-                                text: selectedWords[token.gapIndex!] ?? '_____',
-                                isActive:
-                                    !hasValidated &&
-                                    activeGapIndex == token.gapIndex,
-                                isFilled:
-                                    selectedWords[token.gapIndex!] != null,
-                                isValidated: hasValidated,
-                                isCorrect: hasValidated
-                                    ? validationResults[token.gapIndex!]
-                                    : null,
-                                onTap: hasValidated
-                                    ? null
-                                    : () => onGapTap(token.gapIndex!),
-                              ),
+        _QuestionCard(
+          label: 'Question',
+          question: prompt,
+          hint: hint,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionLabel('Complète le texte'),
+              const SizedBox(height: 14),
+              Text.rich(
+                TextSpan(
+                  style: promptStyle,
+                  children: [
+                    for (final token in tokens)
+                      if (!token.isGap)
+                        TextSpan(text: token.text)
+                      else
+                        WidgetSpan(
+                          alignment: PlaceholderAlignment.middle,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: _ClozeBlankChip(
+                              gapNumber: token.gapIndex! + 1,
+                              text: selectedWords[token.gapIndex!] ?? '_____',
+                              isActive:
+                                  !hasValidated &&
+                                  activeGapIndex == token.gapIndex,
+                              isFilled: selectedWords[token.gapIndex!] != null,
+                              isValidated: hasValidated,
+                              isCorrect: hasValidated
+                                  ? validationResults[token.gapIndex!]
+                                  : null,
+                              onTap: hasValidated
+                                  ? null
+                                  : () => onGapTap(token.gapIndex!),
                             ),
                           ),
-                    ],
-                  ),
+                        ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  'Appuie sur un trou puis sur un mot de la banque.',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text(
+                'Appuie sur un trou puis sur un mot de la banque.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-                if (hint != null) ...[
-                  const SizedBox(height: 18),
-                  const Divider(),
-                  const SizedBox(height: 16),
-                  Text(
-                    hint!,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(20),
@@ -1767,40 +2054,12 @@ class _ClozeMode extends StatelessWidget {
           ),
         ),
         if (hasValidated && showInlineFeedback) ...[
-          const SizedBox(height: 16),
-          Card(
-            color: feedbackBackground,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    (isCorrect == true ? 'Bien joué' : 'Texte complété')
-                        .toUpperCase(),
-                    style: theme.textTheme.labelMedium?.copyWith(
-                      color: feedbackTone,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    solutionText,
-                    style: theme.textTheme.titleLarge?.copyWith(
-                      color: feedbackTone,
-                    ),
-                  ),
-                  if (explanation != null) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      explanation!,
-                      style: theme.textTheme.bodyLarge?.copyWith(
-                        color: feedbackTone,
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+          const SizedBox(height: AppSpacing.lg),
+          _FeedbackCard(
+            resultIsCorrect: isCorrect,
+            label: isCorrect == true ? 'Bien joué' : 'Texte complété',
+            answer: solutionText,
+            explanation: explanation,
           ),
         ],
       ],
@@ -1810,6 +2069,7 @@ class _ClozeMode extends StatelessWidget {
 
 class _ClozeBlankChip extends StatelessWidget {
   const _ClozeBlankChip({
+    required this.gapNumber,
     required this.text,
     required this.isActive,
     required this.isFilled,
@@ -1818,6 +2078,7 @@ class _ClozeBlankChip extends StatelessWidget {
     required this.onTap,
   });
 
+  final int gapNumber;
   final String text;
   final bool isActive;
   final bool isFilled;
@@ -1851,23 +2112,58 @@ class _ClozeBlankChip extends StatelessWidget {
         : isFilled
         ? theme.colorScheme.onSurface
         : theme.colorScheme.onSurfaceVariant;
+    final verdict = !isValidated
+        ? ''
+        : isCorrect == true
+        ? ', bonne réponse'
+        : ', mauvaise réponse';
 
-    return InkWell(
+    return Semantics(
+      button: true,
+      enabled: onTap != null,
+      label: 'Trou $gapNumber, ${isFilled ? text : 'vide'}$verdict',
       onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Ink(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: borderColor),
-        ),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 76),
-          child: Text(
-            text,
-            textAlign: TextAlign.center,
-            style: theme.textTheme.titleSmall?.copyWith(color: foreground),
+      excludeSemantics: true,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: AppTheme.radiusSm,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          decoration: BoxDecoration(
+            color: background,
+            borderRadius: AppTheme.radiusSm,
+            border: Border.all(color: borderColor),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 76, minHeight: 44),
+            child: Center(
+              widthFactor: 1,
+              heightFactor: 1,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Flexible(
+                    child: Text(
+                      text,
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        color: foreground,
+                      ),
+                    ),
+                  ),
+                  if (isValidated) ...[
+                    const SizedBox(width: AppSpacing.xs),
+                    Icon(
+                      isCorrect == true
+                          ? Icons.check_circle_rounded
+                          : Icons.cancel_rounded,
+                      size: 16,
+                      color: foreground,
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
       ),
@@ -1889,28 +2185,45 @@ class _ClozeWordChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(999),
-      child: Ink(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: enabled
-              ? theme.colorScheme.primary.withValues(alpha: 0.08)
-              : theme.colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: enabled
-                ? theme.colorScheme.primary.withValues(alpha: 0.25)
-                : theme.dividerColor,
-          ),
-        ),
-        child: Text(
-          text,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: enabled
-                ? theme.colorScheme.onSurface
-                : theme.colorScheme.onSurfaceVariant,
+    return Pressable(
+      enabled: onTap != null,
+      child: Semantics(
+        button: true,
+        enabled: onTap != null,
+        label: text,
+        onTap: onTap,
+        excludeSemantics: true,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: AppTheme.radiusPill,
+          child: Ink(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(
+              color: enabled
+                  ? theme.colorScheme.primary.withValues(alpha: 0.08)
+                  : theme.colorScheme.surfaceContainerHighest,
+              borderRadius: AppTheme.radiusPill,
+              border: Border.all(
+                color: enabled
+                    ? theme.colorScheme.primary.withValues(alpha: 0.25)
+                    : theme.dividerColor,
+              ),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Center(
+                widthFactor: 1,
+                heightFactor: 1,
+                child: Text(
+                  text,
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: enabled
+                        ? theme.colorScheme.onSurface
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
           ),
         ),
       ),
@@ -1931,6 +2244,7 @@ class _TextEntryMode extends StatelessWidget {
     required this.answerText,
     required this.explanation,
     required this.showInlineFeedback,
+    required this.onSubmit,
   });
 
   final String title;
@@ -1943,83 +2257,59 @@ class _TextEntryMode extends StatelessWidget {
   final String answerText;
   final String? explanation;
   final bool showInlineFeedback;
+  final VoidCallback onSubmit;
 
   @override
   Widget build(BuildContext context) {
-    final feedbackTone = isCorrect == true
-        ? AppColors.resultGoodText
-        : AppColors.resultBadText;
-    final feedbackBackground = isCorrect == true
-        ? AppColors.resultGoodSoft
-        : AppColors.resultBadSoft;
+    final theme = Theme.of(context);
+    final tone = _ResultTone.of(theme, isCorrect);
+    OutlineInputBorder border() => OutlineInputBorder(
+      borderRadius: BorderRadius.circular(28),
+      borderSide: BorderSide(color: tone.border),
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SectionLabel(title),
-                const SizedBox(height: 14),
-                Text(prompt, style: Theme.of(context).textTheme.headlineMedium),
-                if (hint != null) ...[
-                  const SizedBox(height: 16),
-                  Text(
-                    hint!,
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 18),
-                TextField(
-                  controller: controller,
-                  enabled: !hasValidated,
-                  decoration: const InputDecoration(hintText: 'Ta réponse'),
-                ),
-              ],
+        _QuestionCard(
+          label: title,
+          question: prompt,
+          hint: hint,
+          body: TextField(
+            controller: controller,
+            enabled: !hasValidated,
+            textInputAction: TextInputAction.done,
+            textCapitalization: TextCapitalization.sentences,
+            onSubmitted: (_) => onSubmit(),
+            style: hasValidated
+                ? theme.textTheme.bodyLarge?.copyWith(color: tone.text)
+                : null,
+            decoration: InputDecoration(
+              hintText: 'Ta réponse',
+              enabledBorder: hasValidated ? border() : null,
+              disabledBorder: hasValidated ? border() : null,
+              suffixIcon: hasValidated
+                  ? Icon(
+                      isCorrect == true
+                          ? Icons.check_circle_rounded
+                          : Icons.cancel_rounded,
+                      color: tone.text,
+                      semanticLabel: isCorrect == true
+                          ? 'Bonne réponse'
+                          : 'Mauvaise réponse',
+                    )
+                  : null,
             ),
           ),
         ),
         if (hasValidated && showInlineFeedback) ...[
-          const SizedBox(height: 16),
-          Card(
-            color: feedbackBackground,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    (isCorrect == true ? 'Bien joué' : answerLabel)
-                        .toUpperCase(),
-                    style: Theme.of(
-                      context,
-                    ).textTheme.labelMedium?.copyWith(color: feedbackTone),
-                  ),
-                  const SizedBox(height: 10),
-                  Text(
-                    answerText,
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleLarge?.copyWith(color: feedbackTone),
-                  ),
-                  if (explanation != null) ...[
-                    const SizedBox(height: 14),
-                    Text(
-                      explanation!,
-                      style: Theme.of(
-                        context,
-                      ).textTheme.bodyLarge?.copyWith(color: feedbackTone),
-                    ),
-                  ],
-                ],
-              ),
-            ),
+          const SizedBox(height: AppSpacing.lg),
+          _FeedbackCard(
+            resultIsCorrect: isCorrect,
+            label: isCorrect == true ? 'Bien joué' : answerLabel,
+            answer: answerText,
+            explanation: explanation,
           ),
         ],
       ],
@@ -2053,55 +2343,42 @@ class _TrueFalseMode extends StatelessWidget {
     // correspond à la bonne réponse, sinon c'est "Faux" (index 1).
     final correctIndex = propositionIsCorrect ? 0 : 1;
     final theme = Theme.of(context);
+    final answeredCorrectly = selectedIndex == correctIndex;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SectionLabel('Question'),
-                const SizedBox(height: 12),
-                Text(card.question, style: theme.textTheme.headlineMedium),
-                const SizedBox(height: 18),
-                // Petit séparateur visuel entre la question et la réponse
-                // proposée (volontairement plus court que la ligne pleine).
-                Container(
-                  width: 44,
-                  height: 3,
-                  decoration: BoxDecoration(
-                    color: theme.dividerColor,
-                    borderRadius: BorderRadius.circular(999),
-                  ),
+        _QuestionCard(
+          label: 'Question',
+          question: card.question,
+          hint: card.hint,
+          body: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Petit séparateur visuel entre la question et la réponse
+              // proposée (volontairement plus court que la ligne pleine).
+              Container(
+                width: 44,
+                height: 3,
+                decoration: BoxDecoration(
+                  color: theme.dividerColor,
+                  borderRadius: AppTheme.radiusPill,
                 ),
-                const SizedBox(height: 18),
-                const SectionLabel('Cette réponse est-elle correcte ?'),
-                const SizedBox(height: 12),
-                Text(proposition, style: theme.textTheme.headlineSmall),
-                if (card.hint != null) ...[
-                  const SizedBox(height: 22),
-                  const Divider(),
-                  const SizedBox(height: 16),
-                  Text(
-                    card.hint!,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      fontStyle: FontStyle.italic,
-                    ),
-                  ),
-                ],
-              ],
-            ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              const SectionLabel('Cette réponse est-elle correcte ?'),
+              const SizedBox(height: AppSpacing.md),
+              Text(proposition, style: theme.textTheme.headlineSmall),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: AppSpacing.lg),
         for (final item in [('Vrai', 0), ('Faux', 1)]) ...[
           _McqOptionTile(
             text: item.$1,
             isSelected: selectedIndex == item.$2,
+            validated: hasValidatedAnswer,
             isCorrect: hasValidatedAnswer && item.$2 == correctIndex,
             isWrong:
                 hasValidatedAnswer &&
@@ -2112,23 +2389,12 @@ class _TrueFalseMode extends StatelessWidget {
           const SizedBox(height: 10),
         ],
         if (hasValidatedAnswer && showInlineFeedback) ...[
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SectionLabel('Réponse correcte'),
-                  const SizedBox(height: 10),
-                  Text(card.correctAnswer, style: theme.textTheme.titleLarge),
-                  if (card.explanation != null) ...[
-                    const SizedBox(height: 14),
-                    Text(card.explanation!, style: theme.textTheme.bodyLarge),
-                  ],
-                ],
-              ),
-            ),
+          const SizedBox(height: AppSpacing.md),
+          _FeedbackCard(
+            resultIsCorrect: answeredCorrectly,
+            label: 'Réponse correcte',
+            answer: card.correctAnswer,
+            explanation: card.explanation,
           ),
         ],
       ],
