@@ -36,6 +36,7 @@ import 'package:memflow/app/router.dart' show TabShell;
 import 'package:memflow/data/sync/sync_service.dart';
 import 'package:memflow/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show User;
 
 const _label = String.fromEnvironment('VISUAL_OUT');
 
@@ -286,6 +287,15 @@ Future<FilePickerResult?> _pickSampleCsv() async {
   ]);
 }
 
+final _signedInUser = User(
+  id: 'visual-user',
+  appMetadata: const {},
+  userMetadata: const {'display_name': 'Léa Martin'},
+  aud: 'authenticated',
+  createdAt: '2026-01-01',
+  email: 'lea.martin@example.com',
+);
+
 typedef _Interact = Future<void> Function(WidgetTester t);
 typedef _Overrides = List<Override> Function();
 
@@ -535,7 +545,7 @@ List<_State> _states() => [
     () => const ProfileScreen(),
     route: '/profile',
     overrides: () => [
-      currentUserProvider.overrideWithValue(null),
+      currentUserProvider.overrideWithValue(_signedInUser),
       syncStatusProvider.overrideWith(
         (ref) => Stream.value(
           SyncStatus(
@@ -550,7 +560,7 @@ List<_State> _states() => [
   _State(
     'settings',
     () => const SettingsScreen(),
-    overrides: () => [currentUserProvider.overrideWithValue(null)],
+    overrides: () => [currentUserProvider.overrideWithValue(_signedInUser)],
   ),
   _State('auth', () => const AuthScreen()),
   _State(
