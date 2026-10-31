@@ -140,31 +140,35 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ),
             const SizedBox(height: 24),
             stats.when(
-              data: (data) => GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: 2,
-                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 2,
-                  mainAxisExtent: 120,
-                  mainAxisSpacing: 12,
-                  crossAxisSpacing: 12,
-                ),
-                itemBuilder: (context, index) => index == 0
-                    ? StatCard(
-                        compact: true,
-                        horizontal: true,
-                        value: '${data.streakDays}j',
-                        label: 'de série',
-                        icon: Icons.local_fire_department_rounded,
-                      )
-                    : StatCard(
-                        compact: true,
-                        horizontal: true,
-                        value: '${data.dueCards}',
-                        label: 'à revoir',
-                        icon: Icons.schedule_rounded,
+              data: (data) => SizedBox(
+                height: 120,
+                child: GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: 2,
+                  gridDelegate:
+                      const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 2,
+                        mainAxisExtent: 120,
+                        mainAxisSpacing: 12,
+                        crossAxisSpacing: 12,
                       ),
+                  itemBuilder: (context, index) => index == 0
+                      ? StatCard(
+                          compact: true,
+                          horizontal: true,
+                          value: '${data.streakDays} j',
+                          label: 'de série',
+                          icon: Icons.local_fire_department_rounded,
+                        )
+                      : StatCard(
+                          compact: true,
+                          horizontal: true,
+                          value: '${data.dueCards}',
+                          label: 'à revoir',
+                          icon: Icons.schedule_rounded,
+                        ),
+                ),
               ),
               loading: () => const SizedBox.shrink(),
               error: (error, stackTrace) => const SizedBox.shrink(),

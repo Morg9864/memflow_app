@@ -7,6 +7,48 @@
       "skillPath": "skills/taste-skill/SKILL.md",
       "computedHash": "6d838b246d0e35d0b53f4f23f98ba7a1dd561937e64f7d0c7553b0928e376c3e"
     },
+    "flutter-accessibility": {
+      "source": "gabuldev/flutter-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flutter-accessibility/SKILL.md",
+      "computedHash": "9620676660ee005a79fa1830ff035be210e3f8a5fdd5747c3626133cea7da363"
+    },
+    "flutter-design-system": {
+      "source": "gabuldev/flutter-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flutter-design-system/SKILL.md",
+      "computedHash": "8de8fce6c90b8746056225e9f526221fd9217a4dafce77e5f7721bccbd1e2d5d"
+    },
+    "flutter-improve-design": {
+      "source": "kamranbekirovyz/skills",
+      "sourceType": "github",
+      "skillPath": "flutter-improve-design/SKILL.md",
+      "computedHash": "f952ffe353f3c86e1f5f36b1f1fe5020c297c4aa7fc6867fde3754c167e3c0c7"
+    },
+    "flutter-performance": {
+      "source": "thienqo/flutter-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flutter-performance/SKILL.md",
+      "computedHash": "bbec7655a5d9c386c5cfa2eb1b08dacc68492cac489cc41d7577162b497ef6f5"
+    },
+    "flutter-testing": {
+      "source": "gabuldev/flutter-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flutter-testing/SKILL.md",
+      "computedHash": "b0fe0d63060f7ebd80387cd7ac8907f8c84058cce23577ae3719c9c0986c033a"
+    },
+    "flutter-theming": {
+      "source": "gabuldev/flutter-skills",
+      "sourceType": "github",
+      "skillPath": "skills/flutter-theming/SKILL.md",
+      "computedHash": "aff091b49e52278ba768619c9927d0949ad7c88ed4358b3d66acd40394818ede"
+    },
+    "flutter-ui": {
+      "source": "dhruvanbhalara/skills",
+      "sourceType": "github",
+      "skillPath": "skills/flutter/flutter-ui/SKILL.md",
+      "computedHash": "9dcaa5f5e7a4fb65dc4fbc3e9987fc38605a356e13c6227111ea1c4c8b67ead7"
+    },
     "web-design-guidelines": {
       "source": "vercel-labs/agent-skills",
       "sourceType": "github",
