@@ -39,7 +39,7 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | E4 | E | Auth, legal, not found | Done | Analyzer at baseline, `auth__*` and `not_found__*` OK. `auth__phone` reviewed by Opus. Its missing logo is a harness artefact: a probe showed `memflow.png` decodes with `cacheWidth` once real async time passes, and the harness captures before that |
 | D2 | D | Motion and performance pass | Done | 416 pass + 28 skipped, analyzer at baseline, overflow report unchanged. Page transition 220ms, tab fade 120ms, one unguarded `ExpansionTile` fixed. Hero dropped, as the plan allows: the detail page shows a skeleton first, so the flight has no destination on a first open. iOS and macOS keep the native 500ms slide, removed under reduced motion with swipe-back kept (test fails without the fix). Not checked on a device |
 | F1 | F | Accessibility and regression tests | Done | 614 pass + 28 skipped, analyzer at baseline, overflow report unchanged with all 112 captures OK. Guidelines, size and text-scale matrix, reduced motion and 5 journey tests added. Fixed: readable error and destructive text, 48px cloze chips, centred wrapped button labels, no mode sheet slide under reduced motion |
-| F2 | F | Profile-mode measurements | Blocked: `adb devices` empty, no AVD images | Not run. No performance improvement is claimed |
+| F2 | F | Profile-mode measurements | Stopped after an incident, needs the owner's go-ahead | Not run. No performance improvement is claimed. Unrun test code is uncommitted in `.claude/worktrees/agent-afaf4db05bda816b3` |
 | Final review | Opus | Checklist and report | Done | See "Acceptance status" |
 
 ## Audit corrections
@@ -58,8 +58,15 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 ## Decisions needed from the product owner
 - Study header progress dots: `progressDots` is a per-card count (3 to 6, from repetitions), but dots light up by session position, so they carry no real information. Options: remove them, or show repetitions against a fixed target. Left unchanged for now.
 
+## Incident, 2026-11-01: real app removed from the owner's tablet
+- At 00:31:35, F2 setup removed `com.memflow.app.memflow` (v2.4.0) from the SM-X406B, on all user profiles.
+- Cause: `flutter test integration_test/perf_test.dart` was run as a supposed host dry run, before the package id was changed. It auto-selected the attached tablet, installed a debug build over the app, then uninstalled it.
+- Impact: the tablet's local databases are gone. `LOCAL_STORAGE_SECURITY.md` states that a reinstall makes them unrecoverable, because the key is per installation. Only what had already synced to Supabase survives.
+- Rule from now on: no integration test on a device holding real data until the built APK's package id is confirmed to differ, and only with the owner's go-ahead.
+- Noted, not changed: the manifest doesn't disable Android Auto Backup, so a reinstall may restore an encrypted database or key file that can't be read. Effect on startup not tested.
+
 ## Known issues and blockers
-- Remaining: F2 only, once a device or emulator is available.
+- Remaining: F2 only, pending the owner's decision after the incident above.
 - `showDialog`, `showModalBottomSheet`, `SnackBar` and the `NavigationBar` indicator use Material defaults (within 300ms), and Material doesn't remove them under reduced motion.
 
 ## Hypotheses to measure in F2 (no improvement claimed)
