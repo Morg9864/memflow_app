@@ -33,8 +33,8 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | B1 | B | Home | Done (with B2) | 170 pass + 27 skipped, analyzer at baseline, all `home_*` captures OK |
 | B2 | B | Collection card | Done (with B1) | 60-character titles shown in full at 320px and 2.0 text scale |
 | B3 | B | Collection detail and lists | In progress | |
-| E1 | E | Statistics | In progress | |
-| E2 | E | CSV import | Pending | |
+| E1 | E | Statistics | Done | 190 pass + 27 skipped, analyzer at baseline, all `stats_*` captures OK, full-length view reviewed |
+| E2 | E | CSV import | In progress | |
 | E3 | E | Profile and settings | Pending | |
 | E4 | E | Auth, legal, not found | Pending | |
 | D2 | D | Motion and performance pass | Pending | |
@@ -59,6 +59,7 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 - C4: on long flashcards nothing shows that more text exists below the pinned button.
 
 ## Known issues and blockers
+- Riverpod 3 retries failed stream providers by default, so error states may appear after a delay, with skeletons in the meantime. No app-wide `retry` config was added. To verify on a device.
 - F2 needs a physical device or emulator. None available at the start.
 - Out of scope, to report and not fix:
   - "Revoir mes erreurs" shows the mode sheet but ignores the choice.
