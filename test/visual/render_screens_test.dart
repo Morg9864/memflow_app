@@ -9,6 +9,7 @@ import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -267,6 +268,24 @@ final _summary = SessionSummary(
 // ---------------------------------------------------------------------------
 // Harness
 // ---------------------------------------------------------------------------
+/// Deux cartes valides et une ligne invalide, pour l'état de prévisualisation.
+Future<FilePickerResult?> _pickSampleCsv() async {
+  const csv =
+      'collection;deck;question;correct_answer;wrong_answer_1;wrong_answer_2;wrong_answer_3;hint;explanation;level\n'
+      'Biologie;Cellule;Quel organite produit l’ATP ?;La mitochondrie;Le ribosome;Le noyau;Le lysosome;;;1\n'
+      'Biologie;Cellule;Où a lieu la transcription ?;Le noyau;Le cytoplasme;Le ribosome;La membrane;;;1\n'
+      ';;;;;;;;;\n'
+      'Biologie;;Ligne sans deck;;;;;;;1\n';
+  final bytes = Uint8List.fromList(utf8.encode(csv));
+  return FilePickerResult([
+    PlatformFile(
+      name: 'biologie_cellule.csv',
+      size: bytes.length,
+      bytes: bytes,
+    ),
+  ]);
+}
+
 typedef _Interact = Future<void> Function(WidgetTester t);
 typedef _Overrides = List<Override> Function();
 
@@ -505,6 +524,12 @@ List<_State> _states() => [
     ],
   ),
   _State('import_empty', () => const ImportScreen(), route: '/import'),
+  _State(
+    'import_preview',
+    () => ImportScreen(pickFiles: _pickSampleCsv),
+    route: '/import',
+    interact: (t) => _tapText(t, 'Importer un fichier CSV'),
+  ),
   _State(
     'profile',
     () => const ProfileScreen(),

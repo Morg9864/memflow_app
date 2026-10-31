@@ -273,11 +273,20 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                     width: double.infinity,
                     child: Pressable(
                       enabled: !_isImporting,
-                      child: FilledButton.icon(
-                        onPressed: _isImporting ? null : _pickFile,
-                        icon: const Icon(Icons.upload_file_rounded),
-                        label: const Text('Importer un fichier CSV'),
-                      ),
+                      // Une fois un fichier prêt, « Confirmer » devient l'unique
+                      // action principale de l'écran.
+                      child: _preview?.cards.isNotEmpty == true
+                          ? FilledButton.tonalIcon(
+                              style: AppTheme.secondaryAction,
+                              onPressed: _isImporting ? null : _pickFile,
+                              icon: const Icon(Icons.upload_file_rounded),
+                              label: const Text('Importer un fichier CSV'),
+                            )
+                          : FilledButton.icon(
+                              onPressed: _isImporting ? null : _pickFile,
+                              icon: const Icon(Icons.upload_file_rounded),
+                              label: const Text('Importer un fichier CSV'),
+                            ),
                     ),
                   ),
                 ],
@@ -497,14 +506,18 @@ class _PreviewCard extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             _SummaryRow(
               icon: Icons.check_circle_outline_rounded,
-              text: '${preview.cards.length} cartes détectées',
+              text: preview.cards.length > 1
+                  ? '${preview.cards.length} cartes détectées'
+                  : '${preview.cards.length} carte détectée',
             ),
             _SummaryRow(
               icon: hasIssues
                   ? Icons.warning_amber_rounded
                   : Icons.check_circle_outline_rounded,
               color: hasIssues ? AppColors.error : null,
-              text: '${issues.length} lignes invalides',
+              text: issues.length > 1
+                  ? '${issues.length} lignes invalides'
+                  : '${issues.length} ligne invalide',
             ),
             Text(
               'Séparateur : ${preview.delimiter == '\t' ? 'tabulation' : preview.delimiter}'
@@ -533,7 +546,9 @@ class _PreviewCard extends StatelessWidget {
                 ),
               if (issues.length > _maxIssues)
                 Text(
-                  'et ${issues.length - _maxIssues} autres lignes',
+                  issues.length - _maxIssues > 1
+                      ? 'et ${issues.length - _maxIssues} autres lignes'
+                      : 'et 1 autre ligne',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),

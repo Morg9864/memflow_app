@@ -177,7 +177,7 @@ void main() {
     expect(find.text('Prévisualisation'), findsOneWidget);
     expect(find.text('cartes.csv'), findsOneWidget);
     expect(find.text('2 cartes détectées'), findsOneWidget);
-    expect(find.text('1 lignes invalides'), findsOneWidget);
+    expect(find.text('1 ligne invalide'), findsOneWidget);
     expect(find.text('Ligne 2 : colonne manquante 0'), findsOneWidget);
     expect(find.text('APERÇU'), findsOneWidget);
     expect(find.text('Question numéro 0 ?'), findsOneWidget);
