@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../domain/models/models.dart';
 import '../../domain/services/card_mode_service.dart';
+import '../../widgets/ui.dart';
 
 /// Shows a responsive mode picker.
 /// Returns the chosen [TestMode], or null for random.
@@ -22,6 +23,8 @@ Future<ModeChoice?> showModeSelectionSheet(
   return showModalBottomSheet<ModeChoice>(
     context: context,
     isScrollControlled: true,
+    showDragHandle: true,
+    useSafeArea: true,
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
     ),
@@ -68,24 +71,49 @@ class _ModeSelectionBottomSheet extends StatelessWidget {
   }
 }
 
-class _ModeSelectionBody extends StatelessWidget {
-  const _ModeSelectionBody({required this.isDialog, this.availability});
+class _ModeOptionData {
+  const _ModeOptionData({
+    required this.icon,
+    required this.label,
+    required this.description,
+    this.mode,
+  });
 
-  final bool isDialog;
-  final StudyModeAvailability? availability;
+  final IconData icon;
+  final String label;
+  final String description;
+  final TestMode? mode;
+}
 
-  static const _options = <_ModeOptionData>[
-    _ModeOptionData(
-      icon: Icons.auto_awesome_rounded,
-      label: 'Adaptatif',
-      description: 'Le mode suit ta progression sur chaque carte',
-    ),
+class _ModeGroup {
+  const _ModeGroup(this.label, this.options);
+
+  final String label;
+  final List<_ModeOptionData> options;
+}
+
+const _adaptive = _ModeOptionData(
+  icon: Icons.auto_awesome_rounded,
+  label: 'Adaptatif',
+  description: 'Le mode suit ta progression sur chaque carte',
+);
+
+const _groups = <_ModeGroup>[
+  _ModeGroup('Reconnaître', [
     _ModeOptionData(
       icon: Icons.format_list_numbered_rounded,
       label: 'QCM',
       description: 'Choisis parmi plusieurs réponses',
       mode: TestMode.multipleChoice,
     ),
+    _ModeOptionData(
+      icon: Icons.check_circle_outline_rounded,
+      label: 'Vrai / Faux',
+      description: 'Décide si l\'affirmation est correcte',
+      mode: TestMode.trueFalse,
+    ),
+  ]),
+  _ModeGroup('Retourner', [
     _ModeOptionData(
       icon: Icons.flip_rounded,
       label: 'Flashcard',
@@ -98,6 +126,8 @@ class _ModeSelectionBody extends StatelessWidget {
       description: 'La réponse est la question',
       mode: TestMode.reversedFlashcard,
     ),
+  ]),
+  _ModeGroup('Se souvenir', [
     _ModeOptionData(
       icon: Icons.edit_rounded,
       label: 'Saisie libre',
@@ -105,39 +135,37 @@ class _ModeSelectionBody extends StatelessWidget {
       mode: TestMode.freeText,
     ),
     _ModeOptionData(
-      icon: Icons.check_circle_outline_rounded,
-      label: 'Vrai / Faux',
-      description: 'Décide si l\'affirmation est correcte',
-      mode: TestMode.trueFalse,
-    ),
-    _ModeOptionData(
       icon: Icons.text_fields_rounded,
       label: 'Texte à trous',
       description: 'Place les mots dans les trous',
       mode: TestMode.cloze,
     ),
-  ];
+  ]),
+];
+
+class _ModeSelectionBody extends StatelessWidget {
+  const _ModeSelectionBody({required this.isDialog, this.availability});
+
+  final bool isDialog;
+  final StudyModeAvailability? availability;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final horizontalPadding = isDialog ? 28.0 : 24.0;
-    final topPadding = isDialog ? 28.0 : 20.0;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumns = isDialog || constraints.maxWidth >= 640;
-        final crossAxisCount = twoColumns ? 2 : 1;
 
         return SingleChildScrollView(
           padding: EdgeInsets.fromLTRB(
             horizontalPadding,
-            topPadding,
+            isDialog ? 28 : 4,
             horizontalPadding,
             20,
           ),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (isDialog)
@@ -153,39 +181,41 @@ class _ModeSelectionBody extends StatelessWidget {
                     ),
                   ],
                 )
-              else ...[
-                Center(
-                  child: Container(
-                    width: 44,
-                    height: 4,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.outlineVariant,
-                      borderRadius: BorderRadius.circular(999),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
+              else
                 _ModeHeader(theme: theme),
-              ],
-              const SizedBox(height: 24),
-              GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                itemCount: _options.length,
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: crossAxisCount,
-                  crossAxisSpacing: 14,
-                  mainAxisSpacing: 14,
-                  mainAxisExtent: twoColumns ? 184 : 172,
-                ),
-                itemBuilder: (context, index) {
-                  final option = _options[index];
-                  return _ModeOptionCard(
-                    option: option,
-                    availability: availability,
-                  );
-                },
+              const SizedBox(height: 20),
+              _ModeRow(
+                option: _adaptive,
+                availability: availability,
+                featured: true,
               ),
+              for (final group in _groups) ...[
+                const SizedBox(height: 20),
+                SectionLabel(group.label),
+                const SizedBox(height: 8),
+                if (twoColumns)
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        for (final (i, option) in group.options.indexed) ...[
+                          if (i > 0) const SizedBox(width: 12),
+                          Expanded(
+                            child: _ModeRow(
+                              option: option,
+                              availability: availability,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  )
+                else
+                  for (final (i, option) in group.options.indexed) ...[
+                    if (i > 0) const SizedBox(height: 8),
+                    _ModeRow(option: option, availability: availability),
+                  ],
+              ],
             ],
           ),
         );
@@ -204,7 +234,10 @@ class _ModeHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Mode de session', style: theme.textTheme.titleLarge),
+        Semantics(
+          header: true,
+          child: Text('Mode de session', style: theme.textTheme.titleLarge),
+        ),
         const SizedBox(height: 4),
         Text(
           'Comment veux-tu être interrogé ?',
@@ -217,105 +250,114 @@ class _ModeHeader extends StatelessWidget {
   }
 }
 
-class _ModeOptionData {
-  const _ModeOptionData({
-    required this.icon,
-    required this.label,
-    required this.description,
-    this.mode,
+class _ModeRow extends StatelessWidget {
+  const _ModeRow({
+    required this.option,
+    this.availability,
+    this.featured = false,
   });
-
-  final IconData icon;
-  final String label;
-  final String description;
-  final TestMode? mode;
-}
-
-class _ModeOptionCard extends StatelessWidget {
-  const _ModeOptionCard({required this.option, this.availability});
 
   final _ModeOptionData option;
   final StudyModeAvailability? availability;
+  final bool featured;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final scheme = theme.colorScheme;
     final compatible = option.mode == null
         ? availability?.total
         : availability?.count(option.mode!);
     final disabled = option.mode != null && compatible == 0;
-    return Card(
-      color: disabled ? theme.colorScheme.surfaceContainerHighest : null,
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: disabled
-            ? null
-            : () => Navigator.pop(context, ModeChoice(mode: option.mode)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    width: 42,
-                    height: 42,
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Icon(
-                      option.icon,
-                      color: theme.colorScheme.primary,
-                      size: 20,
-                    ),
-                  ),
-                  const Spacer(),
-                  Icon(
-                    Icons.arrow_outward_rounded,
-                    size: 18,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    final count = compatible == null
+        ? null
+        : option.mode == null
+        ? '$compatible cartes'
+        : '$compatible / ${availability!.total} compatibles';
+    final onTap = disabled
+        ? null
+        : () => Navigator.pop(context, ModeChoice(mode: option.mode));
+    final muted = scheme.onSurfaceVariant;
+
+    return Pressable(
+      enabled: !disabled,
+      child: Semantics(
+        button: true,
+        enabled: !disabled,
+        label: [option.label, option.description, ?count].join(', '),
+        excludeSemantics: true,
+        onTap: onTap,
+        child: Material(
+          color: disabled
+              ? scheme.surfaceContainerHighest
+              : featured
+              ? scheme.secondaryContainer
+              : scheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(featured ? 24 : 18),
+            side: featured || disabled
+                ? BorderSide.none
+                : BorderSide(color: scheme.outlineVariant),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onTap,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 56),
+              child: Padding(
+                padding: EdgeInsets.all(featured ? 18 : 12),
+                child: Row(
                   children: [
-                    Text(
-                      option.label,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: theme.textTheme.titleMedium,
+                    IconTile(
+                      icon: disabled ? Icons.lock_outline_rounded : option.icon,
+                      size: featured ? 52 : 40,
+                      background: featured
+                          ? scheme.surface.withValues(alpha: 0.7)
+                          : null,
+                      foreground: disabled ? muted : null,
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(width: featured ? 16 : 12),
                     Expanded(
-                      child: Text(
-                        option.description,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: theme.colorScheme.onSurfaceVariant,
-                        ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            option.label,
+                            style:
+                                (featured
+                                        ? theme.textTheme.titleMedium
+                                        : theme.textTheme.titleSmall)
+                                    ?.copyWith(
+                                      color: disabled
+                                          ? muted
+                                          : scheme.onSurface,
+                                    ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            option.description,
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: disabled
+                                  ? muted
+                                  : scheme.onSurface.withValues(alpha: 0.78),
+                            ),
+                          ),
+                          if (count != null) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              count,
+                              style: theme.textTheme.labelMedium?.copyWith(
+                                color: disabled ? muted : scheme.onSurface,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                    if (compatible != null)
-                      Text(
-                        option.mode == null
-                            ? '$compatible cartes'
-                            : '$compatible / ${availability!.total} compatibles',
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: disabled
-                              ? theme.colorScheme.error
-                              : theme.colorScheme.primary,
-                        ),
-                      ),
                   ],
                 ),
               ),
-            ],
+            ),
           ),
         ),
       ),

@@ -46,6 +46,8 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
 
   StudySessionState? _state;
   Object? _error;
+  // True while the mode sheet is open: show a calm background, not a spinner.
+  bool _choosingMode = false;
   late final StudyController _controller;
   final TextEditingController _freeTextController = TextEditingController();
   List<String?> _clozeSelections = const [];
@@ -126,15 +128,27 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
       Future.microtask(() => _load(forcedMode: widget.forcedMode));
       return;
     }
+    _choosingMode = true;
     Future.microtask(_askModeAndLoad);
   }
 
   Future<void> _askModeAndLoad() async {
     if (!mounted) return;
-    final availability = await _controller.modeAvailability(
-      collectionId: widget.collectionId,
-      deckId: widget.deckId,
-    );
+    final StudyModeAvailability availability;
+    try {
+      availability = await _controller.modeAvailability(
+        collectionId: widget.collectionId,
+        deckId: widget.deckId,
+      );
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _choosingMode = false;
+          _error = error;
+        });
+      }
+      return;
+    }
     if (!mounted) return;
     final choice = await showModeSelectionSheet(
       context,
@@ -146,6 +160,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
       _exitStudy();
       return;
     }
+    setState(() => _choosingMode = false);
     await _load(forcedMode: choice.mode);
   }
 
@@ -564,19 +579,21 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
         canPop: _canPopStudy(),
         onPopInvokedWithResult: (didPop, _) => _handlePopInvoked(didPop),
         child: Scaffold(
-          body: Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const CircularProgressIndicator(),
-                const SizedBox(height: 18),
-                Text(
-                  'Préparation de ta session…',
-                  style: Theme.of(context).textTheme.bodyMedium,
+          body: _choosingMode
+              ? const SizedBox.expand()
+              : Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const CircularProgressIndicator(),
+                      const SizedBox(height: 18),
+                      Text(
+                        'Préparation de ta session…',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
                 ),
-              ],
-            ),
-          ),
         ),
       );
     }
