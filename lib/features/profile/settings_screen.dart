@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../app/session_card_limit_controller.dart';
 import '../../app/providers.dart';
 import '../../widgets/ui.dart';
+import 'settings_row.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -20,8 +21,7 @@ class SettingsScreen extends ConsumerWidget {
     }
 
     return AppScaffold(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: ListView(
         children: [
           Row(
             children: [
@@ -30,72 +30,63 @@ class SettingsScreen extends ConsumerWidget {
                 tooltip: 'Retour',
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
-              const SizedBox(width: 8),
-              Text(
-                'Paramètres',
-                style: Theme.of(context).textTheme.displaySmall,
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Semantics(
+                  header: true,
+                  child: Text(
+                    'Paramètres',
+                    style: Theme.of(context).textTheme.displaySmall,
+                  ),
+                ),
               ),
             ],
           ),
-          const SizedBox(height: 24),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 20, 20, 4),
-                  child: SectionLabel('Mon compte'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.badge_outlined),
-                  title: const Text('Nom d\'affichage'),
-                  subtitle: Text(displayName ?? '—'),
-                  trailing: const Icon(Icons.edit_outlined),
-                  onTap: () =>
-                      _showEditNameDialog(context, ref, displayName ?? ''),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.mail_outline_rounded),
-                  title: const Text('Adresse email'),
-                  subtitle: Text(user.email ?? '—'),
-                  trailing: const Icon(Icons.edit_outlined),
-                  onTap: () =>
-                      _showEditEmailDialog(context, ref, user.email ?? ''),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.lock_outline_rounded),
-                  title: const Text('Mot de passe'),
-                  subtitle: const Text('••••••••'),
-                  trailing: const Icon(Icons.edit_outlined),
-                  onTap: () => _showEditPasswordDialog(context, ref),
-                ),
-              ],
-            ),
+          const SizedBox(height: AppSpacing.xl),
+          SettingsGroup(
+            label: 'Mon compte',
+            children: [
+              SettingsRow(
+                icon: Icons.badge_outlined,
+                title: 'Nom d\'affichage',
+                subtitle: displayName ?? '—',
+                trailing: const _EditIcon(),
+                onTap: () =>
+                    _showEditNameDialog(context, ref, displayName ?? ''),
+              ),
+              SettingsRow(
+                icon: Icons.mail_outline_rounded,
+                title: 'Adresse email',
+                subtitle: user.email ?? '—',
+                trailing: const _EditIcon(),
+                onTap: () =>
+                    _showEditEmailDialog(context, ref, user.email ?? ''),
+              ),
+              SettingsRow(
+                icon: Icons.lock_outline_rounded,
+                title: 'Mot de passe',
+                subtitle: '••••••••',
+                trailing: const _EditIcon(),
+                onTap: () => _showEditPasswordDialog(context, ref),
+              ),
+            ],
           ),
-          const SizedBox(height: 16),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 20, 20, 4),
-                  child: SectionLabel('Révision'),
+          const SizedBox(height: AppSpacing.xl),
+          SettingsGroup(
+            label: 'Révision',
+            children: [
+              SettingsRow(
+                icon: Icons.style_outlined,
+                title: 'Cartes par session',
+                subtitle: '$sessionCardLimit cartes max par session',
+                trailing: const _EditIcon(),
+                onTap: () => _showEditSessionCardLimitDialog(
+                  context,
+                  ref,
+                  sessionCardLimit,
                 ),
-                ListTile(
-                  leading: const Icon(Icons.style_outlined),
-                  title: const Text('Cartes par session'),
-                  subtitle: Text('$sessionCardLimit cartes max par session'),
-                  trailing: const Icon(Icons.edit_outlined),
-                  onTap: () => _showEditSessionCardLimitDialog(
-                    context,
-                    ref,
-                    sessionCardLimit,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ],
       ),
@@ -107,14 +98,13 @@ class SettingsScreen extends ConsumerWidget {
     WidgetRef ref,
     String current,
   ) async {
-    final controller = TextEditingController(text: current);
     final authService = ref.read(authServiceProvider);
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => _EditDialog(
         title: 'Modifier le nom',
-        controller: controller,
+        initialText: current,
         label: 'Nom d\'affichage',
         keyboardType: TextInputType.name,
         onSave: (value) async {
@@ -131,14 +121,13 @@ class SettingsScreen extends ConsumerWidget {
     WidgetRef ref,
     String current,
   ) async {
-    final controller = TextEditingController(text: current);
     final authService = ref.read(authServiceProvider);
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => _EditDialog(
         title: 'Modifier l\'email',
-        controller: controller,
+        initialText: current,
         label: 'Nouvelle adresse email',
         keyboardType: TextInputType.emailAddress,
         confirmNote:
@@ -157,15 +146,11 @@ class SettingsScreen extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
   ) async {
-    final controller = TextEditingController();
-    final confirmController = TextEditingController();
     final authService = ref.read(authServiceProvider);
 
     await showDialog<void>(
       context: context,
       builder: (ctx) => _PasswordDialog(
-        controller: controller,
-        confirmController: confirmController,
         onSave: (value) async {
           await authService.updatePassword(value);
         },
@@ -178,10 +163,9 @@ class SettingsScreen extends ConsumerWidget {
     WidgetRef ref,
     int current,
   ) async {
-    final controller = TextEditingController(text: '$current');
     final result = await showDialog<int>(
       context: context,
-      builder: (ctx) => _SessionCardLimitDialog(controller: controller),
+      builder: (ctx) => _SessionCardLimitDialog(initial: current),
     );
     if (result != null) {
       await ref.read(sessionCardLimitProvider.notifier).setLimit(result);
@@ -189,10 +173,20 @@ class SettingsScreen extends ConsumerWidget {
   }
 }
 
+class _EditIcon extends StatelessWidget {
+  const _EditIcon();
+
+  @override
+  Widget build(BuildContext context) =>
+      const Icon(Icons.edit_outlined, semanticLabel: 'Modifier');
+}
+
+/// Les dialogues possèdent leurs contrôleurs : ils sont libérés avec le
+/// `State`, c'est-à-dire après la fin de l'animation de fermeture.
 class _EditDialog extends StatefulWidget {
   const _EditDialog({
     required this.title,
-    required this.controller,
+    required this.initialText,
     required this.label,
     required this.onSave,
     this.keyboardType,
@@ -201,7 +195,7 @@ class _EditDialog extends StatefulWidget {
   });
 
   final String title;
-  final TextEditingController controller;
+  final String initialText;
   final String label;
   final Future<void> Function(String value) onSave;
   final TextInputType? keyboardType;
@@ -213,8 +207,17 @@ class _EditDialog extends StatefulWidget {
 }
 
 class _EditDialogState extends State<_EditDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: widget.initialText,
+  );
   bool _loading = false;
   String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -225,8 +228,10 @@ class _EditDialogState extends State<_EditDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
-            controller: widget.controller,
+            controller: _controller,
             keyboardType: widget.keyboardType,
+            textInputAction: TextInputAction.done,
+            onSubmitted: _loading ? null : (_) => _submit(),
             autofocus: true,
             decoration: InputDecoration(labelText: widget.label),
           ),
@@ -243,9 +248,8 @@ class _EditDialogState extends State<_EditDialog> {
             const SizedBox(height: 12),
             Text(
               _error!,
-              style: TextStyle(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.error,
-                fontSize: 13,
               ),
             ),
           ],
@@ -266,7 +270,7 @@ class _EditDialogState extends State<_EditDialog> {
   }
 
   Future<void> _submit() async {
-    final value = widget.controller.text.trim();
+    final value = _controller.text.trim();
     if (value.isEmpty) return;
     setState(() {
       _loading = true;
@@ -292,14 +296,8 @@ class _EditDialogState extends State<_EditDialog> {
 }
 
 class _PasswordDialog extends StatefulWidget {
-  const _PasswordDialog({
-    required this.controller,
-    required this.confirmController,
-    required this.onSave,
-  });
+  const _PasswordDialog({required this.onSave});
 
-  final TextEditingController controller;
-  final TextEditingController confirmController;
   final Future<void> Function(String value) onSave;
 
   @override
@@ -307,9 +305,9 @@ class _PasswordDialog extends StatefulWidget {
 }
 
 class _SessionCardLimitDialog extends StatefulWidget {
-  const _SessionCardLimitDialog({required this.controller});
+  const _SessionCardLimitDialog({required this.initial});
 
-  final TextEditingController controller;
+  final int initial;
 
   @override
   State<_SessionCardLimitDialog> createState() =>
@@ -317,7 +315,16 @@ class _SessionCardLimitDialog extends StatefulWidget {
 }
 
 class _SessionCardLimitDialogState extends State<_SessionCardLimitDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: '${widget.initial}',
+  );
   String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -328,8 +335,10 @@ class _SessionCardLimitDialogState extends State<_SessionCardLimitDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
-            controller: widget.controller,
+            controller: _controller,
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
             autofocus: true,
             decoration: InputDecoration(
               labelText: 'Nombre maximum de cartes',
@@ -359,7 +368,7 @@ class _SessionCardLimitDialogState extends State<_SessionCardLimitDialog> {
   }
 
   void _submit() {
-    final value = int.tryParse(widget.controller.text.trim());
+    final value = int.tryParse(_controller.text.trim());
     if (value == null || value < 1) {
       setState(() => _error = 'Entrer un nombre entre 1 et 999.');
       return;
@@ -369,10 +378,19 @@ class _SessionCardLimitDialogState extends State<_SessionCardLimitDialog> {
 }
 
 class _PasswordDialogState extends State<_PasswordDialog> {
+  final _controller = TextEditingController();
+  final _confirmController = TextEditingController();
   bool _loading = false;
   bool _obscure = true;
   bool _obscureConfirm = true;
   String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -382,7 +400,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
         mainAxisSize: MainAxisSize.min,
         children: [
           TextField(
-            controller: widget.controller,
+            controller: _controller,
             obscureText: _obscure,
             autofocus: true,
             decoration: InputDecoration(
@@ -399,7 +417,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: widget.confirmController,
+            controller: _confirmController,
             obscureText: _obscureConfirm,
             decoration: InputDecoration(
               labelText: 'Confirmer le mot de passe',
@@ -418,9 +436,8 @@ class _PasswordDialogState extends State<_PasswordDialog> {
             const SizedBox(height: 12),
             Text(
               _error!,
-              style: TextStyle(
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Theme.of(context).colorScheme.error,
-                fontSize: 13,
               ),
             ),
           ],
@@ -441,8 +458,8 @@ class _PasswordDialogState extends State<_PasswordDialog> {
   }
 
   Future<void> _submit() async {
-    final password = widget.controller.text;
-    final confirm = widget.confirmController.text;
+    final password = _controller.text;
+    final confirm = _confirmController.text;
     if (password.length < 6) {
       setState(
         () => _error = 'Le mot de passe doit faire au moins 6 caractères.',

@@ -13,6 +13,7 @@ import '../../app/providers.dart';
 import '../../data/sync/sync_service.dart';
 import '../../widgets/ui.dart';
 import '../legal/legal_document_screen.dart';
+import 'settings_row.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -137,10 +138,9 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   Future<void> _editDailyGoal() async {
     final current = ref.read(dailyGoalProvider);
-    final controller = TextEditingController(text: '$current');
     final result = await showDialog<int>(
       context: context,
-      builder: (ctx) => _DailyGoalDialog(controller: controller),
+      builder: (ctx) => _DailyGoalDialog(initial: current),
     );
     if (result != null) {
       await ref.read(dailyGoalProvider.notifier).setGoal(result);
@@ -149,164 +149,141 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final user = ref.watch(currentUserProvider);
     final displayName = ref.watch(displayNameProvider);
     final dailyGoal = ref.watch(dailyGoalProvider);
+    const gap = SizedBox(height: AppSpacing.xl);
     return AppScaffold(
       child: ListView(
         children: [
-          Text('Profil', style: Theme.of(context).textTheme.displaySmall),
-          const SizedBox(height: 24),
+          Semantics(
+            header: true,
+            child: Text('Profil', style: theme.textTheme.displaySmall),
+          ),
+          gap,
           Card(
             child: Padding(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(AppSpacing.lg),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     displayName ?? 'Utilisateur',
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: theme.textTheme.titleLarge,
                   ),
                   if (user?.email != null) ...[
-                    const SizedBox(height: 4),
-                    Text(
-                      user!.email!,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(user!.email!, style: theme.textTheme.bodyMedium),
                   ],
-                  const SizedBox(height: 12),
-                  InkWell(
-                    onTap: _editDailyGoal,
-                    borderRadius: BorderRadius.circular(8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          'Objectif quotidien : $dailyGoal cartes',
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                        const SizedBox(width: 6),
-                        Icon(
-                          Icons.edit_outlined,
-                          size: 16,
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                      ],
-                    ),
-                  ),
                 ],
               ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  FilledButton.tonalIcon(
-                    style: AppTheme.secondaryAction,
-                    onPressed: _busy ? null : _exportCsv,
-                    icon: const Icon(Icons.download_rounded),
-                    label: const Text('Exporter les cartes en CSV'),
-                  ),
-                  const SizedBox(height: 16),
-                  const _SyncStatusLine(),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Version app',
-                    style: Theme.of(context).textTheme.labelMedium,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    appVersion,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            clipBehavior: Clip.antiAlias,
-            child: Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 20, 20, 4),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SectionLabel('Légal'),
-                  ),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.privacy_tip_outlined),
-                  title: const Text('Politique de confidentialité'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () =>
-                      context.push('/legal/${LegalDocument.privacy.slug}'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.description_outlined),
-                  title: const Text("Conditions d'utilisation"),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () =>
-                      context.push('/legal/${LegalDocument.terms.slug}'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.gavel_rounded),
-                  title: const Text('Mentions légales'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () =>
-                      context.push('/legal/${LegalDocument.notices.slug}'),
-                ),
-                ListTile(
-                  leading: const Icon(Icons.article_outlined),
-                  title: const Text('Licences open-source'),
-                  trailing: const Icon(Icons.chevron_right_rounded),
-                  onTap: () => showMemFlowLicensePage(context),
-                ),
-              ],
             ),
           ),
           if (user != null) ...[
-            const SizedBox(height: 16),
-            Card(
-              clipBehavior: Clip.antiAlias,
-              child: ListTile(
-                leading: const Icon(Icons.settings_outlined),
-                title: const Text('Paramètres du compte'),
-                subtitle: const Text('Nom, email, mot de passe'),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => context.push('/settings'),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    OutlinedButton.icon(
-                      onPressed: _busy ? null : _signOut,
-                      icon: const Icon(Icons.logout_rounded),
-                      label: const Text('Se déconnecter'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextButton.icon(
-                      onPressed: _busy ? null : _requestAccountDeletion,
-                      style: TextButton.styleFrom(
-                        foregroundColor: Theme.of(context).colorScheme.error,
-                      ),
-                      icon: const Icon(Icons.delete_outline_rounded),
-                      label: const Text(
-                        'Demander la suppression de mon compte',
-                      ),
-                    ),
-                  ],
+            gap,
+            SettingsGroup(
+              label: 'Compte',
+              children: [
+                SettingsRow(
+                  icon: Icons.settings_outlined,
+                  title: 'Paramètres du compte',
+                  subtitle: 'Nom, email, mot de passe',
+                  trailing: const Icon(Icons.chevron_right_rounded),
+                  onTap: () => context.push('/settings'),
                 ),
+              ],
+            ),
+          ],
+          gap,
+          SettingsGroup(
+            label: 'Révision',
+            children: [
+              SettingsRow(
+                icon: Icons.flag_outlined,
+                title: 'Objectif quotidien',
+                subtitle: '$dailyGoal cartes par jour',
+                trailing: const Icon(
+                  Icons.edit_outlined,
+                  semanticLabel: 'Modifier',
+                ),
+                onTap: _editDailyGoal,
               ),
+            ],
+          ),
+          gap,
+          SettingsGroup(
+            label: 'Données et synchronisation',
+            children: [
+              const Padding(
+                padding: EdgeInsets.all(AppSpacing.lg),
+                child: _SyncStatusLine(),
+              ),
+              SettingsRow(
+                icon: Icons.download_rounded,
+                leading: _busy ? const ButtonSpinner() : null,
+                title: 'Exporter les cartes en CSV',
+                enabled: !_busy,
+                onTap: _exportCsv,
+              ),
+              const SettingsRow(
+                icon: Icons.info_outline_rounded,
+                title: 'Version app',
+                subtitle: appVersion,
+              ),
+            ],
+          ),
+          gap,
+          SettingsGroup(
+            label: 'Légal',
+            children: [
+              SettingsRow(
+                icon: Icons.privacy_tip_outlined,
+                title: 'Politique de confidentialité',
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () =>
+                    context.push('/legal/${LegalDocument.privacy.slug}'),
+              ),
+              SettingsRow(
+                icon: Icons.description_outlined,
+                title: "Conditions d'utilisation",
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => context.push('/legal/${LegalDocument.terms.slug}'),
+              ),
+              SettingsRow(
+                icon: Icons.gavel_rounded,
+                title: 'Mentions légales',
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () =>
+                    context.push('/legal/${LegalDocument.notices.slug}'),
+              ),
+              SettingsRow(
+                icon: Icons.article_outlined,
+                title: 'Licences open-source',
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () => showMemFlowLicensePage(context),
+              ),
+            ],
+          ),
+          if (user != null) ...[
+            gap,
+            SettingsGroup(
+              label: 'Session',
+              children: [
+                SettingsRow(
+                  icon: Icons.logout_rounded,
+                  title: 'Se déconnecter',
+                  enabled: !_busy,
+                  onTap: _signOut,
+                ),
+                SettingsRow(
+                  icon: Icons.delete_outline_rounded,
+                  title: 'Demander la suppression de mon compte',
+                  destructive: true,
+                  enabled: !_busy,
+                  onTap: _requestAccountDeletion,
+                ),
+              ],
             ),
           ],
         ],
@@ -324,6 +301,7 @@ class _SyncStatusLine extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
+    final onSurface = theme.colorScheme.onSurface;
     final status = ref.watch(syncStatusProvider).value;
     final pending = status?.pendingCount ?? 0;
     final lastSynced = status?.lastSyncedAt;
@@ -370,7 +348,7 @@ class _SyncStatusLine extends ConsumerWidget {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: color.withValues(alpha: 0.10),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: AppTheme.radiusSm,
           border: Border.all(color: color.withValues(alpha: 0.28)),
         ),
         child: Column(
@@ -385,9 +363,19 @@ class _SyncStatusLine extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(title, style: theme.textTheme.titleSmall),
+                      Text(
+                        title,
+                        style: theme.textTheme.titleSmall?.copyWith(
+                          color: onSurface,
+                        ),
+                      ),
                       const SizedBox(height: 3),
-                      Text(detail, style: theme.textTheme.bodySmall),
+                      Text(
+                        detail,
+                        style: theme.textTheme.bodySmall?.copyWith(
+                          color: onSurface,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -397,7 +385,7 @@ class _SyncStatusLine extends ConsumerWidget {
               const SizedBox(height: 8),
               Text(
                 'Dernière synchronisation : ${_formatSyncDate(lastSynced)}',
-                style: theme.textTheme.bodySmall,
+                style: theme.textTheme.bodySmall?.copyWith(color: onSurface),
               ),
             ],
             const SizedBox(height: 8),
@@ -405,10 +393,14 @@ class _SyncStatusLine extends ConsumerWidget {
               alignment: Alignment.centerLeft,
               child: TextButton.icon(
                 key: const ValueKey('sync-now-button'),
+                style: TextButton.styleFrom(
+                  foregroundColor: onSurface,
+                  minimumSize: const Size(48, 48),
+                ),
                 onPressed: status?.state == SyncState.syncing
                     ? null
                     : () => ref.read(syncServiceProvider).syncNow(),
-                icon: const Icon(Icons.sync_rounded, size: 18),
+                icon: Icon(Icons.sync_rounded, size: 18, color: color),
                 label: const Text('Synchroniser maintenant'),
               ),
             ),
@@ -427,16 +419,25 @@ class _SyncStatusLine extends ConsumerWidget {
 }
 
 class _DailyGoalDialog extends StatefulWidget {
-  const _DailyGoalDialog({required this.controller});
+  const _DailyGoalDialog({required this.initial});
 
-  final TextEditingController controller;
+  final int initial;
 
   @override
   State<_DailyGoalDialog> createState() => _DailyGoalDialogState();
 }
 
 class _DailyGoalDialogState extends State<_DailyGoalDialog> {
+  late final TextEditingController _controller = TextEditingController(
+    text: '${widget.initial}',
+  );
   String? _error;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -447,8 +448,10 @@ class _DailyGoalDialogState extends State<_DailyGoalDialog> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           TextField(
-            controller: widget.controller,
+            controller: _controller,
             keyboardType: TextInputType.number,
+            textInputAction: TextInputAction.done,
+            onSubmitted: (_) => _submit(),
             autofocus: true,
             decoration: InputDecoration(
               labelText: 'Nombre de cartes par jour',
@@ -473,7 +476,7 @@ class _DailyGoalDialogState extends State<_DailyGoalDialog> {
   }
 
   void _submit() {
-    final value = int.tryParse(widget.controller.text.trim());
+    final value = int.tryParse(_controller.text.trim());
     if (value == null || value < 1) {
       setState(() => _error = 'Entrer un nombre entre 1 et 999.');
       return;
