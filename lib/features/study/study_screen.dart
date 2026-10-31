@@ -815,7 +815,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                                 ),
                                 SizedBox(
                                   height: viewportConstraints.maxWidth < 600
-                                      ? 14
+                                      ? 8
                                       : 24,
                                 ),
                                 Expanded(
@@ -1033,8 +1033,8 @@ class _StudyActionArea extends StatelessWidget {
                 ),
               ));
     if (content == null) return const SizedBox.shrink();
-    return Padding(
-      padding: const EdgeInsets.only(top: 12),
+    final padded = Padding(
+      padding: const EdgeInsets.only(top: 8),
       child: Align(
         alignment: Alignment.topCenter,
         child: ConstrainedBox(
@@ -1043,6 +1043,27 @@ class _StudyActionArea extends StatelessWidget {
           ),
           child: content,
         ),
+      ),
+    );
+    // AnimatedSize assert sur une durée nulle : sans animation, on le saute.
+    if (MediaQuery.disableAnimationsOf(context)) return padded;
+    // La clé relance le fondu quand les notes remplacent l'action avant
+    // réponse, et la taille s'anime de l'une à l'autre. Sans action avant
+    // réponse (QCM), la zone apparaît à sa taille finale : un tap immédiat
+    // sur une note doit la toucher, donc fondu seul.
+    // Taille en `fast`, fondu en `standard` : la taille est réglée avant le
+    // ensureVisible du feedback (déclenché à la fin de son propre fondu).
+    return AnimatedSize(
+      duration: AppMotion.fast,
+      curve: AppMotion.standardCurve,
+      alignment: Alignment.topCenter,
+      child: TweenAnimationBuilder<double>(
+        key: ValueKey(review != null),
+        tween: Tween(begin: 0, end: 1),
+        duration: AppMotion.standard,
+        curve: AppMotion.standardCurve,
+        builder: (context, t, child) => Opacity(opacity: t, child: child),
+        child: padded,
       ),
     );
   }
@@ -1066,7 +1087,7 @@ class _ReviewControls extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         const SectionLabel('Comment tu t’en es sorti ?'),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         _ReviewGrid(
           key: const Key('inline-review-controls'),
           suggested: suggested,
@@ -1087,7 +1108,7 @@ class _ReviewGrid extends StatelessWidget {
     required this.onReview,
     required this.columns,
     this.compact = false,
-    this.spacing = 12,
+    this.spacing = 8,
   });
 
   final ReviewResult suggested;
@@ -2416,21 +2437,24 @@ class _LevelBadge extends StatelessWidget {
       _ => ('Avancé', Icons.psychology_alt_rounded),
     };
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: AppTheme.radiusPill,
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(meta.$2, size: 16),
-          const SizedBox(width: 8),
+          Icon(meta.$2, size: 14, color: AppColors.text),
+          const SizedBox(width: 6),
           Flexible(
             child: Text(
               '${meta.$1}, Niv. $level',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              style: Theme.of(
+                context,
+              ).textTheme.labelMedium?.copyWith(color: AppColors.text),
             ),
           ),
         ],
@@ -2458,16 +2482,15 @@ class _StudyProgressHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Clavier ouvert : la seconde ligne cède la place au champ de saisie.
+    final theme = Theme.of(context);
+    // Clavier ouvert : la troisième ligne cède la place au champ de saisie.
     final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-    final secondRow = keyboardOpen
+    final levelRow = keyboardOpen
         ? const SizedBox(width: double.infinity)
         : Padding(
-            padding: const EdgeInsets.only(top: 12),
+            padding: const EdgeInsets.only(top: 8),
             child: Row(
               children: [
-                Text('${currentIndex + 1}/$total'),
-                const SizedBox(width: 12),
                 Expanded(
                   child: Align(
                     alignment: Alignment.centerLeft,
@@ -2483,8 +2506,8 @@ class _StudyProgressHeader extends StatelessWidget {
                       margin: const EdgeInsets.only(left: 6),
                       decoration: BoxDecoration(
                         color: index <= currentIndex
-                            ? Theme.of(context).colorScheme.primary
-                            : Theme.of(context).dividerColor,
+                            ? theme.colorScheme.primary
+                            : theme.dividerColor,
                         shape: BoxShape.circle,
                       ),
                     ),
@@ -2509,23 +2532,46 @@ class _StudyProgressHeader extends StatelessWidget {
                 textAlign: TextAlign.center,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleMedium,
+                style: theme.textTheme.titleSmall,
               ),
             ),
             const SizedBox(width: 48),
           ],
         ),
-        const SizedBox(height: 12),
-        ProgressPill(value: total == 0 ? 0 : (currentIndex + 1) / total),
+        const SizedBox(height: 4),
+        Semantics(
+          container: true,
+          label: 'Carte ${currentIndex + 1} sur $total',
+          child: ExcludeSemantics(
+            child: Row(
+              children: [
+                Expanded(
+                  child: ProgressPill(
+                    height: 8,
+                    value: total == 0 ? 0 : (currentIndex + 1) / total,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Text(
+                  '${currentIndex + 1}/$total',
+                  style: theme.textTheme.labelLarge?.copyWith(
+                    color: AppColors.text,
+                    fontFeatures: AppTheme.tabularFigures,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
         // AnimatedSize assert quand la durée est nulle : on le saute alors.
         if (MediaQuery.disableAnimationsOf(context))
-          secondRow
+          levelRow
         else
           AnimatedSize(
             duration: AppMotion.standard,
             curve: AppMotion.standardCurve,
             alignment: Alignment.topCenter,
-            child: secondRow,
+            child: levelRow,
           ),
       ],
     );
@@ -2547,48 +2593,99 @@ class _ReviewButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     final tone = result.tone;
-    final background = result.background;
-    final borderColor = isSuggested ? tone : Colors.transparent;
+    final enabled = onPressed != null;
+    final largeText = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+    final semanticsLabel = [
+      result.label,
+      result.description,
+      if (isSuggested) 'suggéré',
+    ].join(', ');
+    final textColor = enabled
+        ? AppColors.text
+        : AppColors.text.withValues(alpha: 0.55);
 
-    return FilledButton(
-      onPressed: onPressed,
-      style: FilledButton.styleFrom(
-        minimumSize: Size.fromHeight(compact ? 72 : 88),
-        padding: EdgeInsets.all(compact ? 12 : 16),
-        backgroundColor: background,
-        foregroundColor: tone,
-        disabledBackgroundColor: background.withValues(alpha: 0.55),
-        disabledForegroundColor: tone.withValues(alpha: 0.55),
-        elevation: 0,
-        tapTargetSize: MaterialTapTargetSize.padded,
-        alignment: Alignment.centerLeft,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-          side: BorderSide(color: borderColor, width: isSuggested ? 1.5 : 1),
+    // La largeur de bordure est constante : l'état suggéré ne déplace rien.
+    return Pressable(
+      enabled: enabled,
+      child: Semantics(
+        button: true,
+        enabled: enabled,
+        label: semanticsLabel,
+        excludeSemantics: true,
+        onTap: onPressed,
+        child: Material(
+          color: enabled
+              ? result.background
+              : result.background.withValues(alpha: 0.55),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(compact ? 16 : 20),
+            side: BorderSide(
+              color: isSuggested ? tone : Colors.transparent,
+              width: 1.5,
+            ),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 56),
+              child: Stack(
+                children: [
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 10 : 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          result.icon,
+                          size: 20,
+                          color: enabled ? tone : tone.withValues(alpha: 0.55),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                result.label,
+                                style: theme.textTheme.labelLarge?.copyWith(
+                                  color: textColor,
+                                ),
+                              ),
+                              Text(
+                                result.description,
+                                maxLines: largeText ? 3 : 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: textColor,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (isSuggested)
+                    Positioned(
+                      top: 4,
+                      right: 4,
+                      child: Icon(
+                        Icons.check_circle_rounded,
+                        size: 14,
+                        color: tone,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            result.label,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontSize: compact ? 15 : null,
-              color: tone,
-            ),
-          ),
-          SizedBox(height: compact ? 3 : 6),
-          Text(
-            result.description,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              fontSize: compact ? 11 : null,
-              color: tone,
-            ),
-          ),
-        ],
       ),
     );
   }
@@ -2600,6 +2697,13 @@ extension _ReviewResultColors on ReviewResult {
     ReviewResult.hard => AppColors.ratingHard,
     ReviewResult.good => AppColors.resultGood,
     ReviewResult.easy => AppColors.ratingEasy,
+  };
+
+  IconData get icon => switch (this) {
+    ReviewResult.again => Icons.refresh_rounded,
+    ReviewResult.hard => Icons.terrain_rounded,
+    ReviewResult.good => Icons.thumb_up_alt_rounded,
+    ReviewResult.easy => Icons.rocket_launch_rounded,
   };
 
   Color get background => switch (this) {
