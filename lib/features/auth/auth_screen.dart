@@ -7,6 +7,7 @@ import '../../theme/app_theme.dart';
 import '../../app/providers.dart';
 import '../../domain/services/auth_service.dart';
 import '../../widgets/ui.dart';
+import 'auth_widgets.dart';
 
 enum _AuthMode { signIn, signUp }
 
@@ -26,6 +27,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   _AuthMode _mode = _AuthMode.signIn;
   bool _busy = false;
   bool _obscurePassword = true;
+  String? _error;
 
   @override
   void dispose() {
@@ -40,20 +42,26 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   bool get _isSignUp => _mode == _AuthMode.signUp;
 
   void _toggleMode() {
-    setState(() => _mode = _isSignUp ? _AuthMode.signIn : _AuthMode.signUp);
+    setState(() {
+      _mode = _isSignUp ? _AuthMode.signIn : _AuthMode.signUp;
+      _error = null;
+    });
   }
 
   /// Runs an auth action with shared busy/error handling. Returns true on
   /// success. Navigation happens via the router's auth redirect.
   Future<bool> _run(Future<void> Function() action) async {
-    setState(() => _busy = true);
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       await action();
       return true;
     } on AuthException catch (error) {
-      _showMessage(error.message);
+      _showError(authErrorMessage(error));
     } catch (error) {
-      _showMessage('Une erreur est survenue. Réessaie.');
+      _showError(authErrorMessage(error));
     } finally {
       if (mounted) {
         setState(() => _busy = false);
@@ -105,6 +113,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   }
 
   Future<void> _submitEmailPassword() async {
+    if (_busy) return;
     if (!(_formKey.currentState?.validate() ?? false)) {
       return;
     }
@@ -133,6 +142,10 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     }
   }
 
+  void _showError(String message) {
+    if (mounted) setState(() => _error = message);
+  }
+
   void _showMessage(String message) {
     if (!mounted) {
       return;
@@ -149,150 +162,165 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AppScaffold(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Center(
         child: SingleChildScrollView(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Center(
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(26),
-                      child: Image.asset(
-                        'memflow.png',
-                        width: 96,
-                        height: 96,
-                        cacheWidth:
-                            (96 * MediaQuery.devicePixelRatioOf(context))
-                                .round(),
-                        fit: BoxFit.cover,
+            child: AutofillGroup(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Center(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(26),
+                        child: Image.asset(
+                          'memflow.png',
+                          width: 96,
+                          height: 96,
+                          cacheWidth:
+                              (96 * MediaQuery.devicePixelRatioOf(context))
+                                  .round(),
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'MemFlow',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.displaySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _isSignUp
-                        ? 'Crée ton compte pour synchroniser tes cartes.'
-                        : 'Connecte-toi pour retrouver tes cartes.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyLarge,
-                  ),
-                  const SizedBox(height: 32),
-                  Card(
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          if (_isSignUp) ...[
+                    const SizedBox(height: 20),
+                    Text(
+                      'MemFlow',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.displaySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      _isSignUp
+                          ? 'Crée ton compte pour synchroniser tes cartes.'
+                          : 'Connecte-toi pour retrouver tes cartes.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: 32),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_isSignUp) ...[
+                              TextFormField(
+                                controller: _nameController,
+                                enabled: !_busy,
+                                keyboardType: TextInputType.name,
+                                textInputAction: TextInputAction.next,
+                                textCapitalization: TextCapitalization.words,
+                                autofillHints: const [AutofillHints.name],
+                                decoration: const InputDecoration(
+                                  labelText: 'Nom',
+                                  prefixIcon: Icon(
+                                    Icons.person_outline_rounded,
+                                  ),
+                                ),
+                                validator: (value) =>
+                                    (value ?? '').trim().isNotEmpty
+                                    ? null
+                                    : 'Saisis un nom',
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                             TextFormField(
-                              controller: _nameController,
+                              controller: _emailController,
                               enabled: !_busy,
-                              textCapitalization: TextCapitalization.words,
-                              autofillHints: const [AutofillHints.name],
+                              keyboardType: TextInputType.emailAddress,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.email],
                               decoration: const InputDecoration(
-                                labelText: 'Nom',
-                                prefixIcon: Icon(Icons.person_outline_rounded),
+                                labelText: 'Email',
+                                prefixIcon: Icon(Icons.mail_outline_rounded),
                               ),
                               validator: (value) =>
-                                  (value ?? '').trim().isNotEmpty
+                                  _isValidEmail((value ?? '').trim())
                                   ? null
-                                  : 'Saisis un nom',
+                                  : 'Email invalide',
                             ),
                             const SizedBox(height: 16),
-                          ],
-                          TextFormField(
-                            controller: _emailController,
-                            enabled: !_busy,
-                            keyboardType: TextInputType.emailAddress,
-                            autofillHints: const [AutofillHints.email],
-                            decoration: const InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: Icon(Icons.mail_outline_rounded),
-                            ),
-                            validator: (value) =>
-                                _isValidEmail((value ?? '').trim())
-                                ? null
-                                : 'Email invalide',
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _passwordController,
-                            enabled: !_busy,
-                            obscureText: _obscurePassword,
-                            autofillHints: const [AutofillHints.password],
-                            decoration: InputDecoration(
-                              labelText: 'Mot de passe',
-                              prefixIcon: const Icon(
-                                Icons.lock_outline_rounded,
-                              ),
-                              suffixIcon: IconButton(
-                                onPressed: () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
+                            TextFormField(
+                              controller: _passwordController,
+                              enabled: !_busy,
+                              obscureText: _obscurePassword,
+                              keyboardType: TextInputType.visiblePassword,
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _submitEmailPassword(),
+                              autofillHints: [
+                                _isSignUp
+                                    ? AutofillHints.newPassword
+                                    : AutofillHints.password,
+                              ],
+                              decoration: InputDecoration(
+                                labelText: 'Mot de passe',
+                                prefixIcon: const Icon(
+                                  Icons.lock_outline_rounded,
                                 ),
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                ),
-                                tooltip: _obscurePassword
-                                    ? 'Afficher le mot de passe'
-                                    : 'Masquer le mot de passe',
-                              ),
-                            ),
-                            validator: (value) => (value ?? '').length >= 6
-                                ? null
-                                : '6 caractères minimum',
-                          ),
-                          const SizedBox(height: 24),
-                          FilledButton(
-                            onPressed: _busy ? null : _submitEmailPassword,
-                            child: _busy
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : Text(
-                                    _isSignUp
-                                        ? 'Créer le compte'
-                                        : 'Se connecter',
+                                suffixIcon: IconButton(
+                                  onPressed: () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
                                   ),
-                          ),
-                        ],
+                                  icon: Icon(
+                                    _obscurePassword
+                                        ? Icons.visibility_outlined
+                                        : Icons.visibility_off_outlined,
+                                  ),
+                                  tooltip: _obscurePassword
+                                      ? 'Afficher le mot de passe'
+                                      : 'Masquer le mot de passe',
+                                ),
+                              ),
+                              validator: (value) => (value ?? '').length >= 6
+                                  ? null
+                                  : '6 caractères minimum',
+                            ),
+                            if (_error != null) ...[
+                              const SizedBox(height: AppSpacing.lg),
+                              AuthErrorText(_error!),
+                            ],
+                            const SizedBox(height: AppSpacing.xl),
+                            Pressable(
+                              enabled: !_busy,
+                              child: FilledButton(
+                                onPressed: _busy ? null : _submitEmailPassword,
+                                child: _busy
+                                    ? const ButtonSpinner()
+                                    : Text(
+                                        _isSignUp
+                                            ? 'Créer le compte'
+                                            : 'Se connecter',
+                                      ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextButton(
-                    onPressed: _busy ? null : _toggleMode,
-                    child: Text(
-                      _isSignUp
-                          ? 'Déjà un compte ? Se connecter'
-                          : 'Pas de compte ? En créer un',
-                    ),
-                  ),
-                  if (!_isSignUp)
+                    const SizedBox(height: 16),
                     TextButton(
-                      onPressed: _busy ? null : _forgotPassword,
-                      child: const Text('Mot de passe oublié ?'),
+                      onPressed: _busy ? null : _toggleMode,
+                      child: Text(
+                        _isSignUp
+                            ? 'Déjà un compte ? Se connecter'
+                            : 'Pas de compte ? En créer un',
+                      ),
                     ),
-                ],
+                    if (!_isSignUp)
+                      TextButton(
+                        onPressed: _busy ? null : _forgotPassword,
+                        child: const Text('Mot de passe oublié ?'),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),

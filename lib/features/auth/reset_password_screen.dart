@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../app/providers.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
+import 'auth_widgets.dart';
 
 class ResetPasswordScreen extends ConsumerStatefulWidget {
   const ResetPasswordScreen({super.key});
@@ -22,6 +24,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   bool _busy = false;
   bool _obscurePassword = true;
   bool _obscureConfirm = true;
+  String? _error;
 
   @override
   void dispose() {
@@ -31,8 +34,11 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   }
 
   Future<void> _submit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    setState(() => _busy = true);
+    if (_busy || !(_formKey.currentState?.validate() ?? false)) return;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
     try {
       final authService = ref.read(authServiceProvider);
       await authService.updatePassword(_passwordController.text);
@@ -43,124 +49,135 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
         context.go('/');
       }
     } on AuthException catch (e) {
-      _showMessage(e.message);
-    } catch (_) {
-      _showMessage('Une erreur est survenue. Réessaie.');
+      _showError(authErrorMessage(e));
+    } catch (e) {
+      _showError(authErrorMessage(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
 
-  void _showMessage(String message) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(SnackBar(content: Text(message)));
+  void _showError(String message) {
+    if (mounted) setState(() => _error = message);
+  }
+
+  Widget _visibilityButton(bool obscured, VoidCallback onToggle) {
+    return IconButton(
+      onPressed: onToggle,
+      icon: Icon(
+        obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+      ),
+      tooltip: obscured
+          ? 'Afficher le mot de passe'
+          : 'Masquer le mot de passe',
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return AppScaffold(
-      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+      padding: const EdgeInsets.all(AppSpacing.xl),
       child: Center(
         child: SingleChildScrollView(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 440),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Nouveau mot de passe',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.displaySmall,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Choisis un nouveau mot de passe pour ton compte.',
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyLarge,
-                  ),
-                  const SizedBox(height: 32),
-                  Card(
-                    margin: EdgeInsets.zero,
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          TextFormField(
-                            controller: _passwordController,
-                            enabled: !_busy,
-                            obscureText: _obscurePassword,
-                            decoration: InputDecoration(
-                              labelText: 'Nouveau mot de passe',
-                              prefixIcon: const Icon(
-                                Icons.lock_outline_rounded,
+            child: AutofillGroup(
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'Nouveau mot de passe',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.displaySmall,
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    Text(
+                      'Choisis un nouveau mot de passe pour ton compte.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyLarge,
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    Card(
+                      margin: EdgeInsets.zero,
+                      child: Padding(
+                        padding: const EdgeInsets.all(AppSpacing.xl),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            TextFormField(
+                              controller: _passwordController,
+                              enabled: !_busy,
+                              obscureText: _obscurePassword,
+                              keyboardType: TextInputType.visiblePassword,
+                              textInputAction: TextInputAction.next,
+                              autofillHints: const [AutofillHints.newPassword],
+                              decoration: InputDecoration(
+                                labelText: 'Nouveau mot de passe',
+                                prefixIcon: const Icon(
+                                  Icons.lock_outline_rounded,
+                                ),
+                                suffixIcon: _visibilityButton(
+                                  _obscurePassword,
+                                  () => setState(
+                                    () => _obscurePassword = !_obscurePassword,
+                                  ),
+                                ),
                               ),
-                              suffixIcon: IconButton(
-                                onPressed: () => setState(
-                                  () => _obscurePassword = !_obscurePassword,
+                              validator: (value) => (value ?? '').length >= 6
+                                  ? null
+                                  : '6 caractères minimum',
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            TextFormField(
+                              controller: _confirmController,
+                              enabled: !_busy,
+                              obscureText: _obscureConfirm,
+                              keyboardType: TextInputType.visiblePassword,
+                              textInputAction: TextInputAction.done,
+                              onFieldSubmitted: (_) => _submit(),
+                              autofillHints: const [AutofillHints.newPassword],
+                              decoration: InputDecoration(
+                                labelText: 'Confirmer le mot de passe',
+                                prefixIcon: const Icon(
+                                  Icons.lock_outline_rounded,
                                 ),
-                                icon: Icon(
-                                  _obscurePassword
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
+                                suffixIcon: _visibilityButton(
+                                  _obscureConfirm,
+                                  () => setState(
+                                    () => _obscureConfirm = !_obscureConfirm,
+                                  ),
                                 ),
+                              ),
+                              validator: (value) =>
+                                  value == _passwordController.text
+                                  ? null
+                                  : 'Les mots de passe ne correspondent pas',
+                            ),
+                            if (_error != null) ...[
+                              const SizedBox(height: AppSpacing.lg),
+                              AuthErrorText(_error!),
+                            ],
+                            const SizedBox(height: AppSpacing.xl),
+                            Pressable(
+                              enabled: !_busy,
+                              child: FilledButton(
+                                onPressed: _busy ? null : _submit,
+                                child: _busy
+                                    ? const ButtonSpinner()
+                                    : const Text('Enregistrer'),
                               ),
                             ),
-                            validator: (value) => (value ?? '').length >= 6
-                                ? null
-                                : '6 caractères minimum',
-                          ),
-                          const SizedBox(height: 16),
-                          TextFormField(
-                            controller: _confirmController,
-                            enabled: !_busy,
-                            obscureText: _obscureConfirm,
-                            decoration: InputDecoration(
-                              labelText: 'Confirmer le mot de passe',
-                              prefixIcon: const Icon(
-                                Icons.lock_outline_rounded,
-                              ),
-                              suffixIcon: IconButton(
-                                onPressed: () => setState(
-                                  () => _obscureConfirm = !_obscureConfirm,
-                                ),
-                                icon: Icon(
-                                  _obscureConfirm
-                                      ? Icons.visibility_outlined
-                                      : Icons.visibility_off_outlined,
-                                ),
-                              ),
-                            ),
-                            validator: (value) =>
-                                value == _passwordController.text
-                                ? null
-                                : 'Les mots de passe ne correspondent pas',
-                          ),
-                          const SizedBox(height: 24),
-                          FilledButton(
-                            onPressed: _busy ? null : _submit,
-                            child: _busy
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Text('Enregistrer'),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

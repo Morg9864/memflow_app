@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../../app/app_version.dart';
+import '../../theme/app_theme.dart';
+import '../../widgets/ui.dart';
 
 /// The legal documents shown from the profile screen. Bodies are placeholders
 /// to be replaced with the final, reviewed legal text.
@@ -37,39 +39,64 @@ class LegalDocumentScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // Deep-linked: nothing to pop, so the AppBar would show no back button.
+    final canPop = Navigator.of(context).canPop();
     return Scaffold(
-      appBar: AppBar(title: Text(document.title)),
+      appBar: AppBar(
+        title: Text(document.title),
+        leading: canPop
+            ? null
+            : IconButton(
+                tooltip: 'Retour',
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => popOrGo(context, '/profile'),
+              ),
+      ),
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 720),
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(24, 16, 24, 32),
-              children: [
-                Text(
-                  'Dernière mise à jour : 30 mai 2026',
-                  style: theme.textTheme.labelMedium,
+            constraints: const BoxConstraints(maxWidth: 680),
+            child: SelectionArea(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.xl,
+                  AppSpacing.lg,
+                  AppSpacing.xl,
+                  AppSpacing.xxl,
                 ),
-                const SizedBox(height: 16),
-                ..._sectionsFor(document).map(
-                  (section) => Padding(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(section.$1, style: theme.textTheme.titleMedium),
-                        const SizedBox(height: 8),
-                        Text(
-                          section.$2,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
+                children: [
+                  Text(
+                    'Dernière mise à jour : 30 mai 2026',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.xl),
+                  for (final section in _sectionsFor(document))
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.xl),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Semantics(
+                            header: true,
+                            child: Text(
+                              section.$1,
+                              style: theme.textTheme.titleMedium,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            section.$2,
+                            style: theme.textTheme.bodyLarge?.copyWith(
+                              height: 1.6,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
