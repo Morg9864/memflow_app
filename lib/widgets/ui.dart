@@ -10,13 +10,11 @@ class AppScaffold extends StatelessWidget {
   const AppScaffold({
     super.key,
     required this.child,
-    this.bottomNavigation,
     this.floatingActionButton,
     this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 24),
   });
 
   final Widget child;
-  final Widget? bottomNavigation;
   final Widget? floatingActionButton;
   final EdgeInsets padding;
 
@@ -24,7 +22,6 @@ class AppScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       floatingActionButton: floatingActionButton,
-      bottomNavigationBar: bottomNavigation,
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
@@ -93,49 +90,52 @@ class SyncNowButton extends ConsumerWidget {
   }
 }
 
+/// Retour d'un écran: revient en arrière s'il y a un historique, sinon va à
+/// [fallback] (ouverture directe par URL).
+void popOrGo(BuildContext context, String fallback) =>
+    context.canPop() ? context.pop() : context.go(fallback);
+
 class AppBottomNav extends StatelessWidget {
-  const AppBottomNav({super.key, required this.location});
+  const AppBottomNav({super.key, required this.navigationShell});
 
-  final String location;
-
-  int get _currentIndex {
-    if (location.startsWith('/stats')) return 1;
-    if (location.startsWith('/import')) return 2;
-    if (location.startsWith('/profile')) return 3;
-    return 0;
-  }
+  final StatefulNavigationShell navigationShell;
 
   @override
   Widget build(BuildContext context) {
-    return NavigationBar(
-      selectedIndex: _currentIndex,
-      onDestinationSelected: (index) {
-        switch (index) {
-          case 0:
-            context.go('/');
-          case 1:
-            context.go('/stats');
-          case 2:
-            context.go('/import');
-          case 3:
-            context.go('/profile');
-        }
-      },
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.home_rounded), label: 'Accueil'),
-        NavigationDestination(
-          icon: Icon(Icons.insights_rounded),
-          label: 'Stats',
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: Theme.of(context).colorScheme.outline),
         ),
-        NavigationDestination(
-          icon: Icon(Icons.upload_file_rounded),
-          label: 'Importer',
+      ),
+      child: NavigationBar(
+        selectedIndex: navigationShell.currentIndex,
+        onDestinationSelected: (index) => navigationShell.goBranch(
+          index,
+          initialLocation: index == navigationShell.currentIndex,
         ),
-        NavigationDestination(
-          icon: Icon(Icons.person_rounded),
-          label: 'Profil',
-        ),
-      ],
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.home_outlined),
+            selectedIcon: Icon(Icons.home_rounded),
+            label: 'Accueil',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.insights_rounded),
+            label: 'Stats',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.upload_file_outlined),
+            selectedIcon: Icon(Icons.upload_file_rounded),
+            label: 'Importer',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded),
+            label: 'Profil',
+          ),
+        ],
+      ),
     );
   }
 }
@@ -183,12 +183,7 @@ class StatCard extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          value,
-          style: theme.textTheme.titleLarge?.copyWith(
-            fontFeatures: AppTheme.tabularFigures,
-          ),
-        ),
+        Text(value, style: theme.textTheme.titleLarge?.copyWith()),
         SizedBox(height: compact ? 2 : AppSpacing.xs),
         Text(
           label,

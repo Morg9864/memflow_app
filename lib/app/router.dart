@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,6 +20,7 @@ import '../features/stats/stats_screen.dart';
 import '../features/study/session_summary_screen.dart';
 import '../features/study/study_screen.dart';
 import '../domain/models/models.dart';
+import '../widgets/ui.dart';
 import 'providers.dart';
 
 /// Bridges a [Stream] to a [Listenable] so go_router re-evaluates [redirect]
@@ -83,27 +84,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      // Hors coque: pas de barre de navigation.
       GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
       GoRoute(
         path: '/reset-password',
         builder: (context, state) => const ResetPasswordScreen(),
-      ),
-      GoRoute(path: '/', builder: (context, state) => const HomeScreen()),
-      GoRoute(
-        path: '/collection/:collectionId',
-        builder: (context, state) => CollectionDetailScreen(
-          collectionId: state.pathParameters['collectionId']!,
-        ),
-        routes: [
-          GoRoute(
-            name: 'collection-due-cards',
-            path: 'due-cards',
-            builder: (context, state) => CollectionDueCardsScreen(
-              collectionId: state.pathParameters['collectionId']!,
-              collectionName: state.uri.queryParameters['name'] ?? 'Collection',
-            ),
-          ),
-        ],
       ),
       GoRoute(
         path: '/study',
@@ -129,39 +114,102 @@ final routerProvider = Provider<GoRouter>((ref) {
             StudyScreen(deckId: state.pathParameters['deckId']),
       ),
       GoRoute(
-        path: '/stats',
-        builder: (context, state) => const StatisticsScreen(),
-      ),
-      GoRoute(
-        path: '/import',
-        builder: (context, state) => const ImportScreen(),
-      ),
-      GoRoute(
-        path: '/profile',
-        builder: (context, state) => const ProfileScreen(),
-      ),
-      GoRoute(
-        path: '/settings',
-        builder: (context, state) => const SettingsScreen(),
-      ),
-      GoRoute(
-        path: '/deck/:deckId/cards',
-        builder: (context, state) => DeckCardsScreen(
-          deckId: state.pathParameters['deckId']!,
-          deckName: state.uri.queryParameters['name'] ?? 'Deck',
-        ),
-      ),
-      GoRoute(
-        path: '/legal/:doc',
-        builder: (context, state) => LegalDocumentScreen(
-          document: LegalDocument.fromSlug(state.pathParameters['doc']!),
-        ),
-      ),
-      GoRoute(
         path: '/session-summary',
         builder: (context, state) =>
             SessionSummaryScreen(summary: state.extra! as SessionSummary),
       ),
+      // Coque à quatre onglets: l'état de chaque onglet est conservé.
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) =>
+            TabShell(navigationShell: navigationShell),
+        branches: [
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/',
+                builder: (context, state) => const HomeScreen(),
+                routes: [
+                  GoRoute(
+                    path: 'collection/:collectionId',
+                    builder: (context, state) => CollectionDetailScreen(
+                      collectionId: state.pathParameters['collectionId']!,
+                    ),
+                    routes: [
+                      GoRoute(
+                        name: 'collection-due-cards',
+                        path: 'due-cards',
+                        builder: (context, state) => CollectionDueCardsScreen(
+                          collectionId: state.pathParameters['collectionId']!,
+                          collectionName:
+                              state.uri.queryParameters['name'] ?? 'Collection',
+                        ),
+                      ),
+                    ],
+                  ),
+                  GoRoute(
+                    path: 'deck/:deckId/cards',
+                    builder: (context, state) => DeckCardsScreen(
+                      deckId: state.pathParameters['deckId']!,
+                      deckName: state.uri.queryParameters['name'] ?? 'Deck',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/stats',
+                builder: (context, state) => const StatisticsScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/import',
+                builder: (context, state) => const ImportScreen(),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/profile',
+                builder: (context, state) => const ProfileScreen(),
+              ),
+              GoRoute(
+                path: '/settings',
+                builder: (context, state) => const SettingsScreen(),
+              ),
+              GoRoute(
+                path: '/legal/:doc',
+                builder: (context, state) => LegalDocumentScreen(
+                  document: LegalDocument.fromSlug(
+                    state.pathParameters['doc']!,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     ],
   );
 });
+
+/// Hôte des quatre onglets: possède la barre de navigation.
+class TabShell extends StatelessWidget {
+  const TabShell({super.key, required this.navigationShell});
+
+  final StatefulNavigationShell navigationShell;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: navigationShell,
+      bottomNavigationBar: AppBottomNav(navigationShell: navigationShell),
+    );
+  }
+}

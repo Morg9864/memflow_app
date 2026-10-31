@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
@@ -150,7 +149,9 @@ class _CollectionDueCardsScreenState
           Row(
             children: [
               IconButton(
-                onPressed: () => context.pop(),
+                onPressed: () =>
+                    popOrGo(context, '/collection/${widget.collectionId}'),
+                tooltip: 'Retour',
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
               const Spacer(),

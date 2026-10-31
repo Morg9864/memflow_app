@@ -153,9 +153,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final displayName = ref.watch(displayNameProvider);
     final dailyGoal = ref.watch(dailyGoalProvider);
     return AppScaffold(
-      bottomNavigation: AppBottomNav(
-        location: GoRouterState.of(context).uri.path,
-      ),
       child: ListView(
         children: [
           Text('Profil', style: Theme.of(context).textTheme.displaySmall),

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../theme/app_theme.dart';
 import '../../app/providers.dart';
@@ -86,7 +85,8 @@ class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
           Row(
             children: [
               IconButton(
-                onPressed: () => context.pop(),
+                onPressed: () => popOrGo(context, '/'),
+                tooltip: 'Retour',
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
               const Spacer(),

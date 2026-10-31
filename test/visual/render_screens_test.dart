@@ -31,6 +31,7 @@ import 'package:memflow/features/study/session_summary_screen.dart';
 import 'package:memflow/features/study/study_controller.dart';
 import 'package:memflow/features/study/study_screen.dart';
 import 'package:memflow/app/providers.dart';
+import 'package:memflow/app/router.dart' show TabShell;
 import 'package:memflow/data/sync/sync_service.dart';
 import 'package:memflow/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -276,12 +277,14 @@ class _State {
     this.overrides,
     this.interact,
     this.route = '/',
+    this.shell = false,
   });
   final String name;
   final Widget Function() screen;
   final _Overrides? overrides;
   final _Interact? interact;
   final String route;
+  final bool shell; // wrap in the real TabShell (nav bar, Home selected)
 }
 
 const _viewports = <(String, Size, double)>[
@@ -368,6 +371,12 @@ List<_State> _states() => [
   _State(
     'home_data',
     () => const HomeScreen(),
+    overrides: () => _homeOverrides(_homeStats, _collections),
+  ),
+  _State(
+    'tab_shell',
+    () => const HomeScreen(),
+    shell: true,
     overrides: () => _homeOverrides(_homeStats, _collections),
   ),
   _State(
@@ -570,7 +579,28 @@ void main() {
         final router = GoRouter(
           initialLocation: state.route,
           routes: [
-            GoRoute(path: state.route, builder: (_, _) => state.screen()),
+            if (state.shell)
+              StatefulShellRoute.indexedStack(
+                builder: (_, _, shell) => TabShell(navigationShell: shell),
+                branches: [
+                  StatefulShellBranch(
+                    routes: [
+                      GoRoute(path: '/', builder: (_, _) => state.screen()),
+                    ],
+                  ),
+                  for (final path in ['/stats', '/import', '/profile'])
+                    StatefulShellBranch(
+                      routes: [
+                        GoRoute(
+                          path: path,
+                          builder: (_, _) => const SizedBox(),
+                        ),
+                      ],
+                    ),
+                ],
+              )
+            else
+              GoRoute(path: state.route, builder: (_, _) => state.screen()),
           ],
           errorBuilder: (_, _) => const SizedBox(),
         );

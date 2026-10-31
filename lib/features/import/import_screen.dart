@@ -164,9 +164,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   @override
   Widget build(BuildContext context) {
     return AppScaffold(
-      bottomNavigation: AppBottomNav(
-        location: GoRouterState.of(context).uri.path,
-      ),
       child: ListView(
         children: [
           Row(

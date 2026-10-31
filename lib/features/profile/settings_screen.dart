@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../theme/app_theme.dart';
 import '../../app/session_card_limit_controller.dart';
@@ -27,7 +26,8 @@ class SettingsScreen extends ConsumerWidget {
           Row(
             children: [
               IconButton(
-                onPressed: () => context.pop(),
+                onPressed: () => popOrGo(context, '/profile'),
+                tooltip: 'Retour',
                 icon: const Icon(Icons.arrow_back_rounded),
               ),
               const SizedBox(width: 8),

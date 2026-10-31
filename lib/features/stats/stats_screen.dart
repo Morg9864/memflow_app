@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
@@ -43,9 +42,6 @@ class StatisticsScreen extends ConsumerWidget {
     final stats = ref.watch(statisticsOverviewProvider);
 
     return AppScaffold(
-      bottomNavigation: AppBottomNav(
-        location: GoRouterState.of(context).uri.path,
-      ),
       child: stats.when(
         data: (data) => SyncRefreshIndicator(
           child: ListView(

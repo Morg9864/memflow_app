@@ -31,10 +31,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final stats = ref.watch(homeStatsProvider);
     final collections = ref.watch(homeCollectionsProvider(_search));
     final displayName = ref.watch(displayNameProvider);
-    final location = GoRouterState.of(context).uri.path;
 
     return AppScaffold(
-      bottomNavigation: AppBottomNav(location: location),
       child: SyncRefreshIndicator(
         child: ListView(
           children: [
@@ -64,7 +62,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 const Spacer(),
                 IconButton.filledTonal(
                   tooltip: 'Voir les statistiques',
-                  onPressed: () => context.push('/stats'),
+                  onPressed: () => context.go('/stats'),
                   icon: const Icon(Icons.notifications_none_rounded),
                 ),
                 const SizedBox(width: 8),
@@ -179,7 +177,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 const SectionLabel('Collections'),
                 const Spacer(),
                 TextButton(
-                  onPressed: () => context.push('/import'),
+                  onPressed: () => context.go('/import'),
                   child: const Text('Importer CSV'),
                 ),
               ],

@@ -317,7 +317,8 @@ class _CollectionDetailScreenState
               Row(
                 children: [
                   IconButton(
-                    onPressed: () => context.pop(),
+                    onPressed: () => popOrGo(context, '/'),
+                    tooltip: 'Retour',
                     icon: const Icon(Icons.arrow_back_rounded),
                   ),
                   const Spacer(),
@@ -552,7 +553,7 @@ class _CollectionDetailScreenState
                       ],
                       FilledButton.tonalIcon(
                         style: AppTheme.secondaryAction,
-                        onPressed: () => context.push('/import'),
+                        onPressed: () => context.go('/import'),
                         icon: const Icon(Icons.upload_file_rounded),
                         label: const Text('Importer un CSV'),
                       ),
