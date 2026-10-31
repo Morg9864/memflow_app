@@ -292,7 +292,6 @@ class _CollectionDetailScreenState
   Widget build(BuildContext context) {
     final collection = ref.watch(collectionProvider(widget.collectionId));
     final decks = ref.watch(collectionDecksProvider(widget.collectionId));
-    final deckCount = decks.asData?.value.length;
     final currentCollection = collection.asData?.value;
 
     return AppScaffold(
@@ -306,273 +305,181 @@ class _CollectionDetailScreenState
       child: collection.when(
         data: (item) {
           if (item == null) {
-            return const EmptyState(
-              title: 'Collection introuvable',
-              message:
-                  "Cette collection n'existe pas ou n'est plus disponible.",
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const _BackBar(),
+                Expanded(
+                  child: EmptyState(
+                    title: 'Collection introuvable',
+                    message:
+                        "Cette collection n'existe pas ou n'est plus disponible.",
+                    action: FilledButton.tonal(
+                      style: AppTheme.secondaryAction,
+                      onPressed: () => popOrGo(context, '/'),
+                      child: const Text("Retour à l'accueil"),
+                    ),
+                  ),
+                ),
+              ],
             );
           }
-          return ListView(
-            children: [
-              Row(
-                children: [
-                  IconButton(
-                    onPressed: () => popOrGo(context, '/'),
-                    tooltip: 'Retour',
-                    icon: const Icon(Icons.arrow_back_rounded),
-                  ),
-                  const Spacer(),
-                  const SyncNowButton(),
-                  PopupMenuButton<_CollectionAction>(
-                    enabled: !_busy,
-                    icon: const Icon(Icons.more_vert_rounded),
-                    onSelected: (action) {
-                      switch (action) {
-                        case _CollectionAction.toggleDisabled:
-                          _toggleCollectionDisabled(item);
-                        case _CollectionAction.delete:
-                          _deleteCollection(item);
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      PopupMenuItem(
-                        value: _CollectionAction.toggleDisabled,
-                        child: Row(
-                          children: [
-                            Icon(
-                              item.isDisabled
-                                  ? Icons.visibility_rounded
-                                  : Icons.visibility_off_rounded,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                item.isDisabled
-                                    ? 'Réactiver la collection'
-                                    : 'Désactiver la collection',
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _CollectionAction.delete,
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.delete_outline_rounded,
-                              color: Theme.of(context).colorScheme.error,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Supprimer la collection',
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Tooltip(
-                  message: "Changer l'icône",
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      key: const ValueKey('collection-icon'),
-                      onTap: _busy ? null : () => _chooseCollectionIcon(item),
-                      borderRadius: BorderRadius.circular(22),
-                      child: Ink(
-                        width: 64,
-                        height: 64,
-                        decoration: BoxDecoration(
-                          color: Color(item.color).withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(22),
-                        ),
-                        child: Center(
-                          child: Text(
-                            item.icon,
-                            style: const TextStyle(fontSize: 30),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      item.name,
-                      style: Theme.of(context).textTheme.displaySmall,
-                    ),
-                  ),
-                  if (item.isDisabled) ...[
-                    const SizedBox(width: 12),
-                    Chip(
-                      avatar: const Icon(
-                        Icons.visibility_off_rounded,
-                        size: 18,
-                      ),
-                      label: const Text('Désactivée'),
-                    ),
-                  ],
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                item.description,
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
-              const SizedBox(height: 22),
-              Row(
-                children: [
-                  Expanded(
-                    child: StatCard(
-                      value: '${item.totalCards}',
-                      label: 'cartes',
-                      icon: Icons.style_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: StatCard(
-                      value: '${item.cardsDone}',
-                      label: 'faites',
-                      icon: Icons.check_circle_outline_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: StatCard(
-                      value: '${item.dueCards}',
-                      label: 'à revoir',
-                      icon: Icons.schedule_rounded,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              FilledButton.tonalIcon(
-                style: AppTheme.secondaryAction,
-                onPressed: item.isDisabled
-                    ? null
-                    : () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => CollectionDueCardsScreen(
-                            collectionId: widget.collectionId,
-                            collectionName: item.name,
-                          ),
-                        ),
-                      ),
-                icon: const Icon(Icons.schedule_rounded),
-                label: const Text('Voir les échéances'),
-              ),
-              const SizedBox(height: 24),
-              Row(
-                children: [
-                  const SectionLabel('Decks'),
-                  const Spacer(),
-                  if (deckCount != null) Text('$deckCount decks'),
-                  const SizedBox(width: 8),
-                  PopupMenuButton<(_DeckSortField, _SortDirection)>(
-                    tooltip: 'Trier les decks',
-                    icon: const Icon(Icons.sort_rounded),
-                    onSelected: (sort) => _setDeckSort(sort.$1, sort.$2),
-                    itemBuilder: (_) => [
-                      _deckSortMenuItem(
-                        context,
-                        field: _DeckSortField.importOrder,
-                        direction: _SortDirection.ascending,
-                        label: 'Importation croissant',
-                        icon: Icons.south_rounded,
-                      ),
-                      _deckSortMenuItem(
-                        context,
-                        field: _DeckSortField.importOrder,
-                        direction: _SortDirection.descending,
-                        label: 'Importation décroissant',
-                        icon: Icons.north_rounded,
-                      ),
-                      _deckSortMenuItem(
-                        context,
-                        field: _DeckSortField.name,
-                        direction: _SortDirection.ascending,
-                        label: 'Alphabet croissant',
-                        icon: Icons.sort_by_alpha_rounded,
-                      ),
-                      _deckSortMenuItem(
-                        context,
-                        field: _DeckSortField.name,
-                        direction: _SortDirection.descending,
-                        label: 'Alphabet décroissant',
-                        icon: Icons.sort_by_alpha_rounded,
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              decks.when(
-                data: (deckItems) {
-                  final activeDecks = _sortedDecks(
-                    deckItems.where((deck) => !deck.isDisabled).toList(),
-                  );
-                  final disabledDecks = _sortedDecks(
-                    deckItems.where((deck) => deck.isDisabled).toList(),
-                  );
-                  return Column(
-                    children: [
-                      for (final deck in activeDecks) ...[
-                        _buildDeckCard(item, deck),
-                        const SizedBox(height: 12),
-                      ],
-                      if (disabledDecks.isNotEmpty) ...[
-                        if (activeDecks.isNotEmpty) const SizedBox(height: 12),
-                        const Align(
-                          alignment: Alignment.centerLeft,
-                          child: SectionLabel('Désactivé(s)'),
-                        ),
-                        const SizedBox(height: 12),
-                        for (final deck in disabledDecks) ...[
-                          _buildDeckCard(item, deck),
-                          const SizedBox(height: 12),
-                        ],
-                      ],
-                      FilledButton.tonalIcon(
-                        style: AppTheme.secondaryAction,
-                        onPressed: () => context.go('/import'),
-                        icon: const Icon(Icons.upload_file_rounded),
-                        label: const Text('Importer un CSV'),
-                      ),
-                      const SizedBox(height: 80),
-                    ],
-                  );
+          final children = <Widget>[
+            _BackBar(
+              menu: PopupMenuButton<_CollectionAction>(
+                tooltip: 'Options de la collection',
+                enabled: !_busy,
+                icon: const Icon(Icons.more_vert_rounded),
+                onSelected: (action) {
+                  switch (action) {
+                    case _CollectionAction.toggleDisabled:
+                      _toggleCollectionDisabled(item);
+                    case _CollectionAction.delete:
+                      _deleteCollection(item);
+                  }
                 },
-                loading: () => const Padding(
-                  padding: EdgeInsets.all(24),
-                  child: Center(child: CircularProgressIndicator()),
-                ),
-                error: (error, stackTrace) => Text(error.toString()),
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    value: _CollectionAction.toggleDisabled,
+                    child: _MenuRow(
+                      icon: item.isDisabled
+                          ? Icons.visibility_rounded
+                          : Icons.visibility_off_rounded,
+                      label: item.isDisabled
+                          ? 'Réactiver la collection'
+                          : 'Désactiver la collection',
+                    ),
+                  ),
+                  const PopupMenuItem(
+                    value: _CollectionAction.delete,
+                    child: _MenuRow(
+                      icon: Icons.delete_outline_rounded,
+                      label: 'Supprimer la collection',
+                      destructive: true,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
+            _Identity(
+              collection: item,
+              onChangeIcon: _busy ? null : () => _chooseCollectionIcon(item),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: _CollectionStats(collection: item),
+            ),
+            FilledButton.tonalIcon(
+              style: AppTheme.secondaryAction,
+              onPressed: item.isDisabled
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => CollectionDueCardsScreen(
+                          collectionId: widget.collectionId,
+                          collectionName: item.name,
+                        ),
+                      ),
+                    ),
+              icon: const Icon(Icons.schedule_rounded),
+              label: const Text('Voir les échéances'),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(
+                top: AppSpacing.md,
+                bottom: AppSpacing.xs,
+              ),
+              child: _DecksHeader(
+                deckCount: decks.asData?.value.length,
+                field: _deckSortField,
+                direction: _deckSortDirection,
+                onSort: _setDeckSort,
+              ),
+            ),
+            ..._deckEntries(item, decks),
+          ];
+          return ListView.builder(
+            // Le FAB flottant ne doit jamais couvrir la dernière ligne.
+            padding: const EdgeInsets.only(bottom: 96),
+            itemCount: children.length,
+            itemBuilder: (context, index) => children[index],
           );
         },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Text(error.toString()),
+        loading: () => const _DetailSkeleton(),
+        error: (error, stackTrace) => Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const _BackBar(),
+            Expanded(
+              child: AppErrorState(
+                onRetry: () =>
+                    ref.invalidate(collectionProvider(widget.collectionId)),
+              ),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+
+  List<Widget> _deckEntries(
+    CollectionListItem item,
+    AsyncValue<List<DeckListItem>> decks,
+  ) {
+    return decks.when(
+      data: (deckItems) {
+        if (deckItems.isEmpty) {
+          return const [
+            EmptyState(
+              title: 'Aucun deck',
+              message: 'Importe un fichier CSV pour ajouter des decks.',
+              action: _ImportButton(),
+            ),
+          ];
+        }
+        final activeDecks = _sortedDecks(
+          deckItems.where((deck) => !deck.isDisabled).toList(),
+        );
+        final disabledDecks = _sortedDecks(
+          deckItems.where((deck) => deck.isDisabled).toList(),
+        );
+        Widget card(DeckListItem deck) => Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: _buildDeckCard(item, deck),
+        );
+        // ponytail: bloc unique (non lazy) comme avant; les tests existants
+        // supposent tous les decks construits. SliverList.builder par deck si
+        // les collections dépassent quelques centaines de decks.
+        return [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final deck in activeDecks) card(deck),
+              if (disabledDecks.isNotEmpty) ...[
+                const Padding(
+                  padding: EdgeInsets.only(
+                    top: AppSpacing.md,
+                    bottom: AppSpacing.md,
+                  ),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: SectionLabel('Désactivé(s)'),
+                  ),
+                ),
+                for (final deck in disabledDecks) card(deck),
+              ],
+              const _ImportButton(),
+            ],
+          ),
+        ];
+      },
+      loading: () => const [_DeckSkeletons()],
+      error: (error, stackTrace) => [
+        AppErrorState(
+          onRetry: () =>
+              ref.invalidate(collectionDecksProvider(widget.collectionId)),
+        ),
+      ],
     );
   }
 
@@ -587,24 +494,229 @@ class _CollectionDetailScreenState
       ),
     );
   }
+}
 
-  PopupMenuItem<(_DeckSortField, _SortDirection)> _deckSortMenuItem(
-    BuildContext context, {
-    required _DeckSortField field,
-    required _SortDirection direction,
-    required String label,
-    required IconData icon,
-  }) {
-    final selected = _deckSortField == field && _deckSortDirection == direction;
+enum _CollectionAction { toggleDisabled, delete }
+
+/// Ligne du haut: retour, synchronisation et menu optionnel.
+class _BackBar extends StatelessWidget {
+  const _BackBar({this.menu});
+
+  final Widget? menu;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.zero,
+      child: Row(
+        children: [
+          IconButton(
+            onPressed: () => popOrGo(context, '/'),
+            tooltip: 'Retour',
+            icon: const Icon(Icons.arrow_back_rounded),
+          ),
+          const Spacer(),
+          const SyncNowButton(),
+          ?menu,
+        ],
+      ),
+    );
+  }
+}
+
+class _MenuRow extends StatelessWidget {
+  const _MenuRow({
+    required this.icon,
+    required this.label,
+    this.destructive = false,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool destructive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = destructive ? Theme.of(context).colorScheme.error : null;
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: color),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Text(label, style: TextStyle(color: color)),
+        ),
+      ],
+    );
+  }
+}
+
+class _Identity extends StatelessWidget {
+  const _Identity({required this.collection, required this.onChangeIcon});
+
+  final CollectionListItem collection;
+  final VoidCallback? onChangeIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final c = collection;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Tooltip(
+            message: "Changer l'icône",
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                key: const ValueKey('collection-icon'),
+                onTap: onChangeIcon,
+                borderRadius: AppTheme.radiusMd,
+                child: Ink(
+                  width: 64,
+                  height: 64,
+                  decoration: BoxDecoration(
+                    color: Color(c.color).withValues(alpha: 0.15),
+                    borderRadius: AppTheme.radiusMd,
+                  ),
+                  child: Center(
+                    child: Text(
+                      c.icon,
+                      textScaler: TextScaler.noScaling,
+                      style: const TextStyle(fontSize: 30),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Text(
+                  c.name,
+                  style: theme.textTheme.displaySmall,
+                  // Titre d'écran: l'échelle est plafonnée pour éviter les
+                  // coupures au milieu des mots.
+                  textScaler: MediaQuery.textScalerOf(
+                    context,
+                  ).clamp(maxScaleFactor: 1.4),
+                ),
+              ),
+              if (c.isDisabled) ...[
+                const SizedBox(width: AppSpacing.md),
+                const Padding(
+                  padding: EdgeInsets.only(top: AppSpacing.sm),
+                  child: DisabledBadge(label: 'Désactivée'),
+                ),
+              ],
+            ],
+          ),
+          if (c.description.trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              c.description,
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionStats extends StatelessWidget {
+  const _CollectionStats({required this.collection});
+
+  final CollectionListItem collection;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = collection;
+    // Texte agrandi ou écran étroit: trois colonnes ne tiennent plus, on empile.
+    final stack =
+        MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3 ||
+        MediaQuery.sizeOf(context).width < 340;
+    final cards = [
+      StatCard(
+        value: '${c.totalCards}',
+        label: 'cartes',
+        icon: Icons.style_rounded,
+        horizontal: stack,
+      ),
+      StatCard(
+        value: '${c.cardsDone}',
+        label: 'faites',
+        icon: Icons.check_circle_outline_rounded,
+        horizontal: stack,
+      ),
+      StatCard(
+        value: '${c.dueCards}',
+        label: 'à revoir',
+        icon: Icons.schedule_rounded,
+        horizontal: stack,
+      ),
+    ];
+    if (stack) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(height: AppSpacing.md),
+            cards[i],
+          ],
+        ],
+      );
+    }
+    return IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (var i = 0; i < cards.length; i++) ...[
+            if (i > 0) const SizedBox(width: AppSpacing.md),
+            Expanded(child: cards[i]),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DecksHeader extends StatelessWidget {
+  const _DecksHeader({
+    required this.deckCount,
+    required this.field,
+    required this.direction,
+    required this.onSort,
+  });
+
+  final int? deckCount;
+  final _DeckSortField field;
+  final _SortDirection direction;
+  final void Function(_DeckSortField, _SortDirection) onSort;
+
+  PopupMenuItem<(_DeckSortField, _SortDirection)> _item(
+    BuildContext context,
+    _DeckSortField f,
+    _SortDirection d,
+    String label,
+    IconData icon,
+  ) {
+    final selected = field == f && direction == d;
     return PopupMenuItem(
-      value: (field, direction),
+      value: (f, d),
       child: Row(
         children: [
           Icon(icon, size: 20),
-          const SizedBox(width: 12),
+          const SizedBox(width: AppSpacing.md),
           Expanded(child: Text(label)),
           if (selected) ...[
-            const SizedBox(width: 12),
+            const SizedBox(width: AppSpacing.md),
             Icon(
               Icons.check_rounded,
               size: 20,
@@ -615,9 +727,144 @@ class _CollectionDetailScreenState
       ),
     );
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final count = deckCount;
+    return Row(
+      children: [
+        const Flexible(child: SectionLabel('Decks')),
+        const Spacer(),
+        if (count != null)
+          Flexible(
+            child: Text(
+              count == 1 ? '1 deck' : '$count decks',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ),
+        const SizedBox(width: AppSpacing.sm),
+        PopupMenuButton<(_DeckSortField, _SortDirection)>(
+          tooltip: 'Trier les decks',
+          icon: const Icon(Icons.sort_rounded),
+          onSelected: (sort) => onSort(sort.$1, sort.$2),
+          itemBuilder: (_) => [
+            _item(
+              context,
+              _DeckSortField.importOrder,
+              _SortDirection.ascending,
+              'Importation croissant',
+              Icons.south_rounded,
+            ),
+            _item(
+              context,
+              _DeckSortField.importOrder,
+              _SortDirection.descending,
+              'Importation décroissant',
+              Icons.north_rounded,
+            ),
+            _item(
+              context,
+              _DeckSortField.name,
+              _SortDirection.ascending,
+              'Alphabet croissant',
+              Icons.sort_by_alpha_rounded,
+            ),
+            _item(
+              context,
+              _DeckSortField.name,
+              _SortDirection.descending,
+              'Alphabet décroissant',
+              Icons.sort_by_alpha_rounded,
+            ),
+          ],
+        ),
+      ],
+    );
+  }
 }
 
-enum _CollectionAction { toggleDisabled, delete }
+class _ImportButton extends StatelessWidget {
+  const _ImportButton();
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => context.go('/import'),
+      icon: const Icon(Icons.upload_file_rounded),
+      label: const Text('Importer un CSV'),
+    );
+  }
+}
+
+class _DetailSkeleton extends StatelessWidget {
+  const _DetailSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      label: 'Chargement',
+      // Défilable sans interaction: évite tout débordement sur petit écran.
+      child: const SingleChildScrollView(
+        physics: NeverScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _BackBar(),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SkeletonBox(
+                width: 64,
+                height: 64,
+                radius: AppTheme.radiusMd,
+              ),
+            ),
+            SizedBox(height: AppSpacing.lg),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SkeletonBox(height: 40, width: 220),
+            ),
+            SizedBox(height: AppSpacing.xl),
+            Row(
+              children: [
+                Expanded(
+                  child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
+                ),
+                SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
+                ),
+                SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
+                ),
+              ],
+            ),
+            SizedBox(height: AppSpacing.xl),
+            _DeckSkeletons(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DeckSkeletons extends StatelessWidget {
+  const _DeckSkeletons();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Column(
+      children: [
+        SkeletonBox(height: 104, radius: AppTheme.radiusMd),
+        SizedBox(height: AppSpacing.md),
+        SkeletonBox(height: 104, radius: AppTheme.radiusMd),
+        SizedBox(height: AppSpacing.md),
+        SkeletonBox(height: 104, radius: AppTheme.radiusMd),
+        SizedBox(height: AppSpacing.md),
+      ],
+    );
+  }
+}
 
 class DeckCard extends StatelessWidget {
   const DeckCard({
@@ -641,155 +888,137 @@ class DeckCard extends StatelessWidget {
     final hasOptions =
         onDelete != null || onViewCards != null || onToggleDisabled != null;
     final isUnavailable = deck.isDisabled || onTap == null;
-    return Card(
-      child: InkWell(
-        onTap: isUnavailable ? null : onTap,
-        borderRadius: AppTheme.radiusMd,
-        child: Opacity(
-          opacity: isUnavailable ? 0.45 : 1,
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(14),
+    return Pressable(
+      enabled: !isUnavailable,
+      child: Opacity(
+        opacity: isUnavailable ? 0.7 : 1,
+        child: Card(
+          child: InkWell(
+            onTap: isUnavailable ? null : onTap,
+            borderRadius: AppTheme.radiusMd,
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.12),
+                      borderRadius: AppTheme.radiusSm,
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      deck.icon,
+                      textScaler: TextScaler.noScaling,
+                      style: const TextStyle(fontSize: 20),
+                    ),
                   ),
-                  alignment: Alignment.center,
-                  child: Text(deck.icon, style: const TextStyle(fontSize: 20)),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Flexible(
-                            child: Text(
-                              deck.name,
-                              style: theme.textTheme.titleMedium,
-                            ),
-                          ),
-                          if (deck.isDisabled) ...[
-                            const SizedBox(width: 8),
-                            const DisabledBadge(label: 'Désactivé'),
-                          ],
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (deck.isDisabled) ...[
+                          const DisabledBadge(label: 'Désactivé'),
+                          const SizedBox(height: AppSpacing.xs),
                         ],
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '${deck.cardsDone} / ${deck.totalCards} cartes faites • ${deck.difficulty.label}',
-                        style: theme.textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '${deck.dueCards} à revoir',
-                        style: theme.textTheme.bodySmall?.copyWith(
-                          color: theme.colorScheme.primary,
+                        Text(deck.name, style: theme.textTheme.titleMedium),
+                        const SizedBox(height: AppSpacing.xs),
+                        Text(
+                          '${deck.cardsDone} / ${deck.totalCards} cartes faites · ${deck.difficulty.label}',
+                          style: theme.textTheme.bodySmall,
                         ),
-                      ),
-                      const SizedBox(height: 12),
-                      ProgressPill(value: deck.progress),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                if (hasOptions)
-                  PopupMenuButton<_DeckAction>(
-                    icon: const Icon(Icons.more_vert_rounded),
-                    onSelected: (action) {
-                      switch (action) {
-                        case _DeckAction.viewCards:
-                          onViewCards?.call();
-                        case _DeckAction.toggleDisabled:
-                          onToggleDisabled?.call();
-                        case _DeckAction.delete:
-                          onDelete?.call();
-                      }
-                    },
-                    itemBuilder: (_) => [
-                      if (onViewCards != null)
-                        const PopupMenuItem(
-                          value: _DeckAction.viewCards,
-                          child: Row(
+                        if (deck.dueCards > 0) ...[
+                          const SizedBox(height: AppSpacing.xs),
+                          Row(
                             children: [
-                              Icon(Icons.list_rounded, size: 20),
-                              SizedBox(width: 12),
-                              Text('Voir les cartes'),
-                            ],
-                          ),
-                        ),
-                      if (onToggleDisabled != null)
-                        PopupMenuItem(
-                          value: _DeckAction.toggleDisabled,
-                          child: Row(
-                            children: [
-                              Icon(
-                                deck.isDisabled
-                                    ? Icons.visibility_rounded
-                                    : Icons.visibility_off_rounded,
-                                size: 20,
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.primary,
+                                  shape: BoxShape.circle,
+                                ),
                               ),
-                              const SizedBox(width: 12),
-                              Text(
-                                deck.isDisabled
-                                    ? 'Réactiver le deck'
-                                    : 'Désactiver le deck',
-                              ),
-                            ],
-                          ),
-                        ),
-                      if (onDelete != null)
-                        PopupMenuItem(
-                          value: _DeckAction.delete,
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.delete_outline_rounded,
-                                color: theme.colorScheme.error,
-                                size: 20,
-                              ),
-                              const SizedBox(width: 12),
-                              Text(
-                                'Supprimer le deck',
-                                style: TextStyle(
-                                  color: theme.colorScheme.error,
+                              const SizedBox(width: AppSpacing.sm),
+                              Expanded(
+                                child: Text(
+                                  '${deck.dueCards} à revoir',
+                                  style: theme.textTheme.bodySmall?.copyWith(
+                                    color: theme.colorScheme.onSurface,
+                                  ),
                                 ),
                               ),
                             ],
                           ),
+                        ],
+                        const SizedBox(height: AppSpacing.md),
+                        ProgressPill(
+                          value: deck.progress,
+                          semanticsLabel: 'Progression de ${deck.name}',
                         ),
-                    ],
-                  )
-                else
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withValues(
-                            alpha: 0.1,
-                          ),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                        child: Text(
-                          deck.badgeLabel,
-                          style: theme.textTheme.bodySmall,
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      const Icon(Icons.chevron_right_rounded),
-                    ],
+                      ],
+                    ),
                   ),
-              ],
+                  const SizedBox(width: AppSpacing.sm),
+                  if (hasOptions)
+                    PopupMenuButton<_DeckAction>(
+                      tooltip: 'Options du deck',
+                      icon: const Icon(Icons.more_vert_rounded),
+                      onSelected: (action) {
+                        switch (action) {
+                          case _DeckAction.viewCards:
+                            onViewCards?.call();
+                          case _DeckAction.toggleDisabled:
+                            onToggleDisabled?.call();
+                          case _DeckAction.delete:
+                            onDelete?.call();
+                        }
+                      },
+                      itemBuilder: (_) => [
+                        if (onViewCards != null)
+                          const PopupMenuItem(
+                            value: _DeckAction.viewCards,
+                            child: _MenuRow(
+                              icon: Icons.list_rounded,
+                              label: 'Voir les cartes',
+                            ),
+                          ),
+                        if (onToggleDisabled != null)
+                          PopupMenuItem(
+                            value: _DeckAction.toggleDisabled,
+                            child: _MenuRow(
+                              icon: deck.isDisabled
+                                  ? Icons.visibility_rounded
+                                  : Icons.visibility_off_rounded,
+                              label: deck.isDisabled
+                                  ? 'Réactiver le deck'
+                                  : 'Désactiver le deck',
+                            ),
+                          ),
+                        if (onDelete != null)
+                          const PopupMenuItem(
+                            value: _DeckAction.delete,
+                            child: _MenuRow(
+                              icon: Icons.delete_outline_rounded,
+                              label: 'Supprimer le deck',
+                              destructive: true,
+                            ),
+                          ),
+                      ],
+                    )
+                  else
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                ],
+              ),
             ),
           ),
         ),

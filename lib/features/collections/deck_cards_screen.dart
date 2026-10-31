@@ -5,6 +5,7 @@ import '../../theme/app_theme.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
 import '../../widgets/ui.dart';
+import 'collection_list_widgets.dart';
 import 'paginated_list_controller.dart';
 
 class DeckCardsScreen extends ConsumerStatefulWidget {
@@ -80,31 +81,13 @@ class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
 
     return AppScaffold(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: () => popOrGo(context, '/'),
-                tooltip: 'Retour',
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-              const Spacer(),
-              const SyncNowButton(),
-            ],
+          ListScreenHeader(
+            title: widget.deckName,
+            backFallback: '/',
+            count: state.isInitialLoading ? null : state.totalCount,
           ),
-          const SizedBox(height: 8),
-          Text(
-            widget.deckName,
-            style: Theme.of(context).textTheme.displaySmall,
-          ),
-          const SizedBox(height: 4),
-          if (!state.isInitialLoading)
-            Text(
-              '${state.totalCount} carte${state.totalCount == 1 ? '' : 's'}',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-          const SizedBox(height: 20),
           Expanded(child: _buildBody(context, state)),
         ],
       ),
@@ -116,13 +99,13 @@ class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
     PaginatedListState<FlashcardSummary> state,
   ) {
     if (state.isInitialLoading && state.items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const ListSkeleton();
     }
 
     if (state.error != null && state.items.isEmpty) {
-      return _PaginatedErrorState(
+      return AppErrorState(
         message: 'Impossible de charger les cartes.',
-        onRetry: _controller.refresh,
+        onRetry: () => _controller.refresh(),
       );
     }
 
@@ -138,10 +121,11 @@ class _DeckCardsScreenState extends ConsumerState<DeckCardsScreen> {
       child: ListView.separated(
         controller: _scrollController,
         itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
-        separatorBuilder: (context, index) => const SizedBox(height: 8),
+        separatorBuilder: (context, index) =>
+            const SizedBox(height: AppSpacing.sm),
         itemBuilder: (context, index) {
           if (index >= state.items.length) {
-            return const _PaginationFooter();
+            return const PaginationFooter();
           }
 
           final card = state.items[index];
@@ -203,7 +187,12 @@ class _CardTile extends StatelessWidget {
     final theme = Theme.of(context);
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+        ),
         child: Row(
           children: [
             Expanded(
@@ -213,16 +202,16 @@ class _CardTile extends StatelessWidget {
                   Text(
                     card.question,
                     style: theme.textTheme.bodyMedium,
-                    maxLines: 2,
+                    maxLines: 3,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: AppSpacing.xs),
                   Text(
                     card.correctAnswer,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: theme.colorScheme.primary,
+                      color: theme.colorScheme.onSurfaceVariant,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ],
@@ -238,42 +227,6 @@ class _CardTile extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _PaginationFooter extends StatelessWidget {
-  const _PaginationFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 14),
-      child: Center(child: CircularProgressIndicator()),
-    );
-  }
-}
-
-class _PaginatedErrorState extends StatelessWidget {
-  const _PaginatedErrorState({required this.message, required this.onRetry});
-
-  final String message;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: () => onRetry(),
-            child: const Text('Réessayer'),
-          ),
-        ],
       ),
     );
   }

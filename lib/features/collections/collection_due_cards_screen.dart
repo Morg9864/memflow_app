@@ -4,7 +4,9 @@ import 'package:intl/intl.dart';
 
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
+import 'collection_list_widgets.dart';
 import 'paginated_list_controller.dart';
 
 class CollectionDueCardsScreen extends ConsumerStatefulWidget {
@@ -93,12 +95,12 @@ class _CollectionDueCardsScreenState
         context,
       ).showSnackBar(SnackBar(content: Text('Prochaine révision: $label')));
       await _controller.refresh();
-    } catch (error) {
+    } catch (_) {
       if (!mounted) {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Impossible de modifier la date: $error')),
+        SnackBar(content: Text('Impossible de modifier la date.')),
       );
     } finally {
       if (mounted) {
@@ -140,40 +142,17 @@ class _CollectionDueCardsScreenState
   @override
   Widget build(BuildContext context) {
     final state = _controller.state;
-    final theme = Theme.of(context);
 
     return AppScaffold(
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Row(
-            children: [
-              IconButton(
-                onPressed: () =>
-                    popOrGo(context, '/collection/${widget.collectionId}'),
-                tooltip: 'Retour',
-                icon: const Icon(Icons.arrow_back_rounded),
-              ),
-              const Spacer(),
-              const SyncNowButton(),
-            ],
+          ListScreenHeader(
+            title: 'Échéances',
+            subtitle: widget.collectionName,
+            backFallback: '/collection/${widget.collectionId}',
+            count: state.isInitialLoading ? null : state.totalCount,
           ),
-          const SizedBox(height: 8),
-          Text('Échéances', style: theme.textTheme.displaySmall),
-          const SizedBox(height: 4),
-          Text(
-            widget.collectionName,
-            style: theme.textTheme.bodyLarge?.copyWith(
-              color: theme.colorScheme.primary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          if (!state.isInitialLoading)
-            Text(
-              '${state.totalCount} carte${state.totalCount == 1 ? '' : 's'}',
-              style: theme.textTheme.bodyMedium,
-            ),
-          const SizedBox(height: 20),
           Expanded(child: _buildBody(context, state)),
         ],
       ),
@@ -185,13 +164,13 @@ class _CollectionDueCardsScreenState
     PaginatedListState<FlashcardDueItem> state,
   ) {
     if (state.isInitialLoading && state.items.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const ListSkeleton();
     }
 
     if (state.error != null && state.items.isEmpty) {
-      return _PaginatedErrorState(
+      return AppErrorState(
         message: 'Impossible de charger les échéances.',
-        onRetry: _controller.refresh,
+        onRetry: () => _controller.refresh(),
       );
     }
 
@@ -207,10 +186,11 @@ class _CollectionDueCardsScreenState
       child: ListView.separated(
         controller: _scrollController,
         itemCount: state.items.length + (state.isLoadingMore ? 1 : 0),
-        separatorBuilder: (context, index) => const SizedBox(height: 10),
+        separatorBuilder: (context, index) =>
+            const SizedBox(height: AppSpacing.md),
         itemBuilder: (context, index) {
           if (index >= state.items.length) {
-            return const _PaginationFooter();
+            return const PaginationFooter();
           }
 
           final card = state.items[index];
@@ -249,104 +229,107 @@ class _DueCardTile extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(
+          AppSpacing.lg,
+          AppSpacing.md,
+          AppSpacing.sm,
+          AppSpacing.md,
+        ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    card.question,
-                    style: theme.textTheme.titleMedium,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 8),
-                  Text(card.deckName, style: theme.textTheme.bodySmall),
-                ],
+              child: Padding(
+                padding: const EdgeInsets.only(top: AppSpacing.xs),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      card.question,
+                      style: theme.textTheme.titleMedium,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(card.deckName, style: theme.textTheme.bodySmall),
+                    const SizedBox(height: AppSpacing.sm),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(top: 5),
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: BoxDecoration(
+                              color: isDueNow
+                                  ? theme.colorScheme.primary
+                                  : theme.colorScheme.outline,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            'Prochaine révision : $dueLabel',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: theme.colorScheme.onSurface,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ),
-            const SizedBox(width: 12),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: isDueNow
-                        ? theme.colorScheme.primary.withValues(alpha: 0.14)
-                        : theme.colorScheme.surfaceContainerHighest.withValues(
-                            alpha: 0.45,
-                          ),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'Prochaine révision',
-                        style: theme.textTheme.labelMedium,
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        dueLabel,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: isDueNow ? theme.colorScheme.primary : null,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
+            if (busy)
+              const SizedBox(
+                width: 48,
+                height: 48,
+                child: Center(
+                  child: SizedBox.square(
+                    dimension: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2.2),
                   ),
                 ),
-                const SizedBox(height: 8),
-                if (busy)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2.2),
-                  )
-                else
-                  PopupMenuButton<_DueCardAction>(
-                    tooltip: 'Modifier la date',
-                    onSelected: (action) {
-                      switch (action) {
-                        case _DueCardAction.edit:
-                          onEdit();
-                        case _DueCardAction.now:
-                          onSetNow();
-                      }
-                    },
-                    itemBuilder: (context) => const [
-                      PopupMenuItem(
-                        value: _DueCardAction.edit,
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_calendar_rounded, size: 18),
-                            SizedBox(width: 10),
-                            Text('Choisir une date'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: _DueCardAction.now,
-                        child: Row(
-                          children: [
-                            Icon(Icons.bolt_rounded, size: 18),
-                            SizedBox(width: 10),
-                            Text('Remettre à now'),
-                          ],
-                        ),
-                      ),
-                    ],
-                    child: const Icon(Icons.more_horiz_rounded),
+              )
+            else
+              PopupMenuButton<_DueCardAction>(
+                tooltip: 'Modifier la date',
+                icon: const Icon(Icons.more_horiz_rounded),
+                onSelected: (action) {
+                  switch (action) {
+                    case _DueCardAction.edit:
+                      onEdit();
+                    case _DueCardAction.now:
+                      onSetNow();
+                  }
+                },
+                itemBuilder: (context) => const [
+                  PopupMenuItem(
+                    value: _DueCardAction.edit,
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_calendar_rounded, size: 20),
+                        SizedBox(width: AppSpacing.md),
+                        Expanded(child: Text('Choisir une date')),
+                      ],
+                    ),
                   ),
-              ],
-            ),
+                  PopupMenuItem(
+                    value: _DueCardAction.now,
+                    child: Row(
+                      children: [
+                        Icon(Icons.bolt_rounded, size: 20),
+                        SizedBox(width: AppSpacing.md),
+                        Expanded(child: Text('Remettre à now')),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
           ],
         ),
       ),
@@ -355,39 +338,3 @@ class _DueCardTile extends StatelessWidget {
 }
 
 enum _DueCardAction { edit, now }
-
-class _PaginationFooter extends StatelessWidget {
-  const _PaginationFooter();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(vertical: 14),
-      child: Center(child: CircularProgressIndicator()),
-    );
-  }
-}
-
-class _PaginatedErrorState extends StatelessWidget {
-  const _PaginatedErrorState({required this.message, required this.onRetry});
-
-  final String message;
-  final Future<void> Function() onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 12),
-          FilledButton(
-            onPressed: () => onRetry(),
-            child: const Text('Réessayer'),
-          ),
-        ],
-      ),
-    );
-  }
-}
