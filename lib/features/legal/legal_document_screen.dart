@@ -204,7 +204,12 @@ void showMemFlowLicensePage(BuildContext context) {
       padding: const EdgeInsets.all(8),
       child: ClipRRect(
         borderRadius: BorderRadius.circular(14),
-        child: Image.asset('memflow.png', width: 56, height: 56),
+        child: Image.asset(
+          'memflow.png',
+          width: 56,
+          height: 56,
+          cacheWidth: (56 * MediaQuery.devicePixelRatioOf(context)).round(),
+        ),
       ),
     ),
   );

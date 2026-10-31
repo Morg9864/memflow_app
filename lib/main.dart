@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 
@@ -48,6 +49,13 @@ Future<void> _runGuarded() async {
 
 Future<void> _bootstrapAndRun() async {
   WidgetsFlutterBinding.ensureInitialized();
+  for (final family in const ['Lora', 'Outfit']) {
+    LicenseRegistry.addLicense(() async* {
+      yield LicenseEntryWithLineBreaks([
+        family,
+      ], await rootBundle.loadString('assets/fonts/OFL-$family.txt'));
+    });
+  }
   final bootstrap = await AppBootstrap.initialize();
 
   runApp(

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   static const backgroundLight = Color(0xFFFDF9F4);
@@ -119,12 +118,17 @@ class AppTheme {
 
   static ThemeData _buildTheme(ThemeData base) {
     final scheme = base.colorScheme;
-    final title = GoogleFonts.lora(
+    final title = TextStyle(
+      fontFamily: 'Lora',
       color: scheme.onSurface,
       fontWeight: FontWeight.w600,
       letterSpacing: 0,
     );
-    final body = GoogleFonts.outfit(color: scheme.onSurface, letterSpacing: 0);
+    final body = TextStyle(
+      fontFamily: 'Outfit',
+      color: scheme.onSurface,
+      letterSpacing: 0,
+    );
 
     return base.copyWith(
       textTheme: TextTheme(
