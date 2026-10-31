@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 
 ({String title, String subtitle, IconData icon}) _levelPresentation(int level) {
@@ -34,6 +36,14 @@ final statisticsOverviewProvider = StreamProvider<StatisticsOverview>((ref) {
   return ref.watch(appRepositoryProvider).watchStatisticsOverview();
 });
 
+const _windowDays = 14;
+const _activityEmpty =
+    'Pas encore d’activité. Termine une session pour voir ta progression ici.';
+
+String _pct(double value) => '${(value * 100).round()} %';
+
+String _plural(int n, String one, String many) => '$n ${n > 1 ? many : one}';
+
 class StatisticsScreen extends ConsumerWidget {
   const StatisticsScreen({super.key});
 
@@ -46,259 +56,568 @@ class StatisticsScreen extends ConsumerWidget {
         data: (data) => SyncRefreshIndicator(
           child: ListView(
             children: [
-              Row(
-                children: [
-                  Text(
-                    'Statistiques',
-                    style: Theme.of(context).textTheme.displaySmall,
-                  ),
-                  const Spacer(),
-                  const SyncNowButton(),
-                ],
-              ),
-              const SizedBox(height: 24),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: StatCard(
-                      compact: true,
-                      value: '${data.streakDays}',
-                      label: 'série',
-                      icon: Icons.local_fire_department_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: StatCard(
-                      compact: true,
-                      value: '${data.totalReviews}',
-                      label: 'cartes vues',
-                      icon: Icons.menu_book_rounded,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: StatCard(
-                      compact: true,
-                      value: '${(data.successRate * 100).round()}%',
-                      label: 'réussite',
-                      icon: Icons.show_chart_rounded,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 20),
-              Card(
-                child: Padding(
-                  padding: const EdgeInsets.all(22),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            'Activité',
-                            style: Theme.of(context).textTheme.titleLarge,
-                          ),
-                          const Spacer(),
-                          Text('${data.studyDays} jours d’étude'),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '14 derniers jours',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                      const SizedBox(height: 22),
-                      _ActivityBarChart(days: data.heatmap),
-                    ],
-                  ),
+              const _Header(),
+              const SizedBox(height: AppSpacing.xl),
+              _KpiRow(data: data),
+              const SizedBox(height: AppSpacing.xl),
+              _ActivityCard(data: data),
+              const SizedBox(height: AppSpacing.xl),
+              _TrendSection(points: data.successTrend),
+              if (data.levelProgress.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xl),
+                const SectionLabel('Progression par niveau'),
+                const SizedBox(height: AppSpacing.md),
+                Column(
+                  spacing: AppSpacing.md,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final item in data.levelProgress)
+                      _LevelProgressCard(item: item),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 20),
-              _StatisticsDetails(data: data),
-              const SizedBox(height: 20),
-              const SectionLabel('Progression par niveau'),
-              const SizedBox(height: 12),
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final cardWidth = (constraints.maxWidth - 12) / 2;
-                  return Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: [
-                      for (final item in data.levelProgress)
-                        SizedBox(
-                          width: cardWidth,
-                          child: _LevelProgressCard(item: item),
-                        ),
-                    ],
-                  );
-                },
-              ),
+              ],
+              if (data.collectionProgress.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xl),
+                const SectionLabel('Progression par collection'),
+                const SizedBox(height: AppSpacing.md),
+                _ResponsiveGrid(
+                  children: [
+                    for (final item in data.collectionProgress)
+                      _MetricRow(
+                        title: item.name,
+                        detail:
+                            '${item.reviewCount} cartes · ${_pct(item.successRate)}',
+                        value: item.successRate,
+                      ),
+                  ],
+                ),
+              ],
+              if (data.modeProgress.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xl),
+                const SectionLabel('Réussite par mode'),
+                const SizedBox(height: AppSpacing.md),
+                _ResponsiveGrid(
+                  children: [
+                    for (final item in data.modeProgress)
+                      _MetricRow(
+                        title: item.mode.label,
+                        detail:
+                            '${item.reviewCount} cartes · ${_pct(item.successRate)}',
+                        value: item.successRate,
+                      ),
+                  ],
+                ),
+              ],
+              if (data.difficultCards.isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xl),
+                const SectionLabel('Cartes les plus difficiles'),
+                const SizedBox(height: AppSpacing.md),
+                Column(
+                  spacing: AppSpacing.md,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (final item in data.difficultCards)
+                      _DifficultCard(item: item),
+                  ],
+                ),
+              ],
             ],
           ),
         ),
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stackTrace) => Text(error.toString()),
+        loading: () => const _StatsSkeleton(),
+        error: (error, stackTrace) => AppErrorState(
+          title: 'Statistiques indisponibles',
+          message: 'Impossible de charger tes statistiques. Réessaie.',
+          onRetry: () => ref.invalidate(statisticsOverviewProvider),
+        ),
       ),
     );
   }
 }
 
-class _StatisticsDetails extends StatelessWidget {
-  const _StatisticsDetails({required this.data});
+class _Header extends StatelessWidget {
+  const _Header();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        // FittedBox: un titre d'un seul mot ne peut pas passer à la ligne.
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Semantics(
+                header: true,
+                child: Text(
+                  'Statistiques',
+                  style: Theme.of(context).textTheme.displaySmall,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SyncNowButton(),
+      ],
+    );
+  }
+}
+
+class _KpiRow extends StatelessWidget {
+  const _KpiRow({required this.data});
 
   final StatisticsOverview data;
 
   @override
   Widget build(BuildContext context) {
+    final items = [
+      (
+        value: '${data.streakDays}',
+        label: 'série',
+        icon: Icons.local_fire_department_rounded,
+      ),
+      (
+        value: '${data.totalReviews}',
+        label: 'cartes vues',
+        icon: Icons.menu_book_rounded,
+      ),
+      (
+        value: _pct(data.successRate),
+        label: 'réussite',
+        icon: Icons.show_chart_rounded,
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final stacked =
+            MediaQuery.textScalerOf(context).scale(12) > 14.4 ||
+            constraints.maxWidth < 260;
+        final cards = [
+          for (final i in items)
+            StatCard(
+              compact: true,
+              horizontal: stacked,
+              value: i.value,
+              label: i.label,
+              icon: i.icon,
+            ),
+        ];
+        if (stacked) {
+          return Column(
+            spacing: AppSpacing.sm,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: cards,
+          );
+        }
+        return IntrinsicHeight(
+          child: Row(
+            spacing: AppSpacing.sm,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [for (final c in cards) Expanded(child: c)],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ActivityCard extends StatelessWidget {
+  const _ActivityCard({required this.data});
+
+  final StatisticsOverview data;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final all = data.heatmap;
+    final days = all.length > _windowDays
+        ? all.sublist(all.length - _windowDays)
+        : all;
+    final hasActivity = days.any((d) => d.count > 0);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.end,
+              spacing: AppSpacing.md,
+              runSpacing: 2,
+              children: [
+                Text('Activité', style: theme.textTheme.titleLarge),
+                Text(
+                  _plural(data.studyDays, 'jour d’étude', 'jours d’étude'),
+                  style: theme.textTheme.bodyMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text('14 derniers jours', style: theme.textTheme.bodySmall),
+            const SizedBox(height: AppSpacing.lg),
+            if (hasActivity)
+              _ActivityChart(days: days)
+            else
+              Text(_activityEmpty, style: theme.textTheme.bodyMedium),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+const _monthNames = [
+  '',
+  'janv.',
+  'févr.',
+  'mars',
+  'avr.',
+  'mai',
+  'juin',
+  'juil.',
+  'août',
+  'sept.',
+  'oct.',
+  'nov.',
+  'déc.',
+];
+
+/// Libellé d'activité pour le lecteur d'écran, calculé sur les données réelles.
+String activitySemantics(List<HeatmapCell> days) {
+  final total = days.fold(0, (sum, d) => sum + d.count);
+  final active = days.where((d) => d.count > 0).length;
+  final today = days.isEmpty ? 0 : days.last.count;
+  return 'Activité sur ${days.length} jours : '
+      '${_plural(total, 'révision', 'révisions')} '
+      'sur ${_plural(active, 'jour', 'jours')}, aujourd’hui $today';
+}
+
+class _ActivityChart extends StatelessWidget {
+  const _ActivityChart({required this.days});
+
+  /// Non vide, avec au moins un jour actif (garanti par l'appelant).
+  final List<HeatmapCell> days;
+
+  static const _height = 120.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final muted = theme.colorScheme.onSurfaceVariant;
+    final maxCount = days.fold(0, (m, d) => d.count > m ? d.count : m);
+    final last = days.length - 1;
+
+    // Étiquette tous les 3 jours en partant d'aujourd'hui; le mois s'ajoute à
+    // la première étiquette et à chaque changement de mois.
+    final labels = <int, String>{};
+    int? prevMonth;
+    for (var i = last % 3; i <= last; i += 3) {
+      final parts = days[i].label.split('/');
+      final month = parts.length > 1 ? int.tryParse(parts[1]) : null;
+      final showMonth =
+          month != null && month >= 1 && month <= 12 && month != prevMonth;
+      labels[i] = showMonth
+          ? '${parts.first} ${_monthNames[month]}'
+          : parts.first;
+      prevMonth = month ?? prevMonth;
+    }
+
+    return Semantics(
+      container: true,
+      label: activitySemantics(days),
+      child: ExcludeSemantics(
+        child: Column(
+          children: [
+            SizedBox(
+              height: _height,
+              child: Row(
+                children: [
+                  for (final day in days)
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Align(
+                          alignment: Alignment.bottomCenter,
+                          child: day.count > 0
+                              ? FractionallySizedBox(
+                                  heightFactor: (day.count / maxCount).clamp(
+                                    0.04,
+                                    1.0,
+                                  ),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: primary,
+                                      borderRadius: const BorderRadius.vertical(
+                                        top: Radius.circular(4),
+                                      ),
+                                    ),
+                                    child: const SizedBox.expand(),
+                                  ),
+                                )
+                              : SizedBox(
+                                  width: 6,
+                                  height: 2,
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: muted.withValues(alpha: 0.35),
+                                      borderRadius: AppTheme.radiusPill,
+                                    ),
+                                  ),
+                                ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            Container(height: 1, color: theme.colorScheme.outlineVariant),
+            const SizedBox(height: AppSpacing.xs),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var i = 0; i < days.length; i++)
+                  Expanded(
+                    child: labels.containsKey(i)
+                        ? Center(
+                            child: OverflowBox(
+                              maxWidth: 72,
+                              fit: OverflowBoxFit.deferToChild,
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    labels[i]!,
+                                    softWrap: false,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      fontWeight: i == last
+                                          ? FontWeight.w700
+                                          : null,
+                                      color: i == last
+                                          ? theme.colorScheme.onSurface
+                                          : null,
+                                    ),
+                                  ),
+                                  if (i == last)
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 2),
+                                      child: Container(
+                                        width: 5,
+                                        height: 5,
+                                        decoration: BoxDecoration(
+                                          color: primary,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : const SizedBox.shrink(),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Libellé de tendance pour le lecteur d'écran. `null` sans donnée.
+String? trendSemantics(List<StatisticsTrendPoint> points) {
+  final latest = points.where((p) => p.reviewCount > 0).lastOrNull;
+  if (latest == null) return null;
+  return 'Évolution de la réussite : réussite la plus récente '
+      '${_pct(latest.successRate)} (${latest.label})';
+}
+
+class _TrendSection extends StatelessWidget {
+  const _TrendSection({required this.points});
+
+  final List<StatisticsTrendPoint> points;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final latest = points.where((p) => p.reviewCount > 0).lastOrNull;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SectionLabel('Évolution de la réussite'),
-        const SizedBox(height: 12),
+        const SizedBox(height: AppSpacing.md),
         Card(
           child: Padding(
             padding: const EdgeInsets.all(18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: data.successTrend.map((point) {
-                final height = point.reviewCount == 0
-                    ? 4.0
-                    : 10 + point.successRate * 62;
-                return Expanded(
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          height: 18,
-                          child:
-                              point.reviewCount > 0 &&
-                                  point == data.successTrend.last
-                              ? Text(
-                                  '${(point.successRate * 100).round()}%',
-                                  textAlign: TextAlign.center,
-                                  style: Theme.of(context).textTheme.labelSmall,
-                                )
-                              : null,
+            child: latest == null
+                ? Text(
+                    'Pas encore de données de réussite. Elles apparaîtront '
+                    'après tes premières révisions.',
+                    style: theme.textTheme.bodyMedium,
+                  )
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        points.length > 1
+                            ? 'Du ${points.first.label} au ${points.last.label}'
+                            : points.first.label,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Semantics(
+                        container: true,
+                        label: trendSemantics(points),
+                        child: ExcludeSemantics(
+                          child: _TrendChart(points: points),
                         ),
-                        SizedBox(
-                          height: 70,
-                          child: Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Container(
-                              height: height,
-                              decoration: BoxDecoration(
-                                color: Theme.of(context).colorScheme.primary,
-                                borderRadius: BorderRadius.circular(6),
-                              ),
-                            ),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        spacing: AppSpacing.sm,
+                        children: [
+                          Text(
+                            _pct(latest.successRate),
+                            style: theme.textTheme.titleMedium,
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          point.label.split('/').first,
-                          style: Theme.of(context).textTheme.labelSmall,
-                          textAlign: TextAlign.center,
-                        ),
-                      ],
-                    ),
+                          Text(
+                            'réussite la plus récente (${latest.label})',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.xs),
+                      Text(
+                        'Les jours sans révision restent vides.',
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
                   ),
-                );
-              }).toList(),
-            ),
           ),
         ),
-        if (data.collectionProgress.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          const SectionLabel('Progression par collection'),
-          const SizedBox(height: 12),
-          _TwoColumnStatsGrid(
-            children: [
-              for (final item in data.collectionProgress)
-                _MetricRow(
-                  compact: true,
-                  title: item.name,
-                  detail:
-                      '${item.reviewCount} cartes · ${_percent(item.successRate)}',
-                  value: item.successRate,
-                ),
-            ],
-          ),
-        ],
-        if (data.modeProgress.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          const SectionLabel('Réussite par mode'),
-          const SizedBox(height: 12),
-          _TwoColumnStatsGrid(
-            children: [
-              for (final item in data.modeProgress)
-                _MetricRow(
-                  compact: true,
-                  title: item.mode.label,
-                  detail:
-                      '${item.reviewCount} cartes · ${_percent(item.successRate)}',
-                  value: item.successRate,
-                ),
-            ],
-          ),
-        ],
-        if (data.difficultCards.isNotEmpty) ...[
-          const SizedBox(height: 20),
-          const SectionLabel('Cartes les plus difficiles'),
-          const SizedBox(height: 12),
-          _TwoColumnStatsGrid(
-            children: [
-              for (final item in data.difficultCards)
-                Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          item.question,
-                          maxLines: 4,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyLarge,
-                        ),
-                        const SizedBox(height: 10),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                '${item.errorCount} erreur${item.errorCount > 1 ? 's' : ''} · ${item.reviewCount} vues',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.bodySmall,
-                              ),
-                            ),
-                            const SizedBox(width: 6),
-                            Text(_percent(item.successRate)),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ],
       ],
     );
   }
+}
 
-  static String _percent(double value) => '${(value * 100).round()}%';
+class _TrendChart extends StatelessWidget {
+  const _TrendChart({required this.points});
+
+  final List<StatisticsTrendPoint> points;
+
+  static const _height = 100.0;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final line = theme.colorScheme.outlineVariant;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          height: _height,
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text('100 %', style: theme.textTheme.labelSmall),
+              Text('0 %', style: theme.textTheme.labelSmall),
+            ],
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Expanded(
+          child: SizedBox(
+            height: _height,
+            child: Stack(
+              children: [
+                Positioned(
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(height: 1, color: line),
+                ),
+                Positioned(
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  child: Container(height: 1, color: line),
+                ),
+                Row(
+                  children: [
+                    for (final p in points)
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 3),
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: p.reviewCount > 0
+                                ? FractionallySizedBox(
+                                    heightFactor: p.successRate.clamp(
+                                      0.02,
+                                      1.0,
+                                    ),
+                                    child: DecoratedBox(
+                                      decoration: BoxDecoration(
+                                        color: theme.colorScheme.primary,
+                                        borderRadius:
+                                            const BorderRadius.vertical(
+                                              top: Radius.circular(4),
+                                            ),
+                                      ),
+                                      child: const SizedBox.expand(),
+                                    ),
+                                  )
+                                : const SizedBox.shrink(),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ResponsiveGrid extends StatelessWidget {
+  const _ResponsiveGrid({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    if (MediaQuery.sizeOf(context).width < 600) {
+      return Column(
+        spacing: AppSpacing.md,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      );
+    }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = (constraints.maxWidth - AppSpacing.md) / 2;
+        return Wrap(
+          spacing: AppSpacing.md,
+          runSpacing: AppSpacing.md,
+          children: [
+            for (final child in children) SizedBox(width: width, child: child),
+          ],
+        );
+      },
+    );
+  }
 }
 
 class _MetricRow extends StatelessWidget {
   const _MetricRow({
-    this.compact = false,
     required this.title,
     required this.detail,
     required this.value,
@@ -307,61 +626,69 @@ class _MetricRow extends StatelessWidget {
   final String title;
   final String detail;
   final double value;
-  final bool compact;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Card(
-        child: Padding(
-          padding: EdgeInsets.all(compact ? 14 : 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                title,
-                maxLines: compact ? 2 : null,
-                overflow: compact ? TextOverflow.ellipsis : null,
-                style: Theme.of(context).textTheme.titleSmall,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                detail,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              SizedBox(height: compact ? 10 : 9),
-              ProgressPill(value: value),
-            ],
-          ),
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(title, style: theme.textTheme.titleSmall),
+            const SizedBox(height: AppSpacing.xs),
+            Text(detail, style: theme.textTheme.bodySmall),
+            const SizedBox(height: AppSpacing.md),
+            ProgressPill(value: value, semanticsLabel: '$title, $detail'),
+          ],
         ),
       ),
     );
   }
 }
 
-class _TwoColumnStatsGrid extends StatelessWidget {
-  const _TwoColumnStatsGrid({required this.children});
+class _DifficultCard extends StatelessWidget {
+  const _DifficultCard({required this.item});
 
-  final List<Widget> children;
+  final DifficultCardStatistics item;
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardWidth = (constraints.maxWidth - 12) / 2;
-        return Wrap(
-          spacing: 12,
-          runSpacing: 12,
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            for (final child in children)
-              SizedBox(width: cardWidth, child: child),
+            Text(
+              item.question,
+              maxLines: 4,
+              overflow: TextOverflow.ellipsis,
+              style: theme.textTheme.bodyLarge,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              spacing: AppSpacing.md,
+              runSpacing: AppSpacing.xs,
+              children: [
+                Text(
+                  '${_plural(item.errorCount, 'erreur', 'erreurs')} · ${item.reviewCount} vues',
+                  style: theme.textTheme.bodySmall,
+                ),
+                Text(
+                  'Réussite ${_pct(item.successRate)}',
+                  style: theme.textTheme.labelLarge,
+                ),
+              ],
+            ),
           ],
-        );
-      },
+        ),
+      ),
     );
   }
 }
@@ -375,34 +702,45 @@ class _LevelProgressCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final presentation = _levelPresentation(item.level);
     final theme = Theme.of(context);
+    final title = 'Niv. ${item.level}, ${presentation.title}';
+    final count = _plural(item.count, 'carte', 'cartes');
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            IconTile(icon: presentation.icon, size: 36),
-            const SizedBox(height: 12),
-            Text(
-              'Niv. ${item.level}, ${presentation.title}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.titleSmall,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconTile(icon: presentation.icon, size: 40),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title, style: theme.textTheme.titleSmall),
+                      Text(
+                        presentation.subtitle,
+                        style: theme.textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 5),
-            Text(
-              presentation.subtitle,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: theme.textTheme.bodySmall,
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: AppSpacing.md),
             Row(
               children: [
-                Expanded(child: ProgressPill(value: item.progress)),
-                const SizedBox(width: 8),
-                Text('${item.count}', style: theme.textTheme.titleMedium),
+                Expanded(
+                  child: ProgressPill(
+                    value: item.progress,
+                    height: 8,
+                    semanticsLabel: '$title, $count',
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Text(count, style: theme.textTheme.labelLarge),
               ],
             ),
           ],
@@ -412,159 +750,35 @@ class _LevelProgressCard extends StatelessWidget {
   }
 }
 
-class _ActivityBarChart extends StatelessWidget {
-  const _ActivityBarChart({required this.days});
-
-  final List<HeatmapCell> days;
-
-  static const _monthNames = [
-    '',
-    'Jan',
-    'Fév',
-    'Mar',
-    'Avr',
-    'Mai',
-    'Juin',
-    'Juil',
-    'Août',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Déc',
-  ];
-
-  int _monthOf(String label) {
-    final parts = label.split('/');
-    return parts.length >= 2 ? (int.tryParse(parts[1]) ?? 0) : 0;
-  }
-
-  int _dayOf(String label) {
-    return int.tryParse(label.split('/').first) ?? 0;
-  }
+class _StatsSkeleton extends StatelessWidget {
+  const _StatsSkeleton();
 
   @override
   Widget build(BuildContext context) {
-    final primary = Theme.of(context).colorScheme.primary;
-    final inactive = Theme.of(context).colorScheme.surfaceContainerHighest;
-    final labelStyle = Theme.of(
-      context,
-    ).textTheme.bodySmall?.copyWith(fontSize: 10);
-
-    final maxCount = days.fold(0, (m, d) => d.count > m ? d.count : m);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        const gap = 5.0;
-        const chartHeight = 72.0;
-        final barWidth =
-            (constraints.maxWidth - (days.length - 1) * gap) / days.length;
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Bar chart
-            SizedBox(
-              height: chartHeight,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: List.generate(days.length, (i) {
-                  final day = days[i];
-                  final barH = maxCount == 0
-                      ? 3.0
-                      : (day.count / maxCount * chartHeight).clamp(
-                          3.0,
-                          chartHeight,
-                        );
-                  return Row(
-                    children: [
-                      if (i > 0) const SizedBox(width: gap),
-                      Container(
-                        width: barWidth,
-                        height: barH,
-                        decoration: BoxDecoration(
-                          color: day.count > 0 ? primary : inactive,
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(4),
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                }),
-              ),
-            ),
-            // Baseline
-            Container(height: 1, color: inactive),
-            const SizedBox(height: 5),
-            // Day number labels
-            Row(
-              children: List.generate(days.length, (i) {
-                final day = days[i];
-                final isToday = i == days.length - 1;
-                return Row(
-                  children: [
-                    if (i > 0) const SizedBox(width: gap),
-                    SizedBox(
-                      width: barWidth,
-                      child: Column(
-                        children: [
-                          Text(
-                            '${_dayOf(day.label)}',
-                            textAlign: TextAlign.center,
-                            style: labelStyle?.copyWith(
-                              fontWeight: isToday ? FontWeight.bold : null,
-                            ),
-                          ),
-                          if (isToday)
-                            Container(
-                              width: 4,
-                              height: 4,
-                              margin: const EdgeInsets.only(top: 2),
-                              decoration: BoxDecoration(
-                                color: primary,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              }),
-            ),
-            const SizedBox(height: 2),
-            // Month labels (show only on first day of each new month)
-            Row(
-              children: List.generate(days.length, (i) {
-                final month = _monthOf(days[i].label);
-                final prevMonth = i > 0 ? _monthOf(days[i - 1].label) : -1;
-                final showMonth = month != prevMonth;
-                return Row(
-                  children: [
-                    if (i > 0) const SizedBox(width: gap),
-                    SizedBox(
-                      width: barWidth,
-                      child: showMonth
-                          ? Text(
-                              _monthNames[month],
-                              textAlign: TextAlign.center,
-                              style: labelStyle?.copyWith(
-                                color: Theme.of(
-                                  context,
-                                ).colorScheme.onSurface.withValues(alpha: 0.45),
-                              ),
-                              softWrap: false,
-                              overflow: TextOverflow.visible,
-                            )
-                          : null,
-                    ),
-                  ],
-                );
-              }),
-            ),
-          ],
-        );
-      },
+    return Semantics(
+      label: 'Chargement des statistiques',
+      child: ListView(
+        physics: const NeverScrollableScrollPhysics(),
+        children: const [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: SkeletonBox(width: 200, height: 36),
+          ),
+          SizedBox(height: AppSpacing.xl),
+          Row(
+            spacing: AppSpacing.sm,
+            children: [
+              Expanded(child: SkeletonBox(height: 84)),
+              Expanded(child: SkeletonBox(height: 84)),
+              Expanded(child: SkeletonBox(height: 84)),
+            ],
+          ),
+          SizedBox(height: AppSpacing.xl),
+          SkeletonBox(height: 220),
+          SizedBox(height: AppSpacing.xl),
+          SkeletonBox(height: 180),
+        ],
+      ),
     );
   }
 }
