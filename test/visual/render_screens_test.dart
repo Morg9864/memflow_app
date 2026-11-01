@@ -321,6 +321,10 @@ const _viewports = <(String, Size, double)>[
   ('small', Size(320, 568), 1.0),
   ('phone_large_text', Size(360, 800), 2.0),
   ('tall', Size(360, 2400), 1.0),
+  ('tablet_portrait', Size(880, 1408), 1.0),
+  ('tablet_landscape', Size(1408, 880), 1.0),
+  ('tablet_portrait_large_text', Size(880, 1408), 2.0),
+  ('tablet_narrow', Size(600, 960), 1.0),
 ];
 
 Future<void> _loadFonts() async {

@@ -115,4 +115,19 @@ Not verified without a device:
 - Performance on a low-end phone, and on a real phone: not measured. This mid-range tablet is measured, see "Performance results".
 
 ## Remaining work
-The manual device checks above, and the progress dots decision.
+Tablet-first phase below. Manual device checks above still apply.
+
+## Tablet-first phase
+The first pass was designed and reviewed only at phone width. The primary device is the Galaxy Tab S10 Lite: portrait, 880x1408 logical, S Pen. Plan: `/home/morgan/.claude/plans/quiet-growing-comet.md`.
+
+Owner decisions: portrait first, S Pen input, 2x2 study answers, on-screen keyboard for free text, progress dots removed.
+
+| Step | Scope | Status | Validation |
+|---|---|---|---|
+| 1 | Harness with tablet viewports, "before" captures | Done | 224 captures OK in `build/visual/tablet_before`. Findings: phone-sized type everywhere, empty middle in study, bottom bar on a tablet |
+| 2 | Breakpoints, tablet type step, rail, `AppScaffold` | Pending | |
+| 3 | Study | Pending | |
+| 4 | Home and collection screens | Pending | |
+| 5 | Stats, import, profile, settings, remaining screens | Pending | |
+| 6 | Tests and docs | Pending | |
+| 7 | On the tablet, with the owner's go-ahead | Pending | |
