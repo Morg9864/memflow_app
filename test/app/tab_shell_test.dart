@@ -205,6 +205,22 @@ void main() {
     );
   });
 
+  testWidgets('tablet width: rail targets are large and labelled', (
+    tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await _pump(tester, size: tablet);
+    await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+    await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+    for (final label in ['Accueil', 'Stats', 'Importer', 'Profil']) {
+      expect(
+        find.descendant(of: rail, matching: find.text(label)),
+        findsOneWidget,
+      );
+    }
+    handle.dispose();
+  });
+
   for (final (name, size, nav) in [
     ('bar', phone, NavigationBar),
     ('rail', tablet, NavigationRail),

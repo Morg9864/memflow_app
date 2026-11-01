@@ -259,7 +259,9 @@ void main() {
     Future<void> tab(String label) async {
       await tester.tap(
         find.descendant(
-          of: find.byType(NavigationBar),
+          of: find.byWidgetPredicate(
+            (w) => w is NavigationBar || w is NavigationRail,
+          ),
           matching: find.text(label),
         ),
       );

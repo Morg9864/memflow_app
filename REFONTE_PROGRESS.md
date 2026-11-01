@@ -125,9 +125,18 @@ Owner decisions: portrait first, S Pen input, 2x2 study answers, on-screen keybo
 | Step | Scope | Status | Validation |
 |---|---|---|---|
 | 1 | Harness with tablet viewports, "before" captures | Done | 224 captures OK in `build/visual/tablet_before`. Findings: phone-sized type everywhere, empty middle in study, bottom bar on a tablet |
-| 2 | Breakpoints, tablet type step, rail, `AppScaffold` | Pending | |
-| 3 | Study | Pending | |
-| 4 | Home and collection screens | Pending | |
-| 5 | Stats, import, profile, settings, remaining screens | Pending | |
-| 6 | Tests and docs | Pending | |
-| 7 | On the tablet, with the owner's go-ahead | Pending | |
+| 2 | Breakpoints, tablet type step, rail, `AppScaffold` | Done | `6287e57`. Rail at 600 and above, whole-theme type step of 1.15 |
+| 3 | Study | Done | `9ad8058`, `d85394e`. 2x2 answers, side panel depends on width only, dots removed |
+| 4 | Home and collection screens | Done | `bb7599e`. Columns follow available width and text scale, which fixed mid-word breaks beside the rail |
+| 5 | Stats, import, profile, settings, remaining screens | Done | `5bfee1f`. Mode sheet, summary and auth reviewed, no change needed |
+| 6 | Tests and docs | Done | 803 pass + 30 skipped, analyzer at baseline. Layout matrix and guidelines cover tablet sizes. All tablet captures OK. Phone and small captures: 56 compared with the starting state, 26 differ, only in the dots area |
+| 7 | On the tablet, with the owner's go-ahead | Waiting for go-ahead | Release install, manual S Pen check, portrait performance. No tablet performance result for this phase yet |
+
+Unchanged since `950d53e`: `study_controller.dart`, `study_rules.dart`. `lib/data` and `lib/domain` only lost `progressDots`.
+
+Known issues:
+- Not checked on a device: all of this phase, including S Pen tapping, scrolling and palm contact, and whether a pen tap on the free-text field opens the keyboard. Flutter's stylus handwriting is on by default on this Android version.
+- Stylus tests simulate the pointer kind only.
+- `_StudyProgressHeader` reads `MediaQuery.viewInsetsOf`, which inside the Scaffold body never sees the keyboard, so its level row probably never hides. Found during this phase, and left as is because fixing it changes phone behaviour.
+- The rail assumes a right-handed user.
+- The stats skeleton at tablet width was not rendered in a capture.

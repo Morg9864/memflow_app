@@ -112,6 +112,13 @@ void main() {
         await expectLater(tester, meetsGuideline(textContrastGuideline));
         h.dispose();
       });
+      testWidgets('all guidelines, tablet portrait (880x1408)', (tester) async {
+        final h = await open(tester, size: const Size(880, 1408));
+        await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+        await expectLater(tester, meetsGuideline(textContrastGuideline));
+        h.dispose();
+      });
       if (c.kind == 'screen') {
         // Lazy lists only build what is on screen: a tall viewport builds the
         // rest, so the guidelines also see content below the fold.

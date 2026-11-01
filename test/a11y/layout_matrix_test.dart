@@ -1,4 +1,4 @@
-// Small phone and normal phone, normal and 2x text: no exception or overflow,
+// Phones and tablets, normal and 2x text: no exception or overflow,
 // and the main action stays reachable by scrolling. Long content where the
 // fixtures have it. Asserts (unlike the opt-in visual harness), so a layout
 // regression fails the build.
@@ -10,6 +10,9 @@ import '../support/screen_cases.dart';
 const _viewports = <(String, Size)>[
   ('320x568', Size(320, 568)),
   ('360x800', Size(360, 800)),
+  ('600x960', Size(600, 960)),
+  ('880x1408', Size(880, 1408)),
+  ('1408x880', Size(1408, 880)),
 ];
 
 void main() {

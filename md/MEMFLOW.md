@@ -218,10 +218,20 @@ retour à la collection, refaire une session sur le même périmètre, accueil.
 
 ### Responsive
 
-Au-delà de 1100 px **et** sur plateforme desktop (Linux, macOS, Windows), la
-session passe en deux colonnes : le contenu à gauche, un panneau latéral fixe à
-droite qui porte le feedback coloré et les boutons d'évaluation. En dessous, ou
-sur le web et le mobile, les boutons restent en grille sous la carte.
+La tablette en portrait (880×1408, stylet) est le format de référence. La mise
+en page dépend de la largeur, jamais de la plateforme :
+
+- **À partir de 600 px** : rail de navigation à gauche, typographie un cran plus
+  grande, réponses QCM en grille 2×2, Vrai/Faux côte à côte, notes sur une ligne
+  de quatre boutons épinglée en bas.
+- **À partir de 1100 px** : la session passe en deux colonnes, le contenu à
+  gauche, un panneau latéral fixe à droite qui porte le feedback coloré et les
+  boutons d'évaluation.
+- **En dessous de 600 px** : barre de navigation en bas et une seule colonne.
+
+Le nombre de colonnes suit la largeur réellement disponible et la taille du
+texte (`adaptiveColumns`). L'indication des raccourcis clavier reste réservée aux
+plateformes desktop.
 
 ---
 
