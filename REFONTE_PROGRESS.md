@@ -39,7 +39,7 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 | E4 | E | Auth, legal, not found | Done | Analyzer at baseline, `auth__*` and `not_found__*` OK. `auth__phone` reviewed by Opus. Its missing logo is a harness artefact: a probe showed `memflow.png` decodes with `cacheWidth` once real async time passes, and the harness captures before that |
 | D2 | D | Motion and performance pass | Done | 416 pass + 28 skipped, analyzer at baseline, overflow report unchanged. Page transition 220ms, tab fade 120ms, one unguarded `ExpansionTile` fixed. Hero dropped, as the plan allows: the detail page shows a skeleton first, so the flight has no destination on a first open. iOS and macOS keep the native 500ms slide, removed under reduced motion with swipe-back kept (test fails without the fix). Not checked on a device |
 | F1 | F | Accessibility and regression tests | Done | 614 pass + 28 skipped, analyzer at baseline, overflow report unchanged with all 112 captures OK. Guidelines, size and text-scale matrix, reduced motion and 5 journey tests added. Fixed: readable error and destructive text, 48px cloze chips, centred wrapped button labels, no mode sheet slide under reduced motion |
-| F2 | F | Profile-mode measurements | Stopped after an incident, needs the owner's go-ahead | Not run. No performance improvement is claimed. Unrun test code is uncommitted in `.claude/worktrees/agent-afaf4db05bda816b3` |
+| F2 | F | Profile-mode measurements | Done, run by Opus | 12 timed runs and 2 rebuild runs on a Galaxy Tab S10 Lite (SM-X406B, 90Hz), baseline `55ade2e` against final. See "Performance results". The real app stayed unchanged across all runs. Also found and fixed a `Pressable` crash (`06e7476`) |
 | Final review | Opus | Checklist and report | Done | See "Acceptance status" |
 
 ## Audit corrections
@@ -66,25 +66,41 @@ Dependencies: A1 → F0 → A2 → A3 → A4 → D1 → (C1–C5, B1–B3, E1–
 - Noted, not changed: the manifest doesn't disable Android Auto Backup, so a reinstall may restore an encrypted database or key file that can't be read. Effect on startup not tested.
 
 ## Known issues and blockers
-- Remaining: F2 only, pending the owner's decision after the incident above.
+- Remaining: manual checks on a device, see "Acceptance status".
 - `showDialog`, `showModalBottomSheet`, `SnackBar` and the `NavigationBar` indicator use Material defaults (within 300ms), and Material doesn't remove them under reduced motion.
 
-## Hypotheses to measure in F2 (no improvement claimed)
-1. `home_screen.dart`, `_CollectionCard`: `IntrinsicHeight` and `Opacity` per row, layout time while scrolling 30+ collections.
-2. `study_screen.dart`, flashcard flip: `Transform` and `AnimatedSize`, raster time.
-3. `study_screen.dart`, feedback reveal: `Opacity`, `ClipRect` and `Align` per frame on long explanations.
-4. `ui.dart`, `ProgressPill`: many pills rebuilding together on a stream update.
-5. `router.dart`, tab fade over a full tab: raster time on a low-end device.
-6. `home_screen.dart`, `SliverList.builder`: rebuild counts when `homeCollectionsProvider` re-emits after a sync.
-- `/session-summary` "Refaire une session" builds `?collectionId=null` when both ids are null. Out of scope, to report.
-- Forgot-password shows the "lien envoyé" snackbar even if the request failed. Out of scope, to report.
-- Riverpod 3 retries failed stream providers by default, so error states may appear after a delay, with skeletons in the meantime. No app-wide `retry` config was added. To verify on a device.
-- Out of scope, to report and not fix:
-  - "Revoir mes erreurs" shows the mode sheet but ignores the choice.
-  - `/study/errors` and `/session-summary` crash on direct links (null `extra`).
-  - The email-change success message names the current address, while the dialog says the new one.
-  - `sqlite3` is imported without being a direct dependency.
-  - `md/instructions.md` still describes dark and light themes. Left as the historical original brief.
+## Performance results (F2)
+Profile mode, 768 due cards, 3 runs per case, median with the run range. A difference is claimed only when the ranges don't overlap, and 3 runs is little data. The phone layout is simulated (413x660 logical) on tablet hardware. Nothing here describes a low-end phone. Raw data: `build/perf/`.
+
+| Scenario, layout | Frames over 11.1ms (90Hz budget) | Frames over 16.7ms | Worst build | Worst raster |
+|---|---|---|---|---|
+| Tab switch, phone | 71 (66-74) to 0 (0-0) | 16 (15-18) to 0 (0-0) | 42.3 to 9.0ms | 18.4 to 6.7ms |
+| Tab switch, tablet | 71 (67-73) to 0 (0-1) | 14 (14-18) to 0 (0-0) | 40.9 to 10.3ms | 16.5 to 10.5ms |
+| Session, phone | 17 (16-22) to 11 (10-16): no measurable difference | 4 (3-7) to 2 (0-2) | 20.4 to 19.3ms: no measurable difference | 15.6 to 12.7ms: no measurable difference |
+| Session, tablet | 23 (15-26) to 7 (7-7) | 8 (6-8) to 1 (0-2) | 20.2 to 17.5ms | 21.3 to 14.2ms |
+| Home scroll, phone | 1 (1-1) to 0 (0-1): no measurable difference | 0 to 0 | 16.5 to 6.5ms | 8.8 to 7.6ms: no measurable difference |
+| Home scroll, tablet | 0 to 0 (0-1): no measurable difference | 0 to 0 | 4.5 to 7.5ms (worse) | 9.0 to 10.1ms (worse) |
+
+Measured regressions, all well under the 11.1ms budget:
+- Typical build time (p50) rose in tab switches (0.71 to 1.42ms on phone) and in the session (0.57 to 1.18ms on phone).
+- Home scroll: build p99 2.44 to 3.83ms on phone, 2.20 to 5.13ms on tablet. Tablet raster p90 6.12 to 6.51ms.
+
+Other results:
+- Memory (total PSS after the session): phone 257-261MB to 248-262MB, tablet 253-255MB to 253-255MB. No measurable difference.
+- Profile APK: 101.7MB to 98.9MB.
+- The session draws about 3 times as many frames as before (329 to 1,043 on phone), because of its new animations. Percentiles aren't comparable across such different frame sets, so compare missed-frame counts instead.
+- Rebuild runs: each scenario's trace stops at about 15-16k events, so its counts are capped and aren't totals. Tab switching at baseline is dominated by route transitions (`SlideTransition`, `FadeTransition`), which no longer lead the list in the final version.
+- Baseline test differences: the `sharedPreferencesProvider` import, and waiting for runtime fonts.
+
+Earlier hypotheses:
+1. `_CollectionCard` layout cost: the tablet's p99 build rose, but nothing misses the budget and the cause isn't isolated. No action.
+2. Flashcard flip raster: not measured, because the session uses QCM only.
+3. Feedback reveal: not isolated. The session still has 7-11 frames over 11.1ms, whose source is unidentified.
+4. `ProgressPill` rebuilds on stream updates: not measurable, because the scenarios have no sync.
+5. Tab fade raster cost: not supported. Worst raster 6.7ms on phone and 10.5ms on tablet, with 0 missed frames.
+6. Home list rebuilds after sync: not measurable, for the same reason as 4.
+
+No code change is justified by these numbers.
 
 ## Acceptance status (`refonte.md` §7)
 Verified by tests and captures:
@@ -96,7 +112,7 @@ Verified by tests and captures:
 Not verified without a device:
 - Real fluidity, layout stability during transitions, and the real keyboard.
 - TalkBack, VoiceOver and the system reduce-motion setting.
-- Performance on a real device: not measured.
+- Performance on a low-end phone, and on a real phone: not measured. This mid-range tablet is measured, see "Performance results".
 
 ## Remaining work
-F2, then the device checks above.
+The manual device checks above, and the progress dots decision.
