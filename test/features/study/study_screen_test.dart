@@ -3,6 +3,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -36,7 +37,6 @@ void main() {
       clozeWordBank: const [],
       acceptedAnswers: const [],
       level: 1,
-      progressDots: 3,
     );
   }
 
@@ -60,7 +60,6 @@ void main() {
       clozeWordBank: const ['useState', 'useEffect', 'afficher', 'modifier'],
       acceptedAnswers: const [],
       level: 1,
-      progressDots: 3,
     );
   }
 
@@ -297,11 +296,204 @@ void main() {
     },
   );
 
-  testWidgets('tablet layout keeps the existing inline review controls', (
+  testWidgets(
+    'wide Android window gets the side panel, without keyboard hint',
+    (tester) async {
+      final controller = _FakeStudyController(
+        initialState: buildState([buildCard('tablet')]),
+        submitReviewImpl:
+            ({
+              required String cardId,
+              required ReviewResult result,
+              required bool wasCorrect,
+            }) async {},
+      );
+
+      await pumpStudyScreen(
+        tester,
+        controller: controller,
+        size: const Size(1200, 900),
+        platform: TargetPlatform.android,
+      );
+
+      await tester.tap(find.text('Réponse tablet'));
+      await tester.pumpAndSettle();
+
+      expect(find.byKey(const Key('desktop-review-panel')), findsOneWidget);
+      expect(find.byKey(const Key('inline-review-controls')), findsNothing);
+      expect(find.textContaining('Clavier :'), findsNothing);
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  // Cartes aux réponses distinctives (les pastilles A-D ne s'y confondent pas).
+  StudyCard buildChoiceCard(String id, {String? explanation}) => StudyCard(
+    id: id,
+    collectionId: 'react',
+    deckId: 'deck-1',
+    question: 'Question $id',
+    correctAnswer: 'Bonne $id',
+    wrongAnswers: const ['Faux un', 'Faux deux', 'Faux trois'],
+    hint: null,
+    explanation: explanation,
+    currentTestMode: TestMode.multipleChoice,
+    allowedTestModes: const [TestMode.multipleChoice],
+    clozeText: null,
+    clozeAnswers: const [],
+    clozeWordBank: const [],
+    acceptedAnswers: const [],
+    level: 1,
+  );
+
+  _FakeStudyController fakeController(List<StudyCard> cards) =>
+      _FakeStudyController(
+        initialState: buildState(cards),
+        submitReviewImpl:
+            ({
+              required String cardId,
+              required ReviewResult result,
+              required bool wasCorrect,
+            }) async {},
+      );
+
+  Offset topLeftOf(WidgetTester tester, String text) =>
+      tester.getTopLeft(find.text(text));
+
+  Size tileSize(WidgetTester tester, String text) => tester.getSize(
+    find.ancestor(of: find.text(text), matching: find.byType(InkWell)).first,
+  );
+
+  testWidgets('portrait Android tablet: 2x2 answers, one rating row', (
     tester,
   ) async {
+    await pumpStudyScreen(
+      tester,
+      controller: fakeController([buildChoiceCard('a')]),
+      size: const Size(880, 1408),
+      platform: TargetPlatform.android,
+    );
+    final texts = ['Bonne a', 'Faux un', 'Faux deux', 'Faux trois'];
+    final positions = [for (final t in texts) topLeftOf(tester, t)]
+      ..sort(
+        (p, q) => p.dy != q.dy ? p.dy.compareTo(q.dy) : p.dx.compareTo(q.dx),
+      );
+    expect(positions[0].dy, positions[1].dy);
+    expect(positions[2].dy, positions[3].dy);
+    expect(positions[2].dy, greaterThan(positions[0].dy));
+    expect(positions[1].dx, greaterThan(positions[0].dx));
+    expect(positions[2].dx, positions[0].dx);
+    final sizes = {for (final t in texts) tileSize(tester, t)};
+    expect(sizes.length, 1);
+    expect(sizes.first.height, greaterThanOrEqualTo(88));
+
+    await tester.tap(find.text('Bonne a'));
+    await tester.pumpAndSettle();
+    final rows = {
+      for (final t in ['Encore', 'Difficile', 'Correct', 'Facile'])
+        topLeftOf(tester, t).dy,
+    };
+    expect(rows.length, 1);
+    expect(find.textContaining('Clavier :'), findsNothing);
+    expect(tester.takeException(), isNull);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('portrait Android tablet: true/false answers sit side by side', (
+    tester,
+  ) async {
+    final controller = fakeController([
+      buildCard('tf', mode: TestMode.trueFalse),
+    ]);
+    await pumpStudyScreen(
+      tester,
+      controller: controller,
+      size: const Size(880, 1408),
+      platform: TargetPlatform.android,
+    );
+    final vrai = topLeftOf(tester, 'Vrai');
+    final faux = topLeftOf(tester, 'Faux');
+    expect(vrai.dy, faux.dy);
+    expect(faux.dx, greaterThan(vrai.dx));
+    expect(tileSize(tester, 'Vrai'), tileSize(tester, 'Faux'));
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('phone width keeps answers in a single column', (tester) async {
+    await pumpStudyScreen(
+      tester,
+      controller: fakeController([buildChoiceCard('a')]),
+      size: const Size(360, 800),
+      platform: TargetPlatform.android,
+    );
+    final positions = [
+      for (final t in ['Bonne a', 'Faux un', 'Faux deux', 'Faux trois'])
+        topLeftOf(tester, t),
+    ]..sort((p, q) => p.dy.compareTo(q.dy));
+    expect({for (final p in positions) p.dx}.length, 1);
+    expect({for (final p in positions) p.dy}.length, 4);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets(
+    'landscape Android tablet gets the side panel, no keyboard hint',
+    (tester) async {
+      final controller = _FakeStudyController(
+        initialState: buildState([buildChoiceCard('a')]),
+        submitReviewImpl:
+            ({
+              required String cardId,
+              required ReviewResult result,
+              required bool wasCorrect,
+            }) async {},
+      );
+      await pumpStudyScreen(
+        tester,
+        controller: controller,
+        size: const Size(1408, 880),
+        platform: TargetPlatform.android,
+      );
+      await tester.tap(find.text('Bonne a'));
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('desktop-review-panel')), findsOneWidget);
+      expect(find.textContaining('Clavier :'), findsNothing);
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  testWidgets('a stylus answers, rates and moves to the next card', (
+    tester,
+  ) async {
+    final controller = fakeController([
+      buildChoiceCard('a'),
+      buildChoiceCard('b'),
+    ]);
+    await pumpStudyScreen(
+      tester,
+      controller: controller,
+      size: const Size(880, 1408),
+      platform: TargetPlatform.android,
+    );
+    final pen = await tester.createGesture(kind: PointerDeviceKind.stylus);
+    Future<void> penTap(Finder finder) async {
+      await pen.down(tester.getCenter(finder));
+      await pen.up();
+      await tester.pumpAndSettle();
+    }
+
+    await penTap(find.text('Bonne a'));
+    await penTap(find.text('Correct'));
+    expect(controller.submissions.single.result, ReviewResult.good);
+    expect(find.text('Question b'), findsOneWidget);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('a stylus drag scrolls overflowing content', (tester) async {
     final controller = _FakeStudyController(
-      initialState: buildState([buildCard('tablet')]),
+      initialState: buildState(
+        [buildChoiceCard('a', explanation: 'Longue explication. ' * 60)],
+        hasValidatedAnswer: true,
+        currentAnswerWasCorrect: true,
+      ),
       submitReviewImpl:
           ({
             required String cardId,
@@ -309,19 +501,78 @@ void main() {
             required bool wasCorrect,
           }) async {},
     );
-
     await pumpStudyScreen(
       tester,
       controller: controller,
-      size: const Size(1200, 900),
+      size: const Size(880, 500),
       platform: TargetPlatform.android,
     );
-
-    await tester.tap(find.text('Réponse tablet'));
+    final scrollable = find
+        .descendant(
+          of: find.byKey(const Key('desktop-study-content')),
+          matching: find.byType(Scrollable),
+        )
+        .first;
+    expect(tester.state<ScrollableState>(scrollable).position.pixels, 0);
+    final pen = await tester.createGesture(kind: PointerDeviceKind.stylus);
+    await pen.down(const Offset(440, 350));
+    await pen.moveBy(const Offset(0, -150));
+    await pen.moveBy(const Offset(0, -150));
+    await pen.up();
     await tester.pumpAndSettle();
+    expect(
+      tester.state<ScrollableState>(scrollable).position.pixels,
+      greaterThan(0),
+    );
+    debugDefaultTargetPlatformOverride = null;
+  });
 
-    expect(find.byKey(const Key('desktop-review-panel')), findsNothing);
-    expect(find.byKey(const Key('inline-review-controls')), findsOneWidget);
+  testWidgets('rotating mid-session keeps the typed text and the card', (
+    tester,
+  ) async {
+    final controller = fakeController([
+      buildCard('a', mode: TestMode.freeText),
+      buildCard('b', mode: TestMode.freeText),
+    ]);
+    await pumpStudyScreen(
+      tester,
+      controller: controller,
+      size: const Size(880, 1408),
+      platform: TargetPlatform.android,
+    );
+    await tester.enterText(find.byType(TextField), 'ma réponse');
+    tester.view.physicalSize = const Size(1408, 880);
+    await tester.pumpAndSettle();
+    tester.view.physicalSize = const Size(880, 1408);
+    await tester.pumpAndSettle();
+    expect(find.text('ma réponse'), findsOneWidget);
+    expect(find.text('Question a'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+    debugDefaultTargetPlatformOverride = null;
+  });
+
+  testWidgets('open keyboard on a free-text card: no overflow, field visible', (
+    tester,
+  ) async {
+    await pumpStudyScreen(
+      tester,
+      controller: fakeController([buildCard('a', mode: TestMode.freeText)]),
+      size: const Size(880, 1408),
+      platform: TargetPlatform.android,
+    );
+    tester.view.viewInsets = const FakeViewPadding(bottom: 420);
+    addTearDown(tester.view.resetViewInsets);
+    await tester.pumpAndSettle();
+    final field = tester.getRect(find.byType(TextField));
+    expect(field.top, greaterThanOrEqualTo(0));
+    expect(field.bottom, lessThanOrEqualTo(1408 - 420));
+    // Clavier ouvert, la carte abandonne sa hauteur minimale.
+    final card = find.ancestor(
+      of: find.byType(TextField),
+      matching: find.byType(Card),
+    );
+    expect(tester.getSize(card.first).height, lessThan(1408 * 0.25));
+    expect(tester.takeException(), isNull);
     debugDefaultTargetPlatformOverride = null;
   });
 

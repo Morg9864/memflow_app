@@ -25,7 +25,6 @@ void main() {
       clozeWordBank: const [],
       acceptedAnswers: const [],
       level: 1,
-      progressDots: 3,
     );
   }
 
@@ -50,7 +49,6 @@ void main() {
       clozeWordBank: const [],
       acceptedAnswers: const [],
       level: 1,
-      progressDots: 3,
     );
   }
 
@@ -72,7 +70,6 @@ void main() {
       clozeWordBank: const ['useState', 'useEffect', 'afficher', 'modifier'],
       acceptedAnswers: const [],
       level: 1,
-      progressDots: 3,
     );
   }
 

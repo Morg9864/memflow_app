@@ -1319,7 +1319,6 @@ class AppRepository {
       clozeWordBank: card.clozeWordBank,
       acceptedAnswers: card.acceptedAnswers,
       level: card.level,
-      progressDots: math.max(3, math.min(6, card.repetitions + 3)),
     );
   }
 

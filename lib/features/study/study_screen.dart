@@ -41,9 +41,8 @@ class StudyScreen extends ConsumerStatefulWidget {
 
 class _StudyScreenState extends ConsumerState<StudyScreen>
     with WidgetsBindingObserver {
-  static const double _desktopBreakpoint = 1100;
-  static const double _desktopMaxWidth = 1240;
-  static const double _desktopReviewPanelWidth = 340;
+  static const double _wideMaxWidth = 1240;
+  static const double _wideReviewPanelWidth = 340;
 
   StudySessionState? _state;
   Object? _error;
@@ -684,12 +683,15 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
               body: SafeArea(
                 child: LayoutBuilder(
                   builder: (context, viewportConstraints) {
-                    final isWideDesktop =
-                        _isDesktopPlatform() &&
-                        viewportConstraints.maxWidth >= _desktopBreakpoint;
-                    final usesReviewPanel = isWideDesktop && showsReview;
-                    final maxWidth = isWideDesktop
-                        ? _desktopMaxWidth
+                    // Largeur seule : le panneau latéral vaut aussi pour une
+                    // tablette Android en paysage.
+                    final isWide =
+                        viewportConstraints.maxWidth >= AppBreakpoints.wide;
+                    final isTablet =
+                        viewportConstraints.maxWidth >= AppBreakpoints.tablet;
+                    final usesReviewPanel = isWide && showsReview;
+                    final maxWidth = isWide
+                        ? _wideMaxWidth
                         : AppTheme.contentMaxWidth;
 
                     final switcherKey = ValueKey('${mode.name}-${card.id}');
@@ -708,7 +710,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                           options: options,
                           selectedIndex: state.selectedOptionIndex,
                           hasValidatedAnswer: state.hasValidatedAnswer,
-                          desktopGrid: isWideDesktop,
+                          gridAnswers: isTablet,
                           showInlineFeedback: !usesReviewPanel,
                           onSelect: _selectOption,
                         ),
@@ -811,10 +813,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                           },
                           child: Padding(
                             padding: EdgeInsets.fromLTRB(
-                              16,
-                              viewportConstraints.maxWidth < 600 ? 8 : 16,
-                              16,
-                              viewportConstraints.maxWidth < 600 ? 12 : 24,
+                              isTablet ? 28 : 16,
+                              isTablet ? 20 : 8,
+                              isTablet ? 28 : 16,
+                              isTablet ? 28 : 12,
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -824,14 +826,9 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                                   currentIndex: state.currentIndex,
                                   total: state.cards.length,
                                   level: card.level,
-                                  progressDots: card.progressDots,
                                   onClose: _exitStudy,
                                 ),
-                                SizedBox(
-                                  height: viewportConstraints.maxWidth < 600
-                                      ? 8
-                                      : 24,
-                                ),
+                                SizedBox(height: isTablet ? 32 : 8),
                                 Expanded(
                                   child: Row(
                                     crossAxisAlignment:
@@ -856,8 +853,8 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                                       if (usesReviewPanel) ...[
                                         const SizedBox(width: 24),
                                         SizedBox(
-                                          width: _desktopReviewPanelWidth,
-                                          child: _DesktopReviewPanel(
+                                          width: _wideReviewPanelWidth,
+                                          child: _ReviewSidePanel(
                                             feedback: _reviewFeedback(
                                               mode: mode,
                                               card: card,
@@ -866,6 +863,8 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                                             ),
                                             suggested: suggested,
                                             onReview: _applyReview,
+                                            showKeyboardHint:
+                                                _isDesktopPlatform(),
                                           ),
                                         ),
                                       ],
@@ -1192,7 +1191,9 @@ class _ReviewControls extends StatelessWidget {
           key: const Key('inline-review-controls'),
           suggested: suggested,
           onReview: onReview,
-          columns: MediaQuery.sizeOf(context).width > 700 ? 4 : 2,
+          columns: MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet
+              ? 4
+              : 2,
         ),
         if (showKeyboardHint) const _KeyboardHint(),
       ],
@@ -1291,16 +1292,18 @@ class _ReviewFeedback {
   final bool? resultIsCorrect;
 }
 
-class _DesktopReviewPanel extends StatelessWidget {
-  const _DesktopReviewPanel({
+class _ReviewSidePanel extends StatelessWidget {
+  const _ReviewSidePanel({
     required this.feedback,
     required this.suggested,
     required this.onReview,
+    required this.showKeyboardHint,
   });
 
   final _ReviewFeedback feedback;
   final ReviewResult suggested;
   final ValueChanged<ReviewResult> onReview;
+  final bool showKeyboardHint;
 
   @override
   Widget build(BuildContext context) {
@@ -1376,7 +1379,7 @@ class _DesktopReviewPanel extends StatelessWidget {
                     compact: true,
                     spacing: 10,
                   ),
-                  const _KeyboardHint(),
+                  if (showKeyboardHint) const _KeyboardHint(),
                 ],
               ),
             ),
@@ -1435,7 +1438,10 @@ class _FlashcardModeState extends State<_FlashcardMode>
   Widget build(BuildContext context) {
     final reduced = MediaQuery.disableAnimationsOf(context);
     final height = MediaQuery.sizeOf(context).height;
-    final minHeight = (height * 0.42).clamp(240.0, 420.0);
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
+    final minHeight = tablet
+        ? (height * 0.55).clamp(240.0, 820.0)
+        : (height * 0.42).clamp(240.0, 420.0);
 
     // Une seule face est construite : le lecteur d'écran ne voit jamais les
     // deux, ni le texte miroir.
@@ -1481,6 +1487,7 @@ class _FlashcardModeState extends State<_FlashcardMode>
         ? widget.card.correctAnswer
         : widget.card.question;
     final hint = widget.card.hint;
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
     // Le glissement ne révèle que si le contenu ne défile pas.
     final overflows = _StudyOverflow.of(context);
     return Card(
@@ -1499,25 +1506,28 @@ class _FlashcardModeState extends State<_FlashcardMode>
               Text(
                 text,
                 textAlign: TextAlign.center,
-                style: questionTextStyle(theme.textTheme, text),
+                style: questionTextStyle(theme.textTheme, text, tablet: tablet),
               ),
               if (hint != null) ...[
                 const SizedBox(height: AppSpacing.md),
                 _HintLine(hint: hint),
               ],
-              const SizedBox(height: AppSpacing.lg),
-              Visibility(
-                visible: !overflows,
-                maintainSize: true,
-                maintainAnimation: true,
-                maintainState: true,
-                child: Text(
-                  'Glisse vers le haut',
-                  key: const Key('flash-swipe-hint'),
-                  textAlign: TextAlign.center,
-                  style: theme.textTheme.bodySmall,
+              // Sur tablette, « Révéler » suffit ; le glissement marche toujours.
+              if (!tablet) ...[
+                const SizedBox(height: AppSpacing.lg),
+                Visibility(
+                  visible: !overflows,
+                  maintainSize: true,
+                  maintainAnimation: true,
+                  maintainState: true,
+                  child: Text(
+                    'Glisse vers le haut',
+                    key: const Key('flash-swipe-hint'),
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.bodySmall,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
         ),
@@ -1568,14 +1578,19 @@ class _FlashcardModeState extends State<_FlashcardMode>
 
 /// Taille du texte de la question selon sa longueur : les questions courtes
 /// gagnent en présence, les longues restent lisibles sans prendre l'écran.
+/// Sur tablette, chaque palier monte d'un cran par-dessus l'échelle du thème.
 @visibleForTesting
-TextStyle questionTextStyle(TextTheme theme, String text) {
+TextStyle questionTextStyle(
+  TextTheme theme,
+  String text, {
+  bool tablet = false,
+}) {
   final length = text.trim().length;
   return (length < 90
-      ? theme.headlineMedium
+      ? (tablet ? theme.displayMedium : theme.headlineMedium)
       : length < 200
-      ? theme.headlineSmall
-      : theme.titleLarge)!;
+      ? (tablet ? theme.headlineMedium : theme.headlineSmall)
+      : (tablet ? theme.headlineSmall : theme.titleLarge))!;
 }
 
 /// Couleurs et icône d'un résultat de réponse (vrai, faux, neutre).
@@ -1631,25 +1646,45 @@ class _QuestionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final compact = MediaQuery.sizeOf(context).width < 600;
+    final size = MediaQuery.sizeOf(context);
+    final compact = size.width < AppBreakpoints.tablet;
+    // Hauteur minimale : les réponses restent au même endroit d'une carte à
+    // l'autre. Abandonnée clavier ouvert pour garder le champ visible.
+    // Le Scaffold retire l'inset du clavier du MediaQuery de son corps : on le
+    // lit sur la vue.
+    final keyboardOpen = View.of(context).viewInsets.bottom > 0;
+    final minHeight = compact || keyboardOpen
+        ? 0.0
+        : size.height * 0.34 - 2 * AppSpacing.xl;
     return Card(
       child: Padding(
         padding: EdgeInsets.all(compact ? AppSpacing.lg : AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SectionLabel(label),
-            SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
-            Text(question, style: questionTextStyle(theme.textTheme, question)),
-            if (hint != null) ...[
-              const SizedBox(height: AppSpacing.md),
-              _HintLine(hint: hint!),
+        child: ConstrainedBox(
+          constraints: BoxConstraints(minHeight: minHeight),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SectionLabel(label),
+              SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
+              Text(
+                question,
+                style: questionTextStyle(
+                  theme.textTheme,
+                  question,
+                  tablet: !compact,
+                ),
+              ),
+              if (hint != null) ...[
+                const SizedBox(height: AppSpacing.md),
+                _HintLine(hint: hint!),
+              ],
+              if (body != null) ...[
+                SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
+                body!,
+              ],
             ],
-            if (body != null) ...[
-              SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
-              body!,
-            ],
-          ],
+          ),
         ),
       ),
     );
@@ -1788,9 +1823,15 @@ class _FeedbackCardState extends State<_FeedbackCard> {
               const SizedBox(height: 14),
               Opacity(
                 opacity: explanationOpacity,
-                child: Text(
-                  explanation,
-                  style: theme.textTheme.bodyLarge?.copyWith(color: tone.text),
+                // Lignes lisibles dans une carte large.
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 680),
+                  child: Text(
+                    explanation,
+                    style: theme.textTheme.bodyLarge?.copyWith(
+                      color: tone.text,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -1830,7 +1871,7 @@ class _McqMode extends StatelessWidget {
     required this.options,
     required this.selectedIndex,
     required this.hasValidatedAnswer,
-    required this.desktopGrid,
+    required this.gridAnswers,
     required this.showInlineFeedback,
     required this.onSelect,
   });
@@ -1839,13 +1880,13 @@ class _McqMode extends StatelessWidget {
   final List<String> options;
   final int? selectedIndex;
   final bool hasValidatedAnswer;
-  final bool desktopGrid;
+  final bool gridAnswers;
   final bool showInlineFeedback;
   final void Function(int index, List<String> options) onSelect;
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 600;
+    final compact = MediaQuery.sizeOf(context).width < AppBreakpoints.tablet;
     final correctIndex = options.indexWhere(
       (item) => item == card.correctAnswer,
     );
@@ -1877,15 +1918,29 @@ class _McqMode extends StatelessWidget {
           hint: card.hint,
         ),
         SizedBox(height: compact ? 10 : AppSpacing.lg),
-        if (desktopGrid)
+        if (gridAnswers)
           LayoutBuilder(
             builder: (context, constraints) {
               final optionWidth = (constraints.maxWidth - 10) / 2;
-              final optionHeight = _McqOptionTile.uniformHeight(
-                context,
-                options,
-                optionWidth,
+              final optionHeight = math.max(
+                _tabletOptionHeight,
+                _McqOptionTile.uniformHeight(context, options, optionWidth),
               );
+              // Texte très agrandi ou fenêtre étroite : la liste évite les
+              // tuiles démesurées et les mots coupés.
+              final largeText =
+                  MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+              if (largeText || optionWidth < 240 || optionHeight > 220) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    for (var index = 0; index < options.length; index++) ...[
+                      tile(index),
+                      const SizedBox(height: 10),
+                    ],
+                  ],
+                );
+              }
               return Wrap(
                 spacing: 10,
                 runSpacing: 10,
@@ -1919,6 +1974,9 @@ class _McqMode extends StatelessWidget {
   }
 }
 
+/// Hauteur minimale confortable d'une réponse au stylet sur tablette.
+const double _tabletOptionHeight = 104;
+
 class _McqOptionTile extends StatelessWidget {
   const _McqOptionTile({
     required this.text,
@@ -1930,6 +1988,7 @@ class _McqOptionTile extends StatelessWidget {
     this.shortcutLabel,
     this.compact = false,
     this.reserveCaption = false,
+    this.minHeight = 48,
   });
 
   final String text;
@@ -1943,6 +2002,7 @@ class _McqOptionTile extends StatelessWidget {
 
   /// Garde la place de la légende « Ta réponse » (grille à hauteur fixe).
   final bool reserveCaption;
+  final double minHeight;
 
   static const double _padding = 18;
   static const double _borderWidth = 1;
@@ -1975,7 +2035,8 @@ class _McqOptionTile extends StatelessWidget {
     final textScaler = MediaQuery.textScalerOf(context);
     final maxTextWidth = math.max(
       0.0,
-      tileWidth - (_padding + _borderWidth) * 2,
+      // Pastille de lettre (32 + 14) et icône de résultat (22) comprises.
+      tileWidth - (_padding + _borderWidth) * 2 - 46 - 22,
     );
     var tallest = 0.0;
     for (final option in options) {
@@ -2058,7 +2119,7 @@ class _McqOptionTile extends StatelessWidget {
         child: AnimatedContainer(
           duration: AppMotion.of(context, AppMotion.fast),
           curve: AppMotion.standardCurve,
-          constraints: const BoxConstraints(minHeight: 48),
+          constraints: BoxConstraints(minHeight: minHeight),
           decoration: BoxDecoration(
             color: background,
             borderRadius: AppTheme.radiusButton,
@@ -2075,8 +2136,12 @@ class _McqOptionTile extends StatelessWidget {
                   children: [
                     if (shortcutLabel != null) ...[
                       Container(
-                        width: compact ? 28 : 32,
-                        height: compact ? 28 : 32,
+                        // Tablette : la pastille grandit avec le texte agrandi.
+                        width: compact ? 28 : null,
+                        height: compact ? 28 : null,
+                        constraints: compact
+                            ? null
+                            : const BoxConstraints(minWidth: 32, minHeight: 32),
                         alignment: Alignment.center,
                         decoration: BoxDecoration(
                           color: badgeColor,
@@ -2553,6 +2618,21 @@ class _TrueFalseMode extends StatelessWidget {
     final correctIndex = propositionIsCorrect ? 0 : 1;
     final theme = Theme.of(context);
     final answeredCorrectly = selectedIndex == correctIndex;
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
+    Widget answer((String, int) item) => _McqOptionTile(
+      text: item.$1,
+      isSelected: selectedIndex == item.$2,
+      validated: hasValidatedAnswer,
+      isCorrect: hasValidatedAnswer && item.$2 == correctIndex,
+      isWrong:
+          hasValidatedAnswer &&
+          selectedIndex == item.$2 &&
+          selectedIndex != correctIndex,
+      onTap: hasValidatedAnswer ? null : () => onSelect(item.$2),
+      // Côte à côte, la légende réservée garde les deux tuiles égales.
+      reserveCaption: tablet,
+      minHeight: tablet ? _tabletOptionHeight : 48,
+    );
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -2583,20 +2663,19 @@ class _TrueFalseMode extends StatelessWidget {
           ),
         ),
         const SizedBox(height: AppSpacing.lg),
-        for (final item in [('Vrai', 0), ('Faux', 1)]) ...[
-          _McqOptionTile(
-            text: item.$1,
-            isSelected: selectedIndex == item.$2,
-            validated: hasValidatedAnswer,
-            isCorrect: hasValidatedAnswer && item.$2 == correctIndex,
-            isWrong:
-                hasValidatedAnswer &&
-                selectedIndex == item.$2 &&
-                selectedIndex != correctIndex,
-            onTap: hasValidatedAnswer ? null : () => onSelect(item.$2),
-          ),
-          const SizedBox(height: 10),
-        ],
+        if (tablet)
+          Row(
+            children: [
+              Expanded(child: answer(('Vrai', 0))),
+              const SizedBox(width: 10),
+              Expanded(child: answer(('Faux', 1))),
+            ],
+          )
+        else
+          for (final item in [('Vrai', 0), ('Faux', 1)]) ...[
+            answer(item),
+            const SizedBox(height: 10),
+          ],
         if (hasValidatedAnswer && showInlineFeedback) ...[
           const SizedBox(height: AppSpacing.md),
           _FeedbackCard(
@@ -2657,7 +2736,6 @@ class _StudyProgressHeader extends StatelessWidget {
     required this.currentIndex,
     required this.total,
     required this.level,
-    required this.progressDots,
     this.onClose,
   });
 
@@ -2665,7 +2743,6 @@ class _StudyProgressHeader extends StatelessWidget {
   final int currentIndex;
   final int total;
   final int level;
-  final int progressDots;
   final VoidCallback? onClose;
 
   @override
@@ -2677,31 +2754,9 @@ class _StudyProgressHeader extends StatelessWidget {
         ? const SizedBox(width: double.infinity)
         : Padding(
             padding: const EdgeInsets.only(top: 8),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: _LevelBadge(level: level),
-                  ),
-                ),
-                Row(
-                  children: List.generate(
-                    progressDots,
-                    (index) => Container(
-                      width: 8,
-                      height: 8,
-                      margin: const EdgeInsets.only(left: 6),
-                      decoration: BoxDecoration(
-                        color: index <= currentIndex
-                            ? theme.colorScheme.primary
-                            : theme.dividerColor,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: _LevelBadge(level: level),
             ),
           );
     return Column(
@@ -2785,6 +2840,7 @@ class _ReviewButton extends StatelessWidget {
     final tone = result.tone;
     final enabled = onPressed != null;
     final largeText = MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
     final semanticsLabel = [
       result.label,
       result.description,
@@ -2818,7 +2874,9 @@ class _ReviewButton extends StatelessWidget {
           child: InkWell(
             onTap: onPressed,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 56),
+              constraints: BoxConstraints(
+                minHeight: tablet && !compact ? 68 : 56,
+              ),
               child: Stack(
                 children: [
                   Padding(

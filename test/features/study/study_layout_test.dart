@@ -62,7 +62,6 @@ StudyCard _card(String id, TestMode mode, {String? question, String? hint}) {
         : const [],
     acceptedAnswers: const [],
     level: 2,
-    progressDots: 4,
   );
 }
 

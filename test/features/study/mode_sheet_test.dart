@@ -203,7 +203,6 @@ void main() {
           clozeWordBank: [],
           acceptedAnswers: [],
           level: 1,
-          progressDots: 3,
         ),
       ],
       currentIndex: 0,

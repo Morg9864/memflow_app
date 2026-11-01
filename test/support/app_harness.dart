@@ -97,7 +97,6 @@ class FakeRepository implements AppRepository {
       clozeWordBank: const [],
       acceptedAnswers: const [],
       level: 1,
-      progressDots: 1,
     );
     return StudySessionState(
       deckTitle: 'Biologie',

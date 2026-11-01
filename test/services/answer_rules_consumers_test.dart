@@ -61,7 +61,6 @@ void main() {
     clozeWordBank: draft.clozeWordBank,
     acceptedAnswers: draft.acceptedAnswers,
     level: draft.level,
-    progressDots: 0,
   );
 
   test('import, mode eligibility and every grader preserve answer meaning', () {

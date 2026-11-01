@@ -46,7 +46,6 @@ StudyCard _card(
   clozeWordBank: const [],
   acceptedAnswers: const [],
   level: 2,
-  progressDots: 4,
 );
 
 StudySessionState _state(List<StudyCard> cards) => StudySessionState(

@@ -674,7 +674,6 @@ class StudyCard {
     required this.clozeWordBank,
     required this.acceptedAnswers,
     required this.level,
-    required this.progressDots,
   });
 
   final String id;
@@ -692,7 +691,6 @@ class StudyCard {
   final List<String> clozeWordBank;
   final List<String> acceptedAnswers;
   final int level;
-  final int progressDots;
 
   List<String> buildOptions() {
     final seen = <String>{};

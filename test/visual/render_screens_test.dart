@@ -172,7 +172,6 @@ StudyCard _card(
       : const [],
   acceptedAnswers: const [],
   level: 2,
-  progressDots: 3,
 );
 
 final _statsFull = StatisticsOverview(

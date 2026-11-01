@@ -211,7 +211,6 @@ StudyCard fixtureCard(TestMode mode, {bool long = false}) => StudyCard(
       : const [],
   acceptedAnswers: const [],
   level: 2,
-  progressDots: 3,
 );
 
 class FakeStudyController extends StudyController {

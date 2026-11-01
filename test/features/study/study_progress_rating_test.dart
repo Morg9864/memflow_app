@@ -57,7 +57,6 @@ StudyCard _card(
         : const [],
     acceptedAnswers: const [],
     level: 2,
-    progressDots: 4,
   );
 }
 
