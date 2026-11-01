@@ -131,13 +131,27 @@ Owner decisions: portrait first, S Pen input, 2x2 study answers, on-screen keybo
 | 5 | Stats, import, profile, settings, remaining screens | Done | `5bfee1f`. Mode sheet, summary and auth reviewed, no change needed |
 | 6 | Tests and docs | Done | 803 pass + 30 skipped, analyzer at baseline. Layout matrix and guidelines cover tablet sizes. All tablet captures OK. Phone and small captures: 56 compared with the starting state, 26 differ, only in the dots area |
 | 6b | Fix found on the real tablet | Done | `4feaa71`. The tablet's system font scale is 1.15, which dropped home to one column and long answers out of the grid. Column minimum 290, grid limit 320, and 1.15 added to captures and the layout matrix. 916 pass + 30 skipped, phone captures unchanged |
-| 7 | On the tablet | In progress | Release of `4feaa71` installed in place (2.4.0, 13:32:15), signing key matched. An earlier install of `75f01e1` opened signed in with data present. Waiting: owner's S Pen check, then portrait performance (6 runs, `.perf` APKs built and id-checked) |
+| 7 | On the tablet | Done | Release of `9e5bcc4` installed in place (2.4.0, 14:37:03), signing key matched, signed in, sync OK. Owner tried it with the S Pen: "It worked relatively well", nothing to report. Portrait performance below. The real app was checked before and after every run, and the `.perf` app is removed |
 
 Unchanged since `950d53e`: `study_controller.dart`, `study_rules.dart`. `lib/data` and `lib/domain` only lost `progressDots`.
 
 Known issues:
-- Not checked on a device: all of this phase, including S Pen tapping, scrolling and palm contact, and whether a pen tap on the free-text field opens the keyboard. Flutter's stylus handwriting is on by default on this Android version.
-- Stylus tests simulate the pointer kind only.
+- Stylus tests simulate the pointer kind only. Real pen use rests on the owner's own trial.
 - `_StudyProgressHeader` reads `MediaQuery.viewInsetsOf`, which inside the Scaffold body never sees the keyboard, so its level row probably never hides. Found during this phase, and left as is because fixing it changes phone behaviour.
 - The rail assumes a right-handed user.
 - The stats skeleton at tablet width was not rendered in a capture.
+
+### Tablet portrait performance
+Profile mode on the SM-X406B at 880x1408 with its real 1.15 font scale, 768 due cards. Baseline: `950d53e`, the phone-shaped redesign (6 runs). Final: `9e5bcc4` (3 runs). Median and run range. Runs were interleaved. A difference is claimed only when ranges don't overlap. Raw data: `build/perf/portrait/`.
+
+| Scenario | Frames over 11.1ms | Frames over 16.7ms | Worst build | Worst raster |
+|---|---|---|---|---|
+| Tab switch | 0.5 (0-4) to 1 (0-1) | 0 to 0 | 11.1 to 11.3ms | 10.1 to 8.6ms |
+| Home scroll | 0 (0-1) to 0 (0-0) | 0 to 0 | 7.8 to 6.9ms | 10.3 to 9.8ms |
+| Study session | 8.5 (7-13) to 9 (4-11) | 1 (0-1) to 2 (1-3) | 18.4 to 19.2ms | 13.7 to 14.3ms |
+
+No measurable difference from the baseline in any row. Memory (total PSS): 244-253MB to 244-248MB, no measurable difference.
+
+These measurements found one regression, now fixed. `SliverLayoutBuilder` on home re-ran on every scroll offset. At `4feaa71`, home scroll had 11 (10-20) frames over 11.1ms, worst build 15.7ms and build p99 10.5ms. After `9e5bcc4`: 0, 6.9ms and 4.9ms.
+
+Limits: 3 to 6 runs on one mid-range tablet. The study scenario is QCM only, so the flashcard flip isn't measured. The session's 4-13 frames over 11.1ms exist in both versions, source unidentified.
