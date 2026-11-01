@@ -61,54 +61,62 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
     return AppScaffold(
       child: SyncRefreshIndicator(
-        child: CustomScrollView(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          physics: const AlwaysScrollableScrollPhysics(),
-          slivers: [
-            SliverToBoxAdapter(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const _Header(),
-                  const SizedBox(height: AppSpacing.xl),
-                  SectionLabel(
-                    displayName == null ? 'Bonjour' : 'Bonjour, $displayName',
-                  ),
-                  const SizedBox(height: AppSpacing.sm),
-                  stats.when(
-                    data: (data) => _Overview(stats: data),
-                    loading: () => const _StatsSkeleton(),
-                    error: (error, stackTrace) => AppErrorState(
-                      onRetry: () => ref.invalidate(homeStatsProvider),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  TextField(
-                    controller: _searchController,
-                    decoration: const InputDecoration(
-                      hintText: 'Rechercher une collection',
-                      prefixIcon: Icon(Icons.search_rounded),
-                    ),
-                    onChanged: _onSearchChanged,
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  const _CollectionsHeader(),
-                  const SizedBox(height: AppSpacing.md),
-                ],
-              ),
-            ),
-            if (items != null)
-              _CollectionsSliver(items: items, search: _search)
-            else if (collections.hasError)
+        // Pas de SliverLayoutBuilder pour la largeur : il se reconstruit à chaque
+        // décalage de défilement, et toute la liste avec lui.
+        child: LayoutBuilder(
+          builder: (context, viewport) => CustomScrollView(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
               SliverToBoxAdapter(
-                child: AppErrorState(
-                  onRetry: () =>
-                      ref.invalidate(homeCollectionsProvider(_search)),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const _Header(),
+                    const SizedBox(height: AppSpacing.xl),
+                    SectionLabel(
+                      displayName == null ? 'Bonjour' : 'Bonjour, $displayName',
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
+                    stats.when(
+                      data: (data) => _Overview(stats: data),
+                      loading: () => const _StatsSkeleton(),
+                      error: (error, stackTrace) => AppErrorState(
+                        onRetry: () => ref.invalidate(homeStatsProvider),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    TextField(
+                      controller: _searchController,
+                      decoration: const InputDecoration(
+                        hintText: 'Rechercher une collection',
+                        prefixIcon: Icon(Icons.search_rounded),
+                      ),
+                      onChanged: _onSearchChanged,
+                    ),
+                    const SizedBox(height: AppSpacing.xl),
+                    const _CollectionsHeader(),
+                    const SizedBox(height: AppSpacing.md),
+                  ],
                 ),
-              )
-            else
-              const SliverToBoxAdapter(child: _CollectionsSkeleton()),
-          ],
+              ),
+              if (items != null)
+                _CollectionsSliver(
+                  items: items,
+                  search: _search,
+                  width: viewport.maxWidth,
+                )
+              else if (collections.hasError)
+                SliverToBoxAdapter(
+                  child: AppErrorState(
+                    onRetry: () =>
+                        ref.invalidate(homeCollectionsProvider(_search)),
+                  ),
+                )
+              else
+                const SliverToBoxAdapter(child: _CollectionsSkeleton()),
+            ],
+          ),
         ),
       ),
     );
@@ -413,10 +421,17 @@ class _Entry {
 }
 
 class _CollectionsSliver extends StatelessWidget {
-  const _CollectionsSliver({required this.items, required this.search});
+  const _CollectionsSliver({
+    required this.items,
+    required this.search,
+    required this.width,
+  });
 
   final List<CollectionListItem> items;
   final String search;
+
+  /// Largeur réellement disponible (rail et marges déduits), pas la fenêtre.
+  final double width;
 
   static List<_Entry> _rows(List<CollectionListItem> list, int columns) => [
     for (var i = 0; i < list.length; i += columns)
@@ -447,39 +462,30 @@ class _CollectionsSliver extends StatelessWidget {
       );
     }
 
-    // Colonnes selon la largeur réellement disponible (rail et marges déduits)
-    // et l'échelle du texte, pas selon la fenêtre.
-    return SliverLayoutBuilder(
-      builder: (context, constraints) {
-        final columns = adaptiveColumns(context, constraints.crossAxisExtent);
-        final active = items.where((i) => !i.isDisabled).toList();
-        final disabled = items.where((i) => i.isDisabled).toList();
-        final entries = [
-          ..._rows(active, columns),
-          if (disabled.isNotEmpty) const _Entry.header(),
-          ..._rows(disabled, columns),
-        ];
-        return SliverList.builder(
-          itemCount: entries.length,
-          itemBuilder: (context, index) {
-            final entry = entries[index];
-            if (entry.disabledHeader) {
-              return const Padding(
-                padding: EdgeInsets.only(
-                  top: AppSpacing.md,
-                  bottom: AppSpacing.md,
-                ),
-                child: Align(
-                  alignment: Alignment.centerLeft,
-                  child: SectionLabel('Désactivé(s)'),
-                ),
-              );
-            }
-            return cardRow([
-              for (final item in entry.items) _CollectionCard(collection: item),
-            ], columns);
-          },
-        );
+    final columns = adaptiveColumns(context, width);
+    final active = items.where((i) => !i.isDisabled).toList();
+    final disabled = items.where((i) => i.isDisabled).toList();
+    final entries = [
+      ..._rows(active, columns),
+      if (disabled.isNotEmpty) const _Entry.header(),
+      ..._rows(disabled, columns),
+    ];
+    return SliverList.builder(
+      itemCount: entries.length,
+      itemBuilder: (context, index) {
+        final entry = entries[index];
+        if (entry.disabledHeader) {
+          return const Padding(
+            padding: EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.md),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: SectionLabel('Désactivé(s)'),
+            ),
+          );
+        }
+        return cardRow([
+          for (final item in entry.items) _CollectionCard(collection: item),
+        ], columns);
       },
     );
   }

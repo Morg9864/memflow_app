@@ -300,6 +300,8 @@ void main() {
       ].where((f) => f.evaluate().isNotEmpty);
       final lefts = {for (final t in tiles) tester.getTopLeft(t).dx};
       expect(lefts.length, columns);
+      // Il se reconstruirait à chaque image de défilement (mesuré sur tablette).
+      expect(find.byType(SliverLayoutBuilder), findsNothing);
       // Aucune carte plus étroite que le minimum: pas de mot coupé.
       for (final card in find.byType(Card).evaluate().skip(3)) {
         // Téléphone: une seule colonne, sans minimum.
