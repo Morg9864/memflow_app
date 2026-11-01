@@ -408,7 +408,7 @@ class _PressableState extends State<Pressable> {
   bool _down = false;
 
   void _set(bool value) {
-    if (_down != value) setState(() => _down = value);
+    if (mounted && _down != value) setState(() => _down = value);
   }
 
   @override
