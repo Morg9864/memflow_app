@@ -102,6 +102,33 @@ void main() {
     expect(repository.updatedIcon, '🧠');
   });
 
+  for (final (label, size, scale, columns, beside) in [
+    ('360x800', const Size(360, 800), 1.0, 1, false),
+    ('880x1408', const Size(880, 1408), 1.0, 2, true),
+    ('880x1408 at 2.0 text scale', const Size(880, 1408), 2.0, 1, false),
+  ]) {
+    testWidgets('deck columns and summary layout follow the width: $label', (
+      tester,
+    ) async {
+      final repository = _FakeAppRepository(
+        database: database,
+        collection: _collection(),
+        decks: List.generate(4, _deck),
+      );
+      await _pumpScreen(tester, repository, size: size, textScale: scale);
+
+      final lefts = {
+        for (var i = 0; i < 4; i++) tester.getTopLeft(find.text('Deck $i')).dx,
+      };
+      expect(lefts.length, columns);
+      // Identité à gauche des statistiques, ou au-dessus.
+      final identity = tester.getTopLeft(find.text('Collection test'));
+      final stats = tester.getTopLeft(find.text('cartes'));
+      expect(stats.dx > identity.dx + 100, beside);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('decks can be sorted by import order and alphabetically', (
     tester,
   ) async {
@@ -123,7 +150,8 @@ void main() {
         ),
       ],
     );
-    await _pumpScreen(tester, repository);
+    // Une colonne: l'ordre se lit de haut en bas.
+    await _pumpScreen(tester, repository, size: const Size(360, 800));
 
     expect(_visibleDeckOrder(tester), ['Alpha', 'Beta', 'Gamma']);
 
@@ -140,8 +168,15 @@ void main() {
 
 Future<void> _pumpScreen(
   WidgetTester tester,
-  _FakeAppRepository repository,
-) async {
+  _FakeAppRepository repository, {
+  Size? size,
+  double textScale = 1,
+}) async {
+  if (size != null) {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+  }
   final preferences = await SharedPreferences.getInstance();
   await tester.pumpWidget(
     ProviderScope(
@@ -151,6 +186,12 @@ Future<void> _pumpScreen(
       ],
       child: MaterialApp(
         theme: ThemeData(useMaterial3: true),
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
         home: const CollectionDetailScreen(collectionId: 'collection-1'),
       ),
     ),

@@ -274,6 +274,71 @@ void main() {
     });
   }
 
+  // Colonnes: largeur réellement disponible et échelle du texte, pas la fenêtre.
+  for (final (label, size, scale, columns) in [
+    ('360x800', const Size(360, 800), 1.0, 1),
+    ('600x960', const Size(600, 960), 1.0, 1),
+    ('880x1408', const Size(880, 1408), 1.0, 2),
+    ('1408x880', const Size(1408, 880), 1.0, 3),
+    ('880x1408 at 2.0 text scale', const Size(880, 1408), 2.0, 1),
+  ]) {
+    testWidgets('collections use $columns column(s) at $label', (tester) async {
+      await _pump(
+        tester,
+        size: size,
+        textScale: scale,
+        collections: (_) => Stream.value([
+          for (var i = 0; i < 6; i++) _col('c$i', 'Collection $i'),
+        ]),
+      );
+      final tiles = [
+        for (var i = 0; i < 6; i++) find.byKey(ValueKey('collection-tile-c$i')),
+      ].where((f) => f.evaluate().isNotEmpty);
+      final lefts = {for (final t in tiles) tester.getTopLeft(t).dx};
+      expect(lefts.length, columns);
+      // Aucune carte plus étroite que le minimum: pas de mot coupé.
+      for (final card in find.byType(Card).evaluate().skip(3)) {
+        // Téléphone: une seule colonne, sans minimum.
+        if (size.width < 600) break;
+        expect(
+          card.size!.width,
+          greaterThanOrEqualTo(340 * (scale > 1 ? scale : 1)),
+        );
+      }
+    });
+  }
+
+  for (final (label, size, scale, beside) in [
+    ('880x1408', const Size(880, 1408), 1.0, true),
+    ('360x800', const Size(360, 800), 1.0, false),
+    ('880x1408 at 2.0 text scale', const Size(880, 1408), 2.0, false),
+  ]) {
+    testWidgets('hero is beside the stats only when there is room: $label', (
+      tester,
+    ) async {
+      await _pump(tester, size: size, textScale: scale);
+      final hero = tester.getTopLeft(find.text('734'));
+      final streak = tester.getTopLeft(find.text('12 j'));
+      expect(streak.dx > hero.dx + 200, beside);
+      if (beside) {
+        // Même hauteur totale: le bas des statistiques rejoint celui du héros.
+        final heroCard = find.ancestor(
+          of: find.text('734'),
+          matching: find.byType(Card),
+        );
+        final successCard = find.ancestor(
+          of: find.text('82 %'),
+          matching: find.byType(Card),
+        );
+        expect(
+          tester.getBottomLeft(heroCard).dy,
+          closeTo(tester.getBottomLeft(successCard).dy, 0.5),
+        );
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('navigation uses the expected destinations', (tester) async {
     await _pump(tester);
     await tester.tap(find.byTooltip('Voir les statistiques'));

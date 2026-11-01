@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -41,6 +43,40 @@ class AppScaffold extends StatelessWidget {
     );
   }
 }
+
+/// Nombre de colonnes d'une grille de cartes pour la largeur réellement
+/// [available] (rail et marges déduits). Chaque carte garde au moins
+/// [minWidth] × l'échelle du texte, sinon les mots se coupent en deux.
+int adaptiveColumns(
+  BuildContext context,
+  double available, {
+  double minWidth = 340,
+}) {
+  final scale = math.max(1.0, MediaQuery.textScalerOf(context).scale(16) / 16);
+  const gap = AppSpacing.md;
+  return math.max(1, ((available + gap) / (minWidth * scale + gap)).floor());
+}
+
+/// Une ligne de la grille: les cartes ont la même hauteur, la dernière ligne
+/// est complétée par du vide pour garder des colonnes alignées.
+Widget cardRow(List<Widget> cards, int columns) => Padding(
+  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+  child: columns == 1
+      ? cards.first
+      : IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (var i = 0; i < columns; i++) ...[
+                if (i > 0) const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: i < cards.length ? cards[i] : const SizedBox.shrink(),
+                ),
+              ],
+            ],
+          ),
+        ),
+);
 
 /// Demande une synchronisation puis laisse les streams SQLite rafraîchir les
 /// vues. La base locale reste la source de vérité pendant l'opération.

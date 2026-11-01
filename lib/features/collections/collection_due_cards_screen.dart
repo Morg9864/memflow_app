@@ -222,6 +222,7 @@ class _DueCardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
     final isDueNow = card.isDueNow;
     final dueLabel = isDueNow
         ? 'now'
@@ -229,11 +230,12 @@ class _DueCardTile extends StatelessWidget {
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
+        // Lignes un peu plus hautes sur tablette: ce sont des listes à parcourir.
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.lg,
-          AppSpacing.md,
+          tablet ? AppSpacing.lg : AppSpacing.md,
           AppSpacing.sm,
-          AppSpacing.md,
+          tablet ? AppSpacing.lg : AppSpacing.md,
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,

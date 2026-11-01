@@ -185,13 +185,15 @@ class _CardTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
     return Card(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(
+        // Lignes un peu plus hautes sur tablette: ce sont des listes à parcourir.
+        padding: EdgeInsets.fromLTRB(
           AppSpacing.lg,
-          AppSpacing.md,
+          tablet ? AppSpacing.lg : AppSpacing.md,
           AppSpacing.sm,
-          AppSpacing.md,
+          tablet ? AppSpacing.lg : AppSpacing.md,
         ),
         child: Row(
           children: [

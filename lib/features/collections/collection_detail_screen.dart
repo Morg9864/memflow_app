@@ -361,13 +361,9 @@ class _CollectionDetailScreenState
                 ],
               ),
             ),
-            _Identity(
+            _Summary(
               collection: item,
               onChangeIcon: _busy ? null : () => _chooseCollectionIcon(item),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: _CollectionStats(collection: item),
             ),
             FilledButton.tonalIcon(
               style: AppTheme.secondaryAction,
@@ -443,33 +439,42 @@ class _CollectionDetailScreenState
         final disabledDecks = _sortedDecks(
           deckItems.where((deck) => deck.isDisabled).toList(),
         );
-        Widget card(DeckListItem deck) => Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-          child: _buildDeckCard(item, deck),
-        );
         // ponytail: bloc unique (non lazy) comme avant; les tests existants
         // supposent tous les decks construits. SliverList.builder par deck si
         // les collections dépassent quelques centaines de decks.
         return [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              for (final deck in activeDecks) card(deck),
-              if (disabledDecks.isNotEmpty) ...[
-                const Padding(
-                  padding: EdgeInsets.only(
-                    top: AppSpacing.md,
-                    bottom: AppSpacing.md,
-                  ),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: SectionLabel('Désactivé(s)'),
-                  ),
-                ),
-                for (final deck in disabledDecks) card(deck),
-              ],
-              const _ImportButton(),
-            ],
+          LayoutBuilder(
+            builder: (context, constraints) {
+              // Colonnes selon la largeur disponible et l'échelle du texte.
+              final columns = adaptiveColumns(context, constraints.maxWidth);
+              List<Widget> rows(List<DeckListItem> list) => [
+                for (var i = 0; i < list.length; i += columns)
+                  cardRow([
+                    for (final deck in list.skip(i).take(columns))
+                      _buildDeckCard(item, deck),
+                  ], columns),
+              ];
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ...rows(activeDecks),
+                  if (disabledDecks.isNotEmpty) ...[
+                    const Padding(
+                      padding: EdgeInsets.only(
+                        top: AppSpacing.md,
+                        bottom: AppSpacing.md,
+                      ),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: SectionLabel('Désactivé(s)'),
+                      ),
+                    ),
+                    ...rows(disabledDecks),
+                  ],
+                  const _ImportButton(),
+                ],
+              );
+            },
           ),
         ];
       },
@@ -556,6 +561,60 @@ class _MenuRow extends StatelessWidget {
   }
 }
 
+/// Identité et statistiques. Sur tablette elles se placent côte à côte, les
+/// statistiques empilées; sinon, ou avec un texte agrandi, l'une sous l'autre.
+class _Summary extends StatelessWidget {
+  const _Summary({required this.collection, required this.onChangeIcon});
+
+  final CollectionListItem collection;
+  final VoidCallback? onChangeIcon;
+
+  @override
+  Widget build(BuildContext context) {
+    final identity = _Identity(
+      collection: collection,
+      onChangeIcon: onChangeIcon,
+    );
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Largeur utile (rail et marges déduits), pas celle de la fenêtre.
+        final beside =
+            constraints.maxWidth >= AppBreakpoints.tablet &&
+            !_largeText(context);
+        if (beside) {
+          return Padding(
+            padding: const EdgeInsets.only(bottom: AppSpacing.md),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(flex: 3, child: identity),
+                const SizedBox(width: AppSpacing.xl),
+                Expanded(
+                  flex: 2,
+                  child: _CollectionStats(collection: collection, stack: true),
+                ),
+              ],
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            identity,
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.md),
+              child: _CollectionStats(collection: collection),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+bool _largeText(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3;
+
 class _Identity extends StatelessWidget {
   const _Identity({required this.collection, required this.onChangeIcon});
 
@@ -637,16 +696,20 @@ class _Identity extends StatelessWidget {
 }
 
 class _CollectionStats extends StatelessWidget {
-  const _CollectionStats({required this.collection});
+  const _CollectionStats({required this.collection, this.stack = false});
 
   final CollectionListItem collection;
+
+  /// Force l'empilement (stats à côté de l'identité).
+  final bool stack;
 
   @override
   Widget build(BuildContext context) {
     final c = collection;
     // Texte agrandi ou écran étroit: trois colonnes ne tiennent plus, on empile.
     final stack =
-        MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3 ||
+        this.stack ||
+        _largeText(context) ||
         MediaQuery.sizeOf(context).width < 340;
     final cards = [
       StatCard(

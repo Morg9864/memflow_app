@@ -20,7 +20,12 @@ import 'package:go_router/go_router.dart';
 import 'package:memflow/domain/models/models.dart';
 import 'package:memflow/domain/services/card_mode_service.dart';
 import 'package:memflow/features/auth/auth_screen.dart';
+import 'package:memflow/data/local/database.dart';
+import 'package:memflow/data/repositories/app_repository.dart';
+import 'package:memflow/domain/services/spaced_repetition_service.dart';
 import 'package:memflow/features/collections/collection_detail_screen.dart';
+import 'package:memflow/features/collections/collection_due_cards_screen.dart';
+import 'package:memflow/features/collections/deck_cards_screen.dart';
 import 'package:memflow/features/home/home_screen.dart';
 import 'package:memflow/features/import/import_screen.dart';
 import 'package:memflow/features/navigation/not_found_screen.dart';
@@ -36,7 +41,8 @@ import 'package:memflow/app/router.dart' show TabShell;
 import 'package:memflow/data/sync/sync_service.dart';
 import 'package:memflow/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show User;
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show AuthClientOptions, SupabaseClient, User;
 
 const _label = String.fromEnvironment('VISUAL_OUT');
 
@@ -433,6 +439,19 @@ List<_State> _states() => [
     ],
   ),
   _State(
+    'due_cards',
+    () => const CollectionDueCardsScreen(
+      collectionId: 'c1',
+      collectionName: _longTitle,
+    ),
+    overrides: () => [appRepositoryProvider.overrideWithValue(_PagesRepo())],
+  ),
+  _State(
+    'deck_cards',
+    () => const DeckCardsScreen(deckId: 'd0', deckName: 'Génétique'),
+    overrides: () => [appRepositoryProvider.overrideWithValue(_PagesRepo())],
+  ),
+  _State(
     'mode_sheet',
     () => const _SheetOpener(),
     // Mutations mode "Vrai/Faux" has 0 compatible cards.
@@ -802,4 +821,77 @@ class _FakeStudyController extends StudyController {
     wasCorrect: wasCorrect,
     playedMode: playedMode,
   );
+}
+
+// Dépôt minimal pour les listes paginées (échéances, cartes d'un deck).
+class _PagesRepo extends AppRepository {
+  _PagesRepo()
+    : super(
+        database: AppDatabase.memory(),
+        syncService: SyncService(
+          database: AppDatabase.memory(),
+          client: SupabaseClient(
+            'http://localhost',
+            'test-key',
+            authOptions: const AuthClientOptions(autoRefreshToken: false),
+          ),
+        ),
+        spacedRepetitionService: const SpacedRepetitionService(),
+        cardModeService: const CardModeService(),
+      );
+
+  static const _questions = [
+    'Quel organite produit l’essentiel de l’ATP dans la cellule eucaryote ?',
+    'Que signifie « semi-conservative » pour la réplication de l’ADN ?',
+    'Définis la glycolyse en une phrase.',
+    'Quelle enzyme relie les fragments d’Okazaki ?',
+    'Où a lieu la traduction de l’ARN messager ?',
+    'Quelle est la différence entre un allèle dominant et récessif ?',
+  ];
+
+  @override
+  Future<PaginatedSlice<FlashcardDueItem>> fetchDueCardsForCollectionPage({
+    required String collectionId,
+    required int offset,
+    required int limit,
+  }) async => PaginatedSlice(
+    items: [
+      for (var i = 0; i < _questions.length; i++)
+        FlashcardDueItem(
+          id: 'q$i',
+          deckId: 'd$i',
+          deckName: 'Biologie cellulaire',
+          question: _questions[i],
+          dueAt: _now.add(Duration(days: i)),
+          isDueNow: i < 2,
+        ),
+    ],
+    totalCount: _questions.length,
+  );
+
+  @override
+  Future<PaginatedSlice<FlashcardSummary>> fetchFlashcardsForDeckPage({
+    required String deckId,
+    required int offset,
+    required int limit,
+  }) async => PaginatedSlice(
+    items: [
+      for (var i = 0; i < _questions.length; i++)
+        FlashcardSummary(
+          id: 'q$i',
+          deckId: deckId,
+          collectionId: 'c1',
+          question: _questions[i],
+          correctAnswer:
+              'La mitochondrie, grâce à la phosphorylation oxydative.',
+        ),
+    ],
+    totalCount: _questions.length,
+  );
+
+  @override
+  Stream<int> watchDueCardsForCollectionRevision() => const Stream.empty();
+
+  @override
+  Stream<int> watchDeckCardsRevision() => const Stream.empty();
 }

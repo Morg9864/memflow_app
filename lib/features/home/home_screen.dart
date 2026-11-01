@@ -76,14 +76,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   ),
                   const SizedBox(height: AppSpacing.sm),
                   stats.when(
-                    data: (data) => Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _HeroCard(dueCards: data.dueCards),
-                        const SizedBox(height: AppSpacing.md),
-                        _StatsRow(stats: data),
-                      ],
-                    ),
+                    data: (data) => _Overview(stats: data),
                     loading: () => const _StatsSkeleton(),
                     error: (error, stackTrace) => AppErrorState(
                       onRetry: () => ref.invalidate(homeStatsProvider),
@@ -180,6 +173,7 @@ class _HeroCard extends StatelessWidget {
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: upToDate
             ? Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
@@ -199,6 +193,7 @@ class _HeroCard extends StatelessWidget {
                 ],
               )
             : Column(
+                mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
@@ -236,8 +231,11 @@ class _HeroCard extends StatelessWidget {
   }
 }
 
-class _StatsRow extends StatelessWidget {
-  const _StatsRow({required this.stats});
+/// Le héros « cartes à revoir » et les deux statistiques. Sur tablette, le
+/// héros passe à gauche des statistiques empilées (même hauteur totale); sinon,
+/// ou avec un texte agrandi, tout s'empile comme sur téléphone.
+class _Overview extends StatelessWidget {
+  const _Overview({required this.stats});
 
   final HomeStats stats;
 
@@ -253,30 +251,66 @@ class _StatsRow extends StatelessWidget {
       label: 'de réussite',
       icon: Icons.task_alt_rounded,
     );
-    // Au-delà d'un texte agrandi, deux colonnes ne tiennent plus: on empile.
-    final stack = MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3;
-    if (stack) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          streak,
-          const SizedBox(height: AppSpacing.md),
-          success,
-        ],
-      );
-    }
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: streak),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(child: success),
-        ],
-      ),
+    final hero = _HeroCard(dueCards: stats.dueCards);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (_heroBeside(context, constraints.maxWidth)) {
+          return IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(flex: 3, child: hero),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  flex: 2,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Expanded(child: streak),
+                      const SizedBox(height: AppSpacing.md),
+                      Expanded(child: success),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            hero,
+            const SizedBox(height: AppSpacing.md),
+            // Au-delà d'un texte agrandi, deux colonnes ne tiennent plus: on
+            // empile.
+            if (_largeText(context)) ...[
+              streak,
+              const SizedBox(height: AppSpacing.md),
+              success,
+            ] else
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: streak),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(child: success),
+                  ],
+                ),
+              ),
+          ],
+        );
+      },
     );
   }
 }
+
+bool _largeText(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3;
+
+// Largeur utile (rail et marges déduits), pas celle de la fenêtre.
+bool _heroBeside(BuildContext context, double width) =>
+    width >= AppBreakpoints.tablet && !_largeText(context);
 
 class _CollectionsHeader extends StatelessWidget {
   const _CollectionsHeader();
@@ -303,24 +337,53 @@ class _StatsSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    const box = SkeletonBox(height: 110, radius: AppTheme.radiusMd);
     return Semantics(
       label: 'Chargement',
-      child: const Column(
-        children: [
-          SkeletonBox(height: 190, radius: AppTheme.radiusMd),
-          SizedBox(height: AppSpacing.md),
-          Row(
-            children: [
-              Expanded(
-                child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Même découpage que _Overview: pas de saut à la fin du chargement.
+          if (_heroBeside(context, constraints.maxWidth)) {
+            return const SizedBox(
+              height: 232,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 3,
+                    child: SkeletonBox(
+                      height: double.infinity,
+                      radius: AppTheme.radiusMd,
+                    ),
+                  ),
+                  SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      children: [
+                        Expanded(child: box),
+                        SizedBox(height: AppSpacing.md),
+                        Expanded(child: box),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
+            );
+          }
+          return const Column(
+            children: [
+              SkeletonBox(height: 190, radius: AppTheme.radiusMd),
+              SizedBox(height: AppSpacing.md),
+              Row(
+                children: [
+                  Expanded(child: box),
+                  SizedBox(width: AppSpacing.md),
+                  Expanded(child: box),
+                ],
               ),
             ],
-          ),
-        ],
+          );
+        },
       ),
     );
   }
@@ -387,51 +450,38 @@ class _CollectionsSliver extends StatelessWidget {
       );
     }
 
-    final columns = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet
-        ? 2
-        : 1;
-    final active = items.where((i) => !i.isDisabled).toList();
-    final disabled = items.where((i) => i.isDisabled).toList();
-    final entries = [
-      ..._rows(active, columns),
-      if (disabled.isNotEmpty) const _Entry.header(),
-      ..._rows(disabled, columns),
-    ];
-
-    return SliverList.builder(
-      itemCount: entries.length,
-      itemBuilder: (context, index) {
-        final entry = entries[index];
-        if (entry.disabledHeader) {
-          return const Padding(
-            padding: EdgeInsets.only(top: AppSpacing.md, bottom: AppSpacing.md),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: SectionLabel('Désactivé(s)'),
-            ),
-          );
-        }
-        final cards = [
-          for (final item in entry.items) _CollectionCard(collection: item),
+    // Colonnes selon la largeur réellement disponible (rail et marges déduits)
+    // et l'échelle du texte, pas selon la fenêtre.
+    return SliverLayoutBuilder(
+      builder: (context, constraints) {
+        final columns = adaptiveColumns(context, constraints.crossAxisExtent);
+        final active = items.where((i) => !i.isDisabled).toList();
+        final disabled = items.where((i) => i.isDisabled).toList();
+        final entries = [
+          ..._rows(active, columns),
+          if (disabled.isNotEmpty) const _Entry.header(),
+          ..._rows(disabled, columns),
         ];
-        return Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.md),
-          child: columns == 1
-              ? cards.first
-              : IntrinsicHeight(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Expanded(child: cards.first),
-                      const SizedBox(width: AppSpacing.md),
-                      Expanded(
-                        child: cards.length > 1
-                            ? cards.last
-                            : const SizedBox.shrink(),
-                      ),
-                    ],
-                  ),
+        return SliverList.builder(
+          itemCount: entries.length,
+          itemBuilder: (context, index) {
+            final entry = entries[index];
+            if (entry.disabledHeader) {
+              return const Padding(
+                padding: EdgeInsets.only(
+                  top: AppSpacing.md,
+                  bottom: AppSpacing.md,
                 ),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: SectionLabel('Désactivé(s)'),
+                ),
+              );
+            }
+            return cardRow([
+              for (final item in entry.items) _CollectionCard(collection: item),
+            ], columns);
+          },
         );
       },
     );
@@ -447,6 +497,7 @@ class _CollectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final c = collection;
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
     final summary = StringBuffer(
       '${c.name}, ${c.cardsDone} sur ${c.totalCards} cartes faites',
     );
@@ -469,14 +520,14 @@ class _CollectionCard extends StatelessWidget {
               borderRadius: AppTheme.radiusMd,
               onTap: open,
               child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
+                padding: EdgeInsets.all(tablet ? 20 : AppSpacing.lg),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
                       key: ValueKey('collection-tile-${c.id}'),
-                      width: 44,
-                      height: 44,
+                      width: tablet ? 52 : 44,
+                      height: tablet ? 52 : 44,
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: Color(c.color).withValues(alpha: 0.15),
