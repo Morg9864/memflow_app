@@ -1539,19 +1539,27 @@ class _FlashcardModeState extends State<_FlashcardMode>
     final theme = Theme.of(context);
     final card = widget.card;
     final reversed = widget.reversed;
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
+    final answer = reversed ? card.question : card.correctAnswer;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: ConstrainedBox(
           constraints: BoxConstraints(minHeight: minHeight),
           child: Column(
+            // Tablette : contenu centré, même hauteur que la face avant.
+            mainAxisAlignment: tablet
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const SectionLabel('Question'),
               const SizedBox(height: 12),
               Text(
                 reversed ? card.correctAnswer : card.question,
-                style: theme.textTheme.titleLarge,
+                style: tablet
+                    ? theme.textTheme.headlineSmall
+                    : theme.textTheme.titleLarge,
               ),
               if (widget.showInlineAnswer) ...[
                 const SizedBox(height: 18),
@@ -1560,12 +1568,21 @@ class _FlashcardModeState extends State<_FlashcardMode>
                 SectionLabel(reversed ? 'Concept visé' : 'Réponse'),
                 const SizedBox(height: 12),
                 Text(
-                  reversed ? card.question : card.correctAnswer,
-                  style: theme.textTheme.headlineMedium,
+                  answer,
+                  style: tablet
+                      ? questionTextStyle(theme.textTheme, answer, tablet: true)
+                      : theme.textTheme.headlineMedium,
                 ),
                 if (card.explanation != null) ...[
                   const SizedBox(height: 18),
-                  Text(card.explanation!, style: theme.textTheme.bodyLarge),
+                  Text(
+                    card.explanation!,
+                    style: tablet
+                        ? theme.textTheme.bodyLarge?.copyWith(
+                            fontSize: _tabletTextSize,
+                          )
+                        : theme.textTheme.bodyLarge,
+                  ),
                 ],
               ],
             ],
@@ -1891,7 +1908,7 @@ class _McqMode extends StatelessWidget {
       (item) => item == card.correctAnswer,
     );
     final answeredCorrectly = selectedIndex == correctIndex;
-    _McqOptionTile tile(int index, {bool reserveCaption = false}) {
+    _McqOptionTile tile(int index) {
       return _McqOptionTile(
         text: options[index],
         shortcutLabel: String.fromCharCode(65 + index),
@@ -1904,7 +1921,7 @@ class _McqMode extends StatelessWidget {
             selectedIndex != correctIndex,
         onTap: hasValidatedAnswer ? null : () => onSelect(index, options),
         compact: compact,
-        reserveCaption: reserveCaption,
+        tablet: !compact,
       );
     }
 
@@ -1921,7 +1938,7 @@ class _McqMode extends StatelessWidget {
         if (gridAnswers)
           LayoutBuilder(
             builder: (context, constraints) {
-              final optionWidth = (constraints.maxWidth - 10) / 2;
+              final optionWidth = (constraints.maxWidth - _tabletGridGap) / 2;
               final optionHeight = math.max(
                 _tabletOptionHeight,
                 _McqOptionTile.uniformHeight(context, options, optionWidth),
@@ -1942,14 +1959,14 @@ class _McqMode extends StatelessWidget {
                 );
               }
               return Wrap(
-                spacing: 10,
-                runSpacing: 10,
+                spacing: _tabletGridGap,
+                runSpacing: _tabletGridGap,
                 children: [
                   for (var index = 0; index < options.length; index++)
                     SizedBox(
                       width: optionWidth,
                       height: optionHeight,
-                      child: tile(index, reserveCaption: true),
+                      child: tile(index),
                     ),
                 ],
               );
@@ -1974,8 +1991,12 @@ class _McqMode extends StatelessWidget {
   }
 }
 
-/// Hauteur minimale confortable d'une réponse au stylet sur tablette.
-const double _tabletOptionHeight = 104;
+// Réponses sur tablette : hauteur minimale confortable au stylet, écart de
+// la grille, taille du texte et de la pastille de lettre.
+const double _tabletOptionHeight = 150;
+const double _tabletGridGap = 16;
+const double _tabletTextSize = 21;
+const double _tabletBadgeSize = 40;
 
 class _McqOptionTile extends StatelessWidget {
   const _McqOptionTile({
@@ -1987,7 +2008,7 @@ class _McqOptionTile extends StatelessWidget {
     this.validated = false,
     this.shortcutLabel,
     this.compact = false,
-    this.reserveCaption = false,
+    this.tablet = false,
     this.minHeight = 48,
   });
 
@@ -2000,13 +2021,18 @@ class _McqOptionTile extends StatelessWidget {
   final String? shortcutLabel;
   final bool compact;
 
-  /// Garde la place de la légende « Ta réponse » (grille à hauteur fixe).
-  final bool reserveCaption;
+  /// Texte et pastille agrandis (largeur tablette).
+  final bool tablet;
   final double minHeight;
 
   static const double _padding = 18;
   static const double _borderWidth = 1;
   static const double _captionGap = 2;
+
+  static TextStyle? _answerStyle(BuildContext context, bool tablet) {
+    final style = Theme.of(context).textTheme.bodyLarge;
+    return tablet ? style?.copyWith(fontSize: _tabletTextSize) : style;
+  }
 
   static double _captionHeight(BuildContext context) {
     // Mesuré (et non calculé) : la hauteur de ligne réelle est arrondie.
@@ -2031,12 +2057,12 @@ class _McqOptionTile extends StatelessWidget {
     List<String> options,
     double tileWidth,
   ) {
-    final style = Theme.of(context).textTheme.bodyLarge;
+    final style = _answerStyle(context, true);
     final textScaler = MediaQuery.textScalerOf(context);
     final maxTextWidth = math.max(
       0.0,
-      // Pastille de lettre (32 + 14) et icône de résultat (22) comprises.
-      tileWidth - (_padding + _borderWidth) * 2 - 46 - 22,
+      // Pastille de lettre (+ 14 d'écart) et icône de résultat (22) comprises.
+      tileWidth - (_padding + _borderWidth) * 2 - _tabletBadgeSize - 14 - 22,
     );
     var tallest = 0.0;
     for (final option in options) {
@@ -2103,8 +2129,6 @@ class _McqOptionTile extends StatelessWidget {
               ),
             ),
           )
-        : reserveCaption
-        ? SizedBox(height: _captionGap + _captionHeight(context))
         : const SizedBox.shrink();
 
     return Semantics(
@@ -2135,22 +2159,34 @@ class _McqOptionTile extends StatelessWidget {
                 child: Row(
                   children: [
                     if (shortcutLabel != null) ...[
-                      Container(
-                        // Tablette : la pastille grandit avec le texte agrandi.
-                        width: compact ? 28 : null,
-                        height: compact ? 28 : null,
-                        constraints: compact
-                            ? null
-                            : const BoxConstraints(minWidth: 32, minHeight: 32),
-                        alignment: Alignment.center,
+                      DecoratedBox(
                         decoration: BoxDecoration(
                           color: badgeColor,
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: Text(
-                          shortcutLabel!,
-                          style: theme.textTheme.titleSmall?.copyWith(
-                            color: foreground,
+                        // Carré fixe ; sur tablette il grandit avec le texte
+                        // agrandi mais ne s'étire jamais avec la tuile.
+                        child: ConstrainedBox(
+                          constraints: compact
+                              ? const BoxConstraints.tightFor(
+                                  width: 28,
+                                  height: 28,
+                                )
+                              : const BoxConstraints(
+                                  minWidth: _tabletBadgeSize,
+                                  minHeight: _tabletBadgeSize,
+                                ),
+                          child: Center(
+                            widthFactor: compact ? null : 1,
+                            heightFactor: compact ? null : 1,
+                            child: Text(
+                              shortcutLabel!,
+                              style:
+                                  (tablet
+                                          ? theme.textTheme.titleMedium
+                                          : theme.textTheme.titleSmall)
+                                      ?.copyWith(color: foreground),
+                            ),
                           ),
                         ),
                       ),
@@ -2163,11 +2199,12 @@ class _McqOptionTile extends StatelessWidget {
                         children: [
                           Text(
                             text,
-                            style: theme.textTheme.bodyLarge?.copyWith(
-                              color: foreground,
-                            ),
+                            style: _answerStyle(
+                              context,
+                              tablet,
+                            )?.copyWith(color: foreground),
                           ),
-                          if (reduceMotion || reserveCaption)
+                          if (reduceMotion)
                             caption
                           else
                             AnimatedSize(
@@ -2235,6 +2272,7 @@ class _ClozeMode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
     final promptStyle =
         theme.textTheme.headlineSmall?.copyWith(height: 1.5) ??
         theme.textTheme.titleLarge;
@@ -2312,8 +2350,8 @@ class _ClozeMode extends StatelessWidget {
                   )
                 else
                   Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+                    spacing: tablet ? 14 : 10,
+                    runSpacing: tablet ? 14 : 10,
                     children: [
                       for (final word in availableWords)
                         _ClozeWordChip(
@@ -2386,6 +2424,7 @@ class _ClozeBlankChip extends StatelessWidget {
         : isFilled
         ? theme.colorScheme.onSurface
         : theme.colorScheme.onSurfaceVariant;
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
     final verdict = !isValidated
         ? ''
         : isCorrect == true
@@ -2402,14 +2441,17 @@ class _ClozeBlankChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: AppTheme.radiusSm,
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14),
+          padding: EdgeInsets.symmetric(horizontal: tablet ? 20 : 14),
           decoration: BoxDecoration(
             color: background,
             borderRadius: AppTheme.radiusSm,
             border: Border.all(color: borderColor),
           ),
           child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: 76, minHeight: 46),
+            constraints: BoxConstraints(
+              minWidth: tablet ? 104 : 76,
+              minHeight: tablet ? 56 : 46,
+            ),
             child: Center(
               widthFactor: 1,
               heightFactor: 1,
@@ -2420,9 +2462,11 @@ class _ClozeBlankChip extends StatelessWidget {
                     child: Text(
                       text,
                       textAlign: TextAlign.center,
-                      style: theme.textTheme.titleSmall?.copyWith(
-                        color: foreground,
-                      ),
+                      style:
+                          (tablet
+                                  ? theme.textTheme.titleMedium
+                                  : theme.textTheme.titleSmall)
+                              ?.copyWith(color: foreground),
                     ),
                   ),
                   if (isValidated) ...[
@@ -2459,6 +2503,7 @@ class _ClozeWordChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
     return Pressable(
       enabled: onTap != null,
       child: Semantics(
@@ -2471,7 +2516,7 @@ class _ClozeWordChip extends StatelessWidget {
           onTap: onTap,
           borderRadius: AppTheme.radiusPill,
           child: Ink(
-            padding: const EdgeInsets.symmetric(horizontal: 14),
+            padding: EdgeInsets.symmetric(horizontal: tablet ? 22 : 14),
             decoration: BoxDecoration(
               color: enabled
                   ? theme.colorScheme.primary.withValues(alpha: 0.08)
@@ -2484,17 +2529,23 @@ class _ClozeWordChip extends StatelessWidget {
               ),
             ),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(minHeight: 44),
+              constraints: BoxConstraints(minHeight: tablet ? 56 : 44),
               child: Center(
                 widthFactor: 1,
                 heightFactor: 1,
                 child: Text(
                   text,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: enabled
-                        ? theme.colorScheme.onSurface
-                        : theme.colorScheme.onSurfaceVariant,
-                  ),
+                  style:
+                      (tablet
+                              ? theme.textTheme.bodyLarge?.copyWith(
+                                  fontSize: _tabletTextSize,
+                                )
+                              : theme.textTheme.bodyMedium)
+                          ?.copyWith(
+                            color: enabled
+                                ? theme.colorScheme.onSurface
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
                 ),
               ),
             ),
@@ -2629,8 +2680,7 @@ class _TrueFalseMode extends StatelessWidget {
           selectedIndex == item.$2 &&
           selectedIndex != correctIndex,
       onTap: hasValidatedAnswer ? null : () => onSelect(item.$2),
-      // Côte à côte, la légende réservée garde les deux tuiles égales.
-      reserveCaption: tablet,
+      tablet: tablet,
       minHeight: tablet ? _tabletOptionHeight : 48,
     );
 
@@ -2667,7 +2717,7 @@ class _TrueFalseMode extends StatelessWidget {
           Row(
             children: [
               Expanded(child: answer(('Vrai', 0))),
-              const SizedBox(width: 10),
+              const SizedBox(width: _tabletGridGap),
               Expanded(child: answer(('Faux', 1))),
             ],
           )
@@ -2875,7 +2925,7 @@ class _ReviewButton extends StatelessWidget {
             onTap: onPressed,
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                minHeight: tablet && !compact ? 68 : 56,
+                minHeight: tablet && !compact ? 76 : 56,
               ),
               child: Stack(
                 children: [
@@ -2888,7 +2938,7 @@ class _ReviewButton extends StatelessWidget {
                       children: [
                         Icon(
                           result.icon,
-                          size: 20,
+                          size: tablet && !compact ? 26 : 20,
                           color: enabled ? tone : tone.withValues(alpha: 0.55),
                         ),
                         const SizedBox(width: 8),
@@ -2899,17 +2949,21 @@ class _ReviewButton extends StatelessWidget {
                             children: [
                               Text(
                                 result.label,
-                                style: theme.textTheme.labelLarge?.copyWith(
-                                  color: textColor,
-                                ),
+                                style:
+                                    (tablet && !compact
+                                            ? theme.textTheme.titleSmall
+                                            : theme.textTheme.labelLarge)
+                                        ?.copyWith(color: textColor),
                               ),
                               Text(
                                 result.description,
-                                maxLines: largeText ? 3 : 2,
+                                maxLines: largeText || tablet ? 3 : 2,
                                 overflow: TextOverflow.ellipsis,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: textColor,
-                                ),
+                                style:
+                                    (tablet && !compact
+                                            ? theme.textTheme.bodyMedium
+                                            : theme.textTheme.bodySmall)
+                                        ?.copyWith(color: textColor),
                               ),
                             ],
                           ),

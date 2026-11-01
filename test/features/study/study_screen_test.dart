@@ -382,6 +382,13 @@ void main() {
     expect(positions[2].dy, greaterThan(positions[0].dy));
     expect(positions[1].dx, greaterThan(positions[0].dx));
     expect(positions[2].dx, positions[0].dx);
+    // La pastille de lettre est un carré fixe, pas un bloc étiré à la tuile.
+    final badge = tester.getSize(
+      find
+          .ancestor(of: find.text('A'), matching: find.byType(DecoratedBox))
+          .first,
+    );
+    expect(badge, const Size(40, 40));
     final sizes = {for (final t in texts) tileSize(tester, t)};
     expect(sizes.length, 1);
     expect(sizes.first.height, greaterThanOrEqualTo(88));
