@@ -105,8 +105,11 @@ const _stats = StatisticsOverview(
   difficultCards: [],
 );
 
-Future<(GoRouter, _FakeAuth)> _pump(WidgetTester tester) async {
-  tester.view.physicalSize = const Size(600, 900);
+Future<(GoRouter, _FakeAuth)> _pump(
+  WidgetTester tester, {
+  Size size = const Size(599, 900),
+}) async {
+  tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -154,6 +157,7 @@ Future<(GoRouter, _FakeAuth)> _pump(WidgetTester tester) async {
         builder: (context, ref, _) => MaterialApp.router(
           theme: AppTheme.light(),
           routerConfig: ref.watch(routerProvider),
+          builder: (context, child) => AdaptiveTheme(child: child!),
         ),
       ),
     ),
@@ -181,6 +185,96 @@ String _searchText(WidgetTester t) =>
 
 void main() {
   final bar = find.byType(NavigationBar);
+  final rail = find.byType(NavigationRail);
+  const phone = Size(360, 800);
+  const tablet = Size(880, 1408);
+
+  testWidgets('phone width: bar and no rail', (tester) async {
+    await _pump(tester, size: phone);
+    expect(bar, findsOneWidget);
+    expect(rail, findsNothing);
+  });
+
+  testWidgets('tablet width: rail and no bar', (tester) async {
+    await _pump(tester, size: tablet);
+    expect(rail, findsOneWidget);
+    expect(bar, findsNothing);
+    expect(
+      tester.widget<Scaffold>(find.byType(Scaffold).first).bottomNavigationBar,
+      isNull,
+    );
+  });
+
+  for (final (name, size, nav) in [
+    ('bar', phone, NavigationBar),
+    ('rail', tablet, NavigationRail),
+  ]) {
+    testWidgets('$name: tapping switches tab and keeps tab state', (
+      tester,
+    ) async {
+      await _pump(tester, size: size);
+      await tester.enterText(find.byType(TextField), 'keep me');
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.descendant(of: find.byType(nav), matching: find.text('Stats')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(StatisticsScreen), findsOneWidget);
+      await tester.tap(
+        find.descendant(of: find.byType(nav), matching: find.text('Accueil')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(_searchText(tester), 'keep me');
+    });
+
+    testWidgets('$name: re-tapping the current tab returns to its root', (
+      tester,
+    ) async {
+      final (router, _) = await _pump(tester, size: size);
+      router.push('/collection/c1');
+      await tester.pumpAndSettle();
+      expect(find.byType(CollectionDetailScreen), findsOneWidget);
+      await tester.tap(
+        find.descendant(of: find.byType(nav), matching: find.text('Accueil')),
+      );
+      await tester.pumpAndSettle();
+      expect(find.byType(HomeScreen), findsOneWidget);
+      expect(find.byType(CollectionDetailScreen), findsNothing);
+    });
+  }
+
+  testWidgets('tablet type step applies from 600 wide, not below', (
+    tester,
+  ) async {
+    double? bodyLarge;
+    Future<double> sizeAt(double w) async {
+      tester.view.physicalSize = Size(w, 800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(() {
+        tester.view.resetPhysicalSize();
+        tester.view.resetDevicePixelRatio();
+      });
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: AppTheme.light(),
+          builder: (context, child) => AdaptiveTheme(child: child!),
+          home: Builder(
+            builder: (context) {
+              bodyLarge = Theme.of(context).textTheme.bodyLarge!.fontSize;
+              return const SizedBox();
+            },
+          ),
+        ),
+      );
+      return bodyLarge!;
+    }
+
+    final phoneSize = AppTheme.light().textTheme.bodyLarge!.fontSize!;
+    expect(await sizeAt(599), phoneSize);
+    expect(await sizeAt(600), greaterThan(phoneSize));
+    expect(await sizeAt(880), AppTheme.tablet().textTheme.bodyLarge!.fontSize);
+  });
 
   testWidgets(
     'Home search text and scroll survive a round trip through Stats',

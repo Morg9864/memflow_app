@@ -22,6 +22,8 @@ class MemFlowApp extends ConsumerWidget {
       scaffoldMessengerKey: appScaffoldMessengerKey,
       theme: AppTheme.light(),
       themeMode: ThemeMode.light,
+      builder: (context, child) =>
+          AdaptiveTheme(child: child ?? const SizedBox.shrink()),
       routerConfig: router,
     );
   }

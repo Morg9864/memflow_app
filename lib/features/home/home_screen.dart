@@ -19,7 +19,6 @@ final homeCollectionsProvider = StreamProvider.autoDispose
     });
 
 const _searchDebounce = Duration(milliseconds: 250);
-const _wideBreakpoint = 600.0;
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -388,7 +387,9 @@ class _CollectionsSliver extends StatelessWidget {
       );
     }
 
-    final columns = MediaQuery.sizeOf(context).width >= _wideBreakpoint ? 2 : 1;
+    final columns = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet
+        ? 2
+        : 1;
     final active = items.where((i) => !i.isDisabled).toList();
     final disabled = items.where((i) => i.isDisabled).toList();
     final entries = [

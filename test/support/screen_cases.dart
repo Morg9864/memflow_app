@@ -530,7 +530,7 @@ Future<void> pumpCase(
             textScaler: TextScaler.linear(textScale),
             disableAnimations: disableAnimations,
           ),
-          child: child!,
+          child: AdaptiveTheme(child: child!),
         ),
       ),
     ),

@@ -192,6 +192,7 @@ Future<(GoRouter, FakeAuth)> pumpApp(
         builder: (context, ref, _) => MaterialApp.router(
           theme: AppTheme.light(),
           routerConfig: ref.watch(routerProvider),
+          builder: (context, child) => AdaptiveTheme(child: child!),
         ),
       ),
     ),

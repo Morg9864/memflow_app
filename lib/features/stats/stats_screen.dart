@@ -594,7 +594,7 @@ class _ResponsiveGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.sizeOf(context).width < 600) {
+    if (MediaQuery.sizeOf(context).width < AppBreakpoints.tablet) {
       return Column(
         spacing: AppSpacing.md,
         crossAxisAlignment: CrossAxisAlignment.stretch,

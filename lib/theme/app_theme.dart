@@ -103,8 +103,14 @@ class _AppCupertinoPageTransitionsBuilder
   }
 }
 
+abstract final class AppBreakpoints {
+  static const double tablet = 600;
+  static const double wide = 1100;
+}
+
 class AppTheme {
-  static const double contentMaxWidth = 920;
+  static const double contentMaxWidth = 1120;
+  static const double tabletTypeScale = 1.15;
   static const BorderRadius radiusSm = BorderRadius.all(Radius.circular(14));
   static const BorderRadius radiusMd = BorderRadius.all(Radius.circular(22));
   static const BorderRadius radiusLg = BorderRadius.all(Radius.circular(30));
@@ -149,40 +155,47 @@ class AppTheme {
 
   static ThemeData light() => _light;
 
-  static final ThemeData _light = _buildTheme(
-    ThemeData(
-      useMaterial3: true,
-      brightness: Brightness.light,
-      scaffoldBackgroundColor: AppColors.background,
-      colorScheme: const ColorScheme.light(
-        primary: AppColors.primary,
-        onPrimary: Colors.white,
-        primaryContainer: AppColors.primarySoft,
-        onPrimaryContainer: AppColors.text,
-        surface: AppColors.surface,
-        onSurface: AppColors.text,
-        secondary: AppColors.primary,
-        onSecondary: Colors.white,
-        secondaryContainer: AppColors.primarySoft,
-        onSecondaryContainer: AppColors.text,
-        onSurfaceVariant: AppColors.muted,
-        outline: AppColors.border,
-        outlineVariant: AppColors.border,
-        surfaceContainerHighest: AppColors.surfaceHigh,
-        surfaceTint: Colors.transparent,
-        error: AppColors.error,
-        onError: Colors.white,
-      ),
+  /// Même thème, un cran typographique plus grand (à partir de 600 px).
+  static ThemeData tablet() => _tablet;
+
+  static final ThemeData _light = _buildTheme(_base());
+  static final ThemeData _tablet = _buildTheme(_base(), scale: tabletTypeScale);
+
+  static ThemeData _base() => ThemeData(
+    useMaterial3: true,
+    brightness: Brightness.light,
+    scaffoldBackgroundColor: AppColors.background,
+    colorScheme: const ColorScheme.light(
+      primary: AppColors.primary,
+      onPrimary: Colors.white,
+      primaryContainer: AppColors.primarySoft,
+      onPrimaryContainer: AppColors.text,
+      surface: AppColors.surface,
+      onSurface: AppColors.text,
+      secondary: AppColors.primary,
+      onSecondary: Colors.white,
+      secondaryContainer: AppColors.primarySoft,
+      onSecondaryContainer: AppColors.text,
+      onSurfaceVariant: AppColors.muted,
+      outline: AppColors.border,
+      outlineVariant: AppColors.border,
+      surfaceContainerHighest: AppColors.surfaceHigh,
+      surfaceTint: Colors.transparent,
+      error: AppColors.error,
+      onError: Colors.white,
     ),
   );
 
-  static ThemeData _buildTheme(ThemeData base) {
+  /// [scale] agrandit toutes les tailles de police du thème; les hauteurs de
+  /// ligne (ratios) restent. `compactAction`/`secondaryAction` sont des styles
+  /// statiques et gardent leur taille.
+  static ThemeData _buildTheme(ThemeData base, {double scale = 1}) {
     final scheme = base.colorScheme;
     TextStyle lora(double size, double height) => TextStyle(
       fontFamily: 'Lora',
       color: scheme.onSurface,
       fontWeight: FontWeight.w600,
-      fontSize: size,
+      fontSize: size * scale,
       height: height,
       letterSpacing: 0,
     );
@@ -195,7 +208,7 @@ class AppTheme {
       fontFamily: 'Outfit',
       color: color ?? scheme.onSurface,
       fontWeight: weight,
-      fontSize: size,
+      fontSize: size * scale,
       height: height,
       letterSpacing: 0,
     );
@@ -345,6 +358,20 @@ class AppTheme {
               : textTheme.labelMedium,
         ),
       ),
+      navigationRailTheme: NavigationRailThemeData(
+        backgroundColor: scheme.surface,
+        elevation: 0,
+        indicatorColor: AppColors.primarySoft,
+        labelType: NavigationRailLabelType.all,
+        groupAlignment: -1,
+        selectedIconTheme: IconThemeData(color: scheme.onSurface),
+        unselectedIconTheme: IconThemeData(color: scheme.onSurfaceVariant),
+        selectedLabelTextStyle: textTheme.labelMedium!.copyWith(
+          fontWeight: FontWeight.w600,
+          color: scheme.onSurface,
+        ),
+        unselectedLabelTextStyle: textTheme.labelMedium,
+      ),
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: scheme.primary,
         foregroundColor: Colors.white,
@@ -378,14 +405,33 @@ class AppTheme {
       chipTheme: base.chipTheme.copyWith(
         selectedColor: scheme.secondaryContainer,
         checkmarkColor: scheme.onSecondaryContainer,
-        labelStyle: body.copyWith(fontSize: 14, fontWeight: FontWeight.w600),
+        labelStyle: body.copyWith(
+          fontSize: 14 * scale,
+          fontWeight: FontWeight.w600,
+        ),
         secondaryLabelStyle: body.copyWith(
           color: scheme.onSecondaryContainer,
-          fontSize: 14,
+          fontSize: 14 * scale,
           fontWeight: FontWeight.w600,
         ),
         side: BorderSide(color: scheme.outlineVariant),
       ),
+    );
+  }
+}
+
+/// Choisit le thème téléphone ou tablette selon la largeur de la fenêtre.
+class AdaptiveTheme extends StatelessWidget {
+  const AdaptiveTheme({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
+    return Theme(
+      data: tablet ? AppTheme.tablet() : AppTheme.light(),
+      child: child,
     );
   }
 }

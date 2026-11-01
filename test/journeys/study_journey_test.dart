@@ -136,5 +136,6 @@ void main() {
     expect(router.state.matchedLocation, '/auth');
     expect(find.byType(AuthScreen), findsOneWidget);
     expect(find.byType(NavigationBar), findsNothing);
+    expect(find.byType(NavigationRail), findsNothing);
   });
 }

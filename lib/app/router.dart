@@ -245,11 +245,23 @@ class _TabShellState extends State<TabShell>
 
   @override
   Widget build(BuildContext context) {
+    final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
+    final body = FadeTransition(
+      opacity: _opacity,
+      child: widget.navigationShell,
+    );
     return Scaffold(
-      body: FadeTransition(opacity: _opacity, child: widget.navigationShell),
-      bottomNavigationBar: AppBottomNav(
-        navigationShell: widget.navigationShell,
-      ),
+      body: tablet
+          ? Row(
+              children: [
+                AppNavRail(navigationShell: widget.navigationShell),
+                Expanded(child: body),
+              ],
+            )
+          : body,
+      bottomNavigationBar: tablet
+          ? null
+          : AppBottomNav(navigationShell: widget.navigationShell),
     );
   }
 }

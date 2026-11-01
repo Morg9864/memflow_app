@@ -11,15 +11,18 @@ class AppScaffold extends StatelessWidget {
     super.key,
     required this.child,
     this.floatingActionButton,
-    this.padding = const EdgeInsets.fromLTRB(20, 16, 20, 24),
+    this.padding,
   });
 
   final Widget child;
   final Widget? floatingActionButton;
-  final EdgeInsets padding;
+  final EdgeInsets? padding;
 
   @override
   Widget build(BuildContext context) {
+    final h = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet
+        ? 32.0
+        : 20.0;
     return Scaffold(
       floatingActionButton: floatingActionButton,
       body: SafeArea(
@@ -28,7 +31,10 @@ class AppScaffold extends StatelessWidget {
             constraints: const BoxConstraints(
               maxWidth: AppTheme.contentMaxWidth,
             ),
-            child: Padding(padding: padding, child: child),
+            child: Padding(
+              padding: padding ?? EdgeInsets.fromLTRB(h, 16, h, 24),
+              child: child,
+            ),
           ),
         ),
       ),
@@ -71,7 +77,7 @@ class SyncNowButton extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (MediaQuery.sizeOf(context).width < 700) {
+    if (MediaQuery.sizeOf(context).width < AppBreakpoints.tablet) {
       return const SizedBox.shrink();
     }
     final status = ref.watch(syncStatusProvider).value;
@@ -95,6 +101,26 @@ class SyncNowButton extends ConsumerWidget {
 void popOrGo(BuildContext context, String fallback) =>
     context.canPop() ? context.pop() : context.go(fallback);
 
+/// Les quatre onglets, partagés par la barre (téléphone) et le rail (tablette).
+const appNavItems = <({IconData icon, IconData? selectedIcon, String label})>[
+  (
+    icon: Icons.home_outlined,
+    selectedIcon: Icons.home_rounded,
+    label: 'Accueil',
+  ),
+  (icon: Icons.insights_rounded, selectedIcon: null, label: 'Stats'),
+  (
+    icon: Icons.upload_file_outlined,
+    selectedIcon: Icons.upload_file_rounded,
+    label: 'Importer',
+  ),
+  (
+    icon: Icons.person_outline_rounded,
+    selectedIcon: Icons.person_rounded,
+    label: 'Profil',
+  ),
+];
+
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({super.key, required this.navigationShell});
 
@@ -114,26 +140,15 @@ class AppBottomNav extends StatelessWidget {
           index,
           initialLocation: index == navigationShell.currentIndex,
         ),
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.home_outlined),
-            selectedIcon: Icon(Icons.home_rounded),
-            label: 'Accueil',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.insights_rounded),
-            label: 'Stats',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.upload_file_outlined),
-            selectedIcon: Icon(Icons.upload_file_rounded),
-            label: 'Importer',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.person_outline_rounded),
-            selectedIcon: Icon(Icons.person_rounded),
-            label: 'Profil',
-          ),
+        destinations: [
+          for (final d in appNavItems)
+            NavigationDestination(
+              icon: Icon(d.icon),
+              selectedIcon: d.selectedIcon == null
+                  ? null
+                  : Icon(d.selectedIcon),
+              label: d.label,
+            ),
         ],
       ),
     );
@@ -465,6 +480,45 @@ class SkeletonBox extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppColors.surfaceHigh,
           borderRadius: radius ?? AppTheme.radiusSm,
+        ),
+      ),
+    );
+  }
+}
+
+/// Rail de navigation (tablette): mêmes destinations et même comportement
+/// que [AppBottomNav].
+class AppNavRail extends StatelessWidget {
+  const AppNavRail({super.key, required this.navigationShell});
+
+  final StatefulNavigationShell navigationShell;
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(
+          right: BorderSide(color: Theme.of(context).colorScheme.outline),
+        ),
+      ),
+      child: SafeArea(
+        right: false,
+        child: NavigationRail(
+          selectedIndex: navigationShell.currentIndex,
+          onDestinationSelected: (index) => navigationShell.goBranch(
+            index,
+            initialLocation: index == navigationShell.currentIndex,
+          ),
+          destinations: [
+            for (final d in appNavItems)
+              NavigationRailDestination(
+                icon: Icon(d.icon),
+                selectedIcon: d.selectedIcon == null
+                    ? null
+                    : Icon(d.selectedIcon),
+                label: Text(d.label),
+              ),
+          ],
         ),
       ),
     );

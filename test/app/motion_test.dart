@@ -105,7 +105,7 @@ Future<(GoRouter, _FakeAuth)> _pump(
   WidgetTester tester, {
   bool reduced = false,
 }) async {
-  tester.view.physicalSize = const Size(600, 900);
+  tester.view.physicalSize = const Size(599, 900);
   tester.view.devicePixelRatio = 1;
   addTearDown(() {
     tester.view.resetPhysicalSize();
@@ -155,7 +155,7 @@ Future<(GoRouter, _FakeAuth)> _pump(
           routerConfig: ref.watch(routerProvider),
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context).copyWith(disableAnimations: reduced),
-            child: child!,
+            child: AdaptiveTheme(child: child!),
           ),
         ),
       ),

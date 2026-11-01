@@ -665,7 +665,7 @@ void main() {
                     data: MediaQuery.of(
                       context,
                     ).copyWith(textScaler: TextScaler.linear(textScale)),
-                    child: child!,
+                    child: AdaptiveTheme(child: child!),
                   ),
                 ),
               ),
