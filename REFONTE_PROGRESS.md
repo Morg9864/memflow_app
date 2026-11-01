@@ -130,7 +130,8 @@ Owner decisions: portrait first, S Pen input, 2x2 study answers, on-screen keybo
 | 4 | Home and collection screens | Done | `bb7599e`. Columns follow available width and text scale, which fixed mid-word breaks beside the rail |
 | 5 | Stats, import, profile, settings, remaining screens | Done | `5bfee1f`. Mode sheet, summary and auth reviewed, no change needed |
 | 6 | Tests and docs | Done | 803 pass + 30 skipped, analyzer at baseline. Layout matrix and guidelines cover tablet sizes. All tablet captures OK. Phone and small captures: 56 compared with the starting state, 26 differ, only in the dots area |
-| 7 | On the tablet, with the owner's go-ahead | Waiting for go-ahead | Release install, manual S Pen check, portrait performance. No tablet performance result for this phase yet |
+| 6b | Fix found on the real tablet | Done | `4feaa71`. The tablet's system font scale is 1.15, which dropped home to one column and long answers out of the grid. Column minimum 290, grid limit 320, and 1.15 added to captures and the layout matrix. 916 pass + 30 skipped, phone captures unchanged |
+| 7 | On the tablet | In progress | Release of `4feaa71` installed in place (2.4.0, 13:32:15), signing key matched. An earlier install of `75f01e1` opened signed in with data present. Waiting: owner's S Pen check, then portrait performance (6 runs, `.perf` APKs built and id-checked) |
 
 Unchanged since `950d53e`: `study_controller.dart`, `study_rules.dart`. `lib/data` and `lib/domain` only lost `progressDots`.
 
