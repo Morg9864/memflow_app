@@ -114,6 +114,7 @@ void main() {
         child: MaterialApp(
           scaffoldMessengerKey: appScaffoldMessengerKey,
           theme: AppTheme.light(),
+          builder: (context, child) => AdaptiveTheme(child: child!),
           home: StudyScreen(
             collectionId: 'react',
             deckId: 'deck-1',

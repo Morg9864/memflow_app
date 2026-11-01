@@ -327,6 +327,9 @@ const _viewports = <(String, Size, double)>[
   ('phone_large_text', Size(360, 800), 2.0),
   ('tall', Size(360, 2400), 1.0),
   ('tablet_portrait', Size(880, 1408), 1.0),
+  // Taille de police système réelle de la tablette du propriétaire.
+  ('tablet_device', Size(880, 1408), 1.15),
+  ('tablet_device_landscape', Size(1408, 880), 1.15),
   ('tablet_landscape', Size(1408, 880), 1.0),
   ('tablet_portrait_large_text', Size(880, 1408), 2.0),
   ('tablet_narrow', Size(600, 960), 1.0),

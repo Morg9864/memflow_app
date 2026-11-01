@@ -4,6 +4,7 @@
 // regression fails the build.
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:memflow/domain/models/models.dart';
 
 import '../support/screen_cases.dart';
 
@@ -21,9 +22,31 @@ void main() {
     await loadAppFonts();
   });
 
+  // Taille de police système réelle de la tablette du propriétaire, polices de
+  // l'app chargées: les longues réponses restent en grille 2x2.
+  testWidgets('long answers keep the 2x2 grid at 880x1408 x1.15', (
+    tester,
+  ) async {
+    final c = screenCases().firstWhere((c) => c.name == 'study qcm');
+    await pumpCase(
+      tester,
+      c,
+      size: const Size(880, 1408),
+      textScale: 1.15,
+      long: true,
+    );
+    final card = fixtureCard(TestMode.multipleChoice, long: true);
+    final lefts = {
+      for (final answer in [card.correctAnswer, ...card.wrongAnswers])
+        tester.getTopLeft(find.text(answer)).dx,
+    };
+    expect(lefts.length, 2, reason: 'two columns of answers');
+    expect(tester.takeException(), isNull);
+  });
+
   for (final c in screenCases()) {
     for (final (vp, size) in _viewports) {
-      for (final scale in [1.0, 2.0]) {
+      for (final scale in [1.0, 1.15, 2.0]) {
         testWidgets('${c.name} @ $vp x$scale: no overflow, action reachable', (
           tester,
         ) async {

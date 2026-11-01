@@ -55,7 +55,7 @@ class AppScaffold extends StatelessWidget {
 int adaptiveColumns(
   BuildContext context,
   double available, {
-  double minWidth = 340,
+  double minWidth = 290,
 }) {
   final scale = math.max(1.0, MediaQuery.textScalerOf(context).scale(16) / 16);
   const gap = AppSpacing.md;

@@ -1947,7 +1947,7 @@ class _McqMode extends StatelessWidget {
               // tuiles démesurées et les mots coupés.
               final largeText =
                   MediaQuery.textScalerOf(context).scale(10) / 10 > 1.3;
-              if (largeText || optionWidth < 240 || optionHeight > 220) {
+              if (largeText || optionWidth < 240 || optionHeight > 320) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [

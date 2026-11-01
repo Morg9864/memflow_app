@@ -279,7 +279,11 @@ void main() {
     ('360x800', const Size(360, 800), 1.0, 1),
     ('600x960', const Size(600, 960), 1.0, 1),
     ('880x1408', const Size(880, 1408), 1.0, 2),
+    // Taille de police système réelle de la tablette du propriétaire. Ces tests
+    // n'ont pas de rail: 800 de large donne les 736 du portrait réel (880).
+    ('800x1408 at 1.15 text scale', const Size(800, 1408), 1.15, 2),
     ('1408x880', const Size(1408, 880), 1.0, 3),
+    ('1408x880 at 1.15 text scale', const Size(1408, 880), 1.15, 3),
     ('880x1408 at 2.0 text scale', const Size(880, 1408), 2.0, 1),
   ]) {
     testWidgets('collections use $columns column(s) at $label', (tester) async {
@@ -302,7 +306,7 @@ void main() {
         if (size.width < 600) break;
         expect(
           card.size!.width,
-          greaterThanOrEqualTo(340 * (scale > 1 ? scale : 1)),
+          greaterThanOrEqualTo(290 * (scale > 1 ? scale : 1)),
         );
       }
     });
