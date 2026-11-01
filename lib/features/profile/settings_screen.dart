@@ -21,6 +21,7 @@ class SettingsScreen extends ConsumerWidget {
     }
 
     return AppScaffold(
+      maxContentWidth: AppTheme.formMaxWidth,
       child: ListView(
         children: [
           Row(

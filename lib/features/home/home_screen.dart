@@ -283,7 +283,7 @@ class _Overview extends StatelessWidget {
             const SizedBox(height: AppSpacing.md),
             // Au-delà d'un texte agrandi, deux colonnes ne tiennent plus: on
             // empile.
-            if (_largeText(context)) ...[
+            if (largeText(context)) ...[
               streak,
               const SizedBox(height: AppSpacing.md),
               success,
@@ -305,12 +305,9 @@ class _Overview extends StatelessWidget {
   }
 }
 
-bool _largeText(BuildContext context) =>
-    MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3;
-
 // Largeur utile (rail et marges déduits), pas celle de la fenêtre.
 bool _heroBeside(BuildContext context, double width) =>
-    width >= AppBreakpoints.tablet && !_largeText(context);
+    width >= AppBreakpoints.tablet && !largeText(context);
 
 class _CollectionsHeader extends StatelessWidget {
   const _CollectionsHeader();

@@ -155,6 +155,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
     final dailyGoal = ref.watch(dailyGoalProvider);
     const gap = SizedBox(height: AppSpacing.xl);
     return AppScaffold(
+      maxContentWidth: AppTheme.formMaxWidth,
       child: ListView(
         children: [
           Semantics(

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../theme/app_theme.dart';
+import '../../widgets/ui.dart';
 import '../../domain/models/models.dart';
 
 class SessionSummaryScreen extends StatelessWidget {
@@ -14,7 +15,7 @@ class SessionSummaryScreen extends StatelessWidget {
     final theme = Theme.of(context);
     final counts = summary.reviewCounts;
     // Au-delà d'un texte agrandi, deux colonnes ne tiennent plus: on empile.
-    final stack = MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3;
+    final stack = largeText(context);
     final tiles = <Widget>[
       _CountTile(
         value: counts[ReviewResult.again] ?? 0,

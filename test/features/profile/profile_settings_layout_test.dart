@@ -147,6 +147,23 @@ const _settingsActions = [
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  testWidgets('profile and settings stay within the form column on a tablet', (
+    tester,
+  ) async {
+    for (final screen in [const ProfileScreen(), const SettingsScreen()]) {
+      await _pump(
+        tester,
+        screen: screen,
+        size: const Size(880, 1408),
+        user: _user(),
+      );
+      expect(
+        tester.getSize(find.byType(ListView).first).width,
+        lessThanOrEqualTo(AppTheme.formMaxWidth),
+      );
+    }
+  });
+
   for (final (label, size, scale) in _sizes) {
     group('at $label', () {
       testWidgets('profile lays out with long name and email', (tester) async {

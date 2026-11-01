@@ -171,6 +171,16 @@ void main() {
     expect(find.byType(EmptyState), findsNothing);
   });
 
+  testWidgets('content stays within the form column on a tablet', (
+    tester,
+  ) async {
+    await _pump(tester, size: const Size(880, 1408));
+    expect(
+      tester.getSize(find.byType(ListView).first).width,
+      lessThanOrEqualTo(AppTheme.formMaxWidth),
+    );
+  });
+
   testWidgets('preview shows summary, errors and sample', (tester) async {
     await _pump(tester);
     await _choose(tester);

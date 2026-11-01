@@ -16,6 +16,7 @@ class NotFoundScreen extends StatelessWidget {
 
     // Scrollable: large text or a short screen must never overflow.
     return AppScaffold(
+      maxContentWidth: AppTheme.formMaxWidth,
       child: Center(
         child: SingleChildScrollView(
           child: EmptyState(

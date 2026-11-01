@@ -14,11 +14,16 @@ class AppScaffold extends StatelessWidget {
     required this.child,
     this.floatingActionButton,
     this.padding,
+    this.maxContentWidth,
   });
 
   final Widget child;
   final Widget? floatingActionButton;
   final EdgeInsets? padding;
+
+  /// Colonne plus étroite que [AppTheme.contentMaxWidth] (formulaires, listes),
+  /// centrée.
+  final double? maxContentWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +35,8 @@ class AppScaffold extends StatelessWidget {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(
-              maxWidth: AppTheme.contentMaxWidth,
+            constraints: BoxConstraints(
+              maxWidth: maxContentWidth ?? AppTheme.contentMaxWidth,
             ),
             child: Padding(
               padding: padding ?? EdgeInsets.fromLTRB(h, 16, h, 24),
@@ -56,6 +61,10 @@ int adaptiveColumns(
   const gap = AppSpacing.md;
   return math.max(1, ((available + gap) / (minWidth * scale + gap)).floor());
 }
+
+/// Texte système agrandi: les mises en page côte à côte repassent en colonne.
+bool largeText(BuildContext context) =>
+    MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3;
 
 /// Une ligne de la grille: les cartes ont la même hauteur, la dernière ligne
 /// est complétée par du vide pour garder des colonnes alignées.

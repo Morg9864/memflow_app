@@ -110,6 +110,9 @@ abstract final class AppBreakpoints {
 
 class AppTheme {
   static const double contentMaxWidth = 1120;
+
+  /// Largeur max des écrans de formulaire et de réglages (tablette).
+  static const double formMaxWidth = 640;
   static const double tabletTypeScale = 1.15;
   static const BorderRadius radiusSm = BorderRadius.all(Radius.circular(14));
   static const BorderRadius radiusMd = BorderRadius.all(Radius.circular(22));
@@ -124,26 +127,35 @@ class AppTheme {
   ];
 
   /// Small button for dialog actions (no full-width, no colours).
-  static final ButtonStyle compactAction = FilledButton.styleFrom(
-    minimumSize: const Size(64, 48),
-    textStyle: const TextStyle(
-      fontFamily: 'Outfit',
-      fontSize: 15,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0,
-    ),
-  );
+  static final ButtonStyle compactAction = _action(const Size(64, 48), 15);
 
   /// Full-width tonal button (no colours).
-  static final ButtonStyle secondaryAction = FilledButton.styleFrom(
-    minimumSize: const Size.fromHeight(52),
-    textStyle: const TextStyle(
-      fontFamily: 'Outfit',
-      fontSize: 16,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0,
-    ),
+  static final ButtonStyle secondaryAction = _action(
+    const Size.fromHeight(52),
+    16,
   );
+
+  /// Ces styles sont statiques: la taille de police suit l'échelle du thème
+  /// (1 sur téléphone, [tabletTypeScale] à partir de 600 px) via le builder.
+  static ButtonStyle _action(Size minimumSize, double size) =>
+      FilledButton.styleFrom(
+        minimumSize: minimumSize,
+        textStyle: TextStyle(
+          fontFamily: 'Outfit',
+          fontSize: size,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0,
+        ),
+      ).copyWith(
+        foregroundBuilder: (context, states, child) => DefaultTextStyle.merge(
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize:
+                size * Theme.of(context).textTheme.bodyMedium!.fontSize! / 15,
+          ),
+          child: child!,
+        ),
+      );
 
   /// ButtonStyle has no textAlign: a label that wraps (large text) would hug
   /// the left edge of its button. One builder centres every button kind.
@@ -187,8 +199,8 @@ class AppTheme {
   );
 
   /// [scale] agrandit toutes les tailles de police du thème; les hauteurs de
-  /// ligne (ratios) restent. `compactAction`/`secondaryAction` sont des styles
-  /// statiques et gardent leur taille.
+  /// ligne (ratios) restent. `compactAction`/`secondaryAction` suivent cette
+  /// échelle par leur builder.
   static ThemeData _buildTheme(ThemeData base, {double scale = 1}) {
     final scheme = base.colorScheme;
     TextStyle lora(double size, double height) => TextStyle(

@@ -241,6 +241,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       );
     }
     return AppScaffold(
+      maxContentWidth: AppTheme.formMaxWidth,
       child: ListView(
         children: [
           Text('Import CSV', style: theme.textTheme.displaySmall),

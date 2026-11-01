@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show OverflowBoxFit;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -37,6 +39,9 @@ final statisticsOverviewProvider = StreamProvider<StatisticsOverview>((ref) {
 });
 
 const _windowDays = 14;
+
+/// Largeur utile à partir de laquelle activité et tendance se placent côte à côte.
+const _sideBySideWidth = 1000.0;
 const _activityEmpty =
     'Pas encore d’activité. Termine une session pour voir ta progression ici.';
 
@@ -60,16 +65,42 @@ class StatisticsScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.xl),
               _KpiRow(data: data),
               const SizedBox(height: AppSpacing.xl),
-              _ActivityCard(data: data),
-              const SizedBox(height: AppSpacing.xl),
-              _TrendSection(points: data.successTrend),
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  // Largeur utile (rail et marges déduits), pas celle de la fenêtre.
+                  if (constraints.maxWidth < _sideBySideWidth ||
+                      largeText(context)) {
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _ActivityCard(data: data),
+                        const SizedBox(height: AppSpacing.xl),
+                        _TrendSection(points: data.successTrend),
+                      ],
+                    );
+                  }
+                  return IntrinsicHeight(
+                    child: Row(
+                      spacing: AppSpacing.md,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Expanded(child: _ActivityCard(data: data)),
+                        Expanded(
+                          child: _TrendSection(
+                            points: data.successTrend,
+                            inCard: true,
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
               if (data.levelProgress.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
                 const SectionLabel('Progression par niveau'),
                 const SizedBox(height: AppSpacing.md),
-                Column(
-                  spacing: AppSpacing.md,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                _ResponsiveGrid(
                   children: [
                     for (final item in data.levelProgress)
                       _LevelProgressCard(item: item),
@@ -112,9 +143,7 @@ class StatisticsScreen extends ConsumerWidget {
                 const SizedBox(height: AppSpacing.xl),
                 const SectionLabel('Cartes les plus difficiles'),
                 const SizedBox(height: AppSpacing.md),
-                Column(
-                  spacing: AppSpacing.md,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                _ResponsiveGrid(
                   children: [
                     for (final item in data.difficultCards)
                       _DifficultCard(item: item),
@@ -436,69 +465,80 @@ String? trendSemantics(List<StatisticsTrendPoint> points) {
 }
 
 class _TrendSection extends StatelessWidget {
-  const _TrendSection({required this.points});
+  const _TrendSection({required this.points, this.inCard = false});
 
   final List<StatisticsTrendPoint> points;
+
+  /// Côte à côte avec l'activité: le titre passe dans la carte, qui prend la
+  /// hauteur de sa voisine.
+  final bool inCard;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final latest = points.where((p) => p.reviewCount > 0).lastOrNull;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionLabel('Évolution de la réussite'),
-        const SizedBox(height: AppSpacing.md),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(18),
-            child: latest == null
-                ? Text(
-                    'Pas encore de données de réussite. Elles apparaîtront '
-                    'après tes premières révisions.',
-                    style: theme.textTheme.bodyMedium,
-                  )
-                : Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+    final card = Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: latest == null
+            ? Text(
+                'Pas encore de données de réussite. Elles apparaîtront '
+                'après tes premières révisions.',
+                style: theme.textTheme.bodyMedium,
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (inCard) ...[
+                    Text(
+                      'Évolution de la réussite',
+                      style: theme.textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                  ],
+                  Text(
+                    points.length > 1
+                        ? 'Du ${points.first.label} au ${points.last.label}'
+                        : points.first.label,
+                    style: theme.textTheme.bodySmall,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Semantics(
+                    container: true,
+                    label: trendSemantics(points),
+                    child: ExcludeSemantics(child: _TrendChart(points: points)),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Wrap(
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: AppSpacing.sm,
                     children: [
                       Text(
-                        points.length > 1
-                            ? 'Du ${points.first.label} au ${points.last.label}'
-                            : points.first.label,
-                        style: theme.textTheme.bodySmall,
+                        _pct(latest.successRate),
+                        style: theme.textTheme.titleMedium,
                       ),
-                      const SizedBox(height: AppSpacing.md),
-                      Semantics(
-                        container: true,
-                        label: trendSemantics(points),
-                        child: ExcludeSemantics(
-                          child: _TrendChart(points: points),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                      Wrap(
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        spacing: AppSpacing.sm,
-                        children: [
-                          Text(
-                            _pct(latest.successRate),
-                            style: theme.textTheme.titleMedium,
-                          ),
-                          Text(
-                            'réussite la plus récente (${latest.label})',
-                            style: theme.textTheme.bodySmall,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
                       Text(
-                        'Les jours sans révision restent vides.',
+                        'réussite la plus récente (${latest.label})',
                         style: theme.textTheme.bodySmall,
                       ),
                     ],
                   ),
-          ),
-        ),
+                  const SizedBox(height: AppSpacing.xs),
+                  Text(
+                    'Les jours sans révision restent vides.',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+              ),
+      ),
+    );
+    if (inCard) return card;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        const SectionLabel('Évolution de la réussite'),
+        const SizedBox(height: AppSpacing.md),
+        card,
       ],
     );
   }
@@ -594,21 +634,24 @@ class _ResponsiveGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (MediaQuery.sizeOf(context).width < AppBreakpoints.tablet) {
-      return Column(
-        spacing: AppSpacing.md,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
-      );
-    }
     return LayoutBuilder(
       builder: (context, constraints) {
-        final width = (constraints.maxWidth - AppSpacing.md) / 2;
-        return Wrap(
-          spacing: AppSpacing.md,
-          runSpacing: AppSpacing.md,
+        // Largeur utile (rail et marges déduits), 2 colonnes au plus.
+        final columns = math.min(
+          2,
+          adaptiveColumns(context, constraints.maxWidth),
+        );
+        if (columns == 1) {
+          return Column(
+            spacing: AppSpacing.md,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: children,
+          );
+        }
+        return Column(
           children: [
-            for (final child in children) SizedBox(width: width, child: child),
+            for (var i = 0; i < children.length; i += columns)
+              cardRow(children.skip(i).take(columns).toList(), columns),
           ],
         );
       },
@@ -757,27 +800,45 @@ class _StatsSkeleton extends StatelessWidget {
   Widget build(BuildContext context) {
     return Semantics(
       label: 'Chargement des statistiques',
-      child: ListView(
-        physics: const NeverScrollableScrollPhysics(),
-        children: const [
-          Align(
-            alignment: Alignment.centerLeft,
-            child: SkeletonBox(width: 200, height: 36),
-          ),
-          SizedBox(height: AppSpacing.xl),
-          Row(
-            spacing: AppSpacing.sm,
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // Mêmes seuils que l'écran chargé; hauteurs proches de ses cartes.
+          final wide =
+              constraints.maxWidth >= _sideBySideWidth && !largeText(context);
+          final tablet = constraints.maxWidth >= AppBreakpoints.tablet;
+          return ListView(
+            physics: const NeverScrollableScrollPhysics(),
             children: [
-              Expanded(child: SkeletonBox(height: 84)),
-              Expanded(child: SkeletonBox(height: 84)),
-              Expanded(child: SkeletonBox(height: 84)),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: SkeletonBox(width: 200, height: 36),
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              const Row(
+                spacing: AppSpacing.sm,
+                children: [
+                  Expanded(child: SkeletonBox(height: 84)),
+                  Expanded(child: SkeletonBox(height: 84)),
+                  Expanded(child: SkeletonBox(height: 84)),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xl),
+              if (wide)
+                const Row(
+                  spacing: AppSpacing.md,
+                  children: [
+                    Expanded(child: SkeletonBox(height: 270)),
+                    Expanded(child: SkeletonBox(height: 270)),
+                  ],
+                )
+              else ...[
+                SkeletonBox(height: tablet ? 255 : 220),
+                const SizedBox(height: AppSpacing.xl),
+                SkeletonBox(height: tablet ? 270 : 180),
+              ],
             ],
-          ),
-          SizedBox(height: AppSpacing.xl),
-          SkeletonBox(height: 220),
-          SizedBox(height: AppSpacing.xl),
-          SkeletonBox(height: 180),
-        ],
+          );
+        },
       ),
     );
   }

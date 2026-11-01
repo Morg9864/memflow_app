@@ -580,7 +580,7 @@ class _Summary extends StatelessWidget {
         // Largeur utile (rail et marges déduits), pas celle de la fenêtre.
         final beside =
             constraints.maxWidth >= AppBreakpoints.tablet &&
-            !_largeText(context);
+            !largeText(context);
         if (beside) {
           return Padding(
             padding: const EdgeInsets.only(bottom: AppSpacing.md),
@@ -611,9 +611,6 @@ class _Summary extends StatelessWidget {
     );
   }
 }
-
-bool _largeText(BuildContext context) =>
-    MediaQuery.textScalerOf(context).scale(16) / 16 > 1.3;
 
 class _Identity extends StatelessWidget {
   const _Identity({required this.collection, required this.onChangeIcon});
@@ -709,7 +706,7 @@ class _CollectionStats extends StatelessWidget {
     // Texte agrandi ou écran étroit: trois colonnes ne tiennent plus, on empile.
     final stack =
         this.stack ||
-        _largeText(context) ||
+        largeText(context) ||
         MediaQuery.sizeOf(context).width < 340;
     final cards = [
       StatCard(
