@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../theme/app_theme.dart';
@@ -27,6 +28,8 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
   _AuthMode _mode = _AuthMode.signIn;
   bool _busy = false;
   bool _obscurePassword = true;
+  bool _adultConfirmed = false;
+  bool _termsAccepted = false;
   String? _error;
 
   @override
@@ -121,6 +124,12 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
     final password = _passwordController.text;
 
     if (_isSignUp) {
+      if (!_adultConfirmed || !_termsAccepted) {
+        _showError(
+          'Confirme ta majorité et accepte les conditions pour continuer.',
+        );
+        return;
+      }
       final ok = await _run(() async {
         final response = await _authService.signUpWithPassword(
           email: email,
@@ -231,6 +240,49 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                     : 'Saisis un nom',
                               ),
                               const SizedBox(height: 16),
+                              CheckboxListTile(
+                                value: _adultConfirmed,
+                                onChanged: _busy
+                                    ? null
+                                    : (value) => setState(
+                                        () => _adultConfirmed = value ?? false,
+                                      ),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text(
+                                  'Je confirme avoir au moins 18 ans.',
+                                ),
+                              ),
+                              CheckboxListTile(
+                                value: _termsAccepted,
+                                onChanged: _busy
+                                    ? null
+                                    : (value) => setState(
+                                        () => _termsAccepted = value ?? false,
+                                      ),
+                                controlAffinity:
+                                    ListTileControlAffinity.leading,
+                                contentPadding: EdgeInsets.zero,
+                                title: const Text(
+                                  'J’accepte les conditions d’utilisation et confirme avoir lu la politique de confidentialité.',
+                                ),
+                              ),
+                              Wrap(
+                                alignment: WrapAlignment.center,
+                                children: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        context.push('/legal/terms'),
+                                    child: const Text('Lire les conditions'),
+                                  ),
+                                  TextButton(
+                                    onPressed: () =>
+                                        context.push('/legal/privacy'),
+                                    child: const Text('Confidentialité'),
+                                  ),
+                                ],
+                              ),
                             ],
                             TextFormField(
                               controller: _emailController,

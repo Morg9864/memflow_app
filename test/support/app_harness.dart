@@ -24,7 +24,11 @@ import 'screen_cases.dart' show fixtureCollection;
 const testUser = User(
   id: 'u1',
   appMetadata: {},
-  userMetadata: {'display_name': 'Léa'},
+  userMetadata: {
+    'display_name': 'Léa',
+    'adult_attested_at': '2026-11-02T00:00:00Z',
+    'accepted_terms_version': '2026-11-02',
+  },
   aud: 'authenticated',
   createdAt: '2026-01-01',
 );

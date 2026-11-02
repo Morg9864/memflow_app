@@ -56,7 +56,11 @@ class _FakeAuth implements AuthService {
 User _user({String name = _longName, String email = _longEmail}) => User(
   id: 'u1',
   appMetadata: const {},
-  userMetadata: {'display_name': name},
+  userMetadata: {
+    'display_name': name,
+    'adult_attested_at': '2026-11-02T00:00:00Z',
+    'accepted_terms_version': '2026-11-02',
+  },
   aud: 'authenticated',
   createdAt: '2026-01-01',
   email: email,

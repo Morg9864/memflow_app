@@ -23,7 +23,22 @@ class AuthService {
     return _auth.signUp(
       email: email,
       password: password,
-      data: {'display_name': displayName},
+      data: {
+        'display_name': displayName,
+        'adult_attested_at': DateTime.now().toUtc().toIso8601String(),
+        'accepted_terms_version': '2026-11-02',
+      },
+    );
+  }
+
+  Future<UserResponse> acceptCurrentLegalTerms({required String version}) {
+    return _auth.updateUser(
+      UserAttributes(
+        data: {
+          'adult_attested_at': DateTime.now().toUtc().toIso8601String(),
+          'accepted_terms_version': version,
+        },
+      ),
     );
   }
 

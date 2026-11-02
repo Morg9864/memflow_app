@@ -30,6 +30,27 @@ Future<void> _pump(
 }
 
 void main() {
+  test(
+    'legal acceptance is required until age and current terms are recorded',
+    () {
+      expect(needsLegalAcceptance(null), isTrue);
+      expect(
+        needsLegalAcceptance({
+          'adult_attested_at': '2026-11-02T00:00:00Z',
+          'accepted_terms_version': currentTermsVersion,
+        }),
+        isFalse,
+      );
+      expect(
+        needsLegalAcceptance({
+          'adult_attested_at': '2026-11-02T00:00:00Z',
+          'accepted_terms_version': 'old-version',
+        }),
+        isTrue,
+      );
+    },
+  );
+
   const sizes = {
     '320x568': (Size(320, 568), 1.0),
     '360x800': (Size(360, 800), 1.0),

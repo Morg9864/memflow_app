@@ -13,6 +13,7 @@ import '../features/collections/deck_cards_screen.dart';
 import '../features/home/home_screen.dart';
 import '../features/import/import_screen.dart';
 import '../features/legal/legal_document_screen.dart';
+import '../features/legal/legal_acceptance_screen.dart';
 import '../features/navigation/not_found_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/settings_screen.dart';
@@ -70,6 +71,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       final loggedIn = authService.currentSession != null;
       final atAuth = state.matchedLocation == '/auth';
       final atReset = state.matchedLocation == '/reset-password';
+      final atLegalAcceptance = state.matchedLocation == '/legal/accept';
+      final atLegalDocument =
+          state.matchedLocation.startsWith('/legal/') && !atLegalAcceptance;
 
       // Password recovery link clicked → send to reset screen.
       if (refresh.isRecovery) {
@@ -77,9 +81,15 @@ final routerProvider = Provider<GoRouter>((ref) {
       }
 
       if (!loggedIn) {
-        return atAuth ? null : '/auth';
+        return atAuth || atLegalDocument ? null : '/auth';
       }
-      if (atAuth || atReset) {
+      if (needsLegalAcceptance(authService.currentUser?.userMetadata) &&
+          !atLegalAcceptance &&
+          !atLegalDocument &&
+          !atReset) {
+        return '/legal/accept';
+      }
+      if (atAuth || atReset || atLegalAcceptance) {
         return '/';
       }
       return null;
@@ -87,6 +97,16 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       // Hors coque: pas de barre de navigation.
       GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
+      GoRoute(
+        path: '/legal/accept',
+        builder: (context, state) => const LegalAcceptanceScreen(),
+      ),
+      GoRoute(
+        path: '/legal/:doc',
+        builder: (context, state) => LegalDocumentScreen(
+          document: LegalDocument.fromSlug(state.pathParameters['doc']!),
+        ),
+      ),
       GoRoute(
         path: '/reset-password',
         builder: (context, state) => const ResetPasswordScreen(),
@@ -183,14 +203,6 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: '/settings',
                 builder: (context, state) => const SettingsScreen(),
-              ),
-              GoRoute(
-                path: '/legal/:doc',
-                builder: (context, state) => LegalDocumentScreen(
-                  document: LegalDocument.fromSlug(
-                    state.pathParameters['doc']!,
-                  ),
-                ),
               ),
             ],
           ),

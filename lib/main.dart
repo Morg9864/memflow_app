@@ -4,33 +4,16 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:sentry_flutter/sentry_flutter.dart';
 
 import 'app/app_bootstrap.dart';
 import 'app/memflow_app.dart';
 import 'app/providers.dart';
 
-/// Optional: without it the app still runs, but crashes are only visible
-/// locally (see [_runGuarded]) instead of being reported remotely.
-const _sentryDsn = String.fromEnvironment('SENTRY_DSN');
-
 Future<void> main() async {
-  if (_sentryDsn.isEmpty) {
-    await _runGuarded();
-    return;
-  }
-
-  await SentryFlutter.init(
-    (options) => options
-      ..dsn = _sentryDsn
-      ..environment = kReleaseMode ? 'production' : 'development'
-      ..tracesSampleRate = 0.2,
-    appRunner: _bootstrapAndRun,
-  );
+  await _runGuarded();
 }
 
-/// No Sentry DSN configured: still make sure nothing crashes silently by
-/// wiring the same error surfaces Sentry would otherwise cover.
+/// Report uncaught errors to the local runtime surfaces only.
 Future<void> _runGuarded() async {
   FlutterError.onError = (details) {
     FlutterError.presentError(details);

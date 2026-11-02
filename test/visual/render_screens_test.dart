@@ -295,7 +295,11 @@ Future<FilePickerResult?> _pickSampleCsv() async {
 final _signedInUser = User(
   id: 'visual-user',
   appMetadata: const {},
-  userMetadata: const {'display_name': 'Léa Martin'},
+  userMetadata: const {
+    'display_name': 'Léa Martin',
+    'adult_attested_at': '2026-11-02T00:00:00Z',
+    'accepted_terms_version': '2026-11-02',
+  },
   aud: 'authenticated',
   createdAt: '2026-01-01',
   email: 'lea.martin@example.com',

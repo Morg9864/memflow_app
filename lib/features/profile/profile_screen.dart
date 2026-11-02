@@ -259,6 +259,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                     context.push('/legal/${LegalDocument.notices.slug}'),
               ),
               SettingsRow(
+                icon: Icons.cookie_outlined,
+                title: 'Cookies et stockage',
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () =>
+                    context.push('/legal/${LegalDocument.cookies.slug}'),
+              ),
+              SettingsRow(
                 icon: Icons.article_outlined,
                 title: 'Licences open-source',
                 trailing: const Icon(Icons.chevron_right_rounded),

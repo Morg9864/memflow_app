@@ -24,7 +24,10 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 const _user = User(
   id: 'u1',
   appMetadata: {},
-  userMetadata: {},
+  userMetadata: {
+    'adult_attested_at': '2026-11-02T00:00:00Z',
+    'accepted_terms_version': '2026-11-02',
+  },
   aud: 'authenticated',
   createdAt: '2026-01-01',
 );
