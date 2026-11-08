@@ -293,16 +293,8 @@ class _CollectionDetailScreenState
   Widget build(BuildContext context) {
     final collection = ref.watch(collectionProvider(widget.collectionId));
     final decks = ref.watch(collectionDecksProvider(widget.collectionId));
-    final currentCollection = collection.asData?.value;
 
     return AppScaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _busy || currentCollection?.isDisabled != false
-            ? null
-            : () => _launchStudy(),
-        icon: const Icon(AppIcons.play),
-        label: const Text('Étudier'),
-      ),
       child: collection.when(
         data: (item) {
           if (item == null) {
@@ -325,79 +317,105 @@ class _CollectionDetailScreenState
               ],
             );
           }
-          final children = <Widget>[
-            _BackBar(
-              menu: PopupMenuButton<_CollectionAction>(
-                tooltip: 'Options de la collection',
-                enabled: !_busy,
-                icon: const Icon(AppIcons.ellipsis),
-                onSelected: (action) {
-                  switch (action) {
-                    case _CollectionAction.toggleDisabled:
-                      _toggleCollectionDisabled(item);
-                    case _CollectionAction.delete:
-                      _deleteCollection(item);
-                  }
-                },
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    value: _CollectionAction.toggleDisabled,
-                    child: _MenuRow(
-                      icon: item.isDisabled ? AppIcons.eye : AppIcons.eyeOff,
-                      label: item.isDisabled
-                          ? 'Réactiver la collection'
-                          : 'Désactiver la collection',
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: _CollectionAction.delete,
-                    child: _MenuRow(
-                      icon: AppIcons.trash2,
-                      label: 'Supprimer la collection',
-                      destructive: true,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            _Summary(
-              collection: item,
-              onChangeIcon: _busy ? null : () => _chooseCollectionIcon(item),
-            ),
-            FilledButton.tonalIcon(
-              style: AppTheme.secondaryAction,
-              onPressed: item.isDisabled
-                  ? null
-                  : () => Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => CollectionDueCardsScreen(
-                          collectionId: widget.collectionId,
-                          collectionName: item.name,
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              final inlineStudy =
+                  constraints.maxWidth >= AppBreakpoints.tablet &&
+                  constraints.maxWidth > constraints.maxHeight;
+              final children = <Widget>[
+                _BackBar(
+                  menu: PopupMenuButton<_CollectionAction>(
+                    tooltip: 'Options de la collection',
+                    enabled: !_busy,
+                    icon: const Icon(AppIcons.ellipsis),
+                    onSelected: (action) {
+                      switch (action) {
+                        case _CollectionAction.toggleDisabled:
+                          _toggleCollectionDisabled(item);
+                        case _CollectionAction.delete:
+                          _deleteCollection(item);
+                      }
+                    },
+                    itemBuilder: (_) => [
+                      PopupMenuItem(
+                        value: _CollectionAction.toggleDisabled,
+                        child: _MenuRow(
+                          icon: item.isDisabled
+                              ? AppIcons.eye
+                              : AppIcons.eyeOff,
+                          label: item.isDisabled
+                              ? 'Réactiver la collection'
+                              : 'Désactiver la collection',
                         ),
                       ),
+                      const PopupMenuItem(
+                        value: _CollectionAction.delete,
+                        child: _MenuRow(
+                          icon: AppIcons.trash2,
+                          label: 'Supprimer la collection',
+                          destructive: true,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                _Summary(
+                  collection: item,
+                  onChangeIcon: _busy
+                      ? null
+                      : () => _chooseCollectionIcon(item),
+                  onStudy: _busy || item.isDisabled
+                      ? null
+                      : () => _launchStudy(),
+                  inlineStudy: inlineStudy,
+                  onViewDue: item.isDisabled
+                      ? null
+                      : () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => CollectionDueCardsScreen(
+                              collectionId: widget.collectionId,
+                              collectionName: item.name,
+                            ),
+                          ),
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(
+                    top: AppSpacing.md,
+                    bottom: AppSpacing.xs,
+                  ),
+                  child: _DecksHeader(
+                    deckCount: decks.asData?.value.length,
+                    field: _deckSortField,
+                    direction: _deckSortDirection,
+                    onSort: _setDeckSort,
+                  ),
+                ),
+                ..._deckEntries(item, decks),
+              ];
+              return Column(
+                children: [
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                      itemCount: children.length,
+                      itemBuilder: (context, index) => children[index],
                     ),
-              icon: const Icon(AppIcons.calendarDays),
-              label: const Text('Voir les échéances'),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(
-                top: AppSpacing.md,
-                bottom: AppSpacing.xs,
-              ),
-              child: _DecksHeader(
-                deckCount: decks.asData?.value.length,
-                field: _deckSortField,
-                direction: _deckSortDirection,
-                onSort: _setDeckSort,
-              ),
-            ),
-            ..._deckEntries(item, decks),
-          ];
-          return ListView.builder(
-            // Le FAB flottant ne doit jamais couvrir la dernière ligne.
-            padding: const EdgeInsets.only(bottom: 96),
-            itemCount: children.length,
-            itemBuilder: (context, index) => children[index],
+                  ),
+                  if (!inlineStudy)
+                    Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.sm),
+                      child: _StudyButton(
+                        onPressed: _busy || item.isDisabled
+                            ? null
+                            : () => _launchStudy(),
+                        expanded: true,
+                      ),
+                    ),
+                ],
+              );
+            },
           );
         },
         loading: () => const _DetailSkeleton(),
@@ -560,53 +578,53 @@ class _MenuRow extends StatelessWidget {
   }
 }
 
-/// Identité et statistiques. Sur tablette elles se placent côte à côte, les
-/// statistiques empilées; sinon, ou avec un texte agrandi, l'une sous l'autre.
 class _Summary extends StatelessWidget {
-  const _Summary({required this.collection, required this.onChangeIcon});
+  const _Summary({
+    required this.collection,
+    required this.onChangeIcon,
+    required this.onStudy,
+    required this.inlineStudy,
+    required this.onViewDue,
+  });
 
   final CollectionListItem collection;
   final VoidCallback? onChangeIcon;
+  final VoidCallback? onStudy;
+  final bool inlineStudy;
+  final VoidCallback? onViewDue;
 
   @override
   Widget build(BuildContext context) {
-    final identity = _Identity(
-      collection: collection,
-      onChangeIcon: onChangeIcon,
-    );
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        // Largeur utile (rail et marges déduits), pas celle de la fenêtre.
-        final beside =
-            constraints.maxWidth >= AppBreakpoints.tablet &&
-            !largeText(context);
-        if (beside) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(flex: 3, child: identity),
-                const SizedBox(width: AppSpacing.xl),
-                Expanded(
-                  flex: 2,
-                  child: _CollectionStats(collection: collection, stack: true),
-                ),
-              ],
-            ),
-          );
-        }
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            identity,
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.md),
-              child: _CollectionStats(collection: collection),
-            ),
-          ],
-        );
-      },
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: AppTheme.contentMaxWidth),
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: AppSpacing.md),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(
+                    child: _Identity(
+                      collection: collection,
+                      onChangeIcon: onChangeIcon,
+                    ),
+                  ),
+                  if (inlineStudy) ...[
+                    const SizedBox(width: AppSpacing.xl),
+                    _StudyButton(onPressed: onStudy),
+                  ],
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _CollectionProgress(collection: collection, onViewDue: onViewDue),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -621,129 +639,273 @@ class _Identity extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final c = collection;
-    return Padding(
-      padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Tooltip(
-            message: "Changer l'icône",
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                key: const ValueKey('collection-icon'),
-                onTap: onChangeIcon,
-                borderRadius: AppTheme.radiusMd,
-                child: Ink(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    color: Color(c.color).withValues(alpha: 0.15),
-                    borderRadius: AppTheme.radiusMd,
-                  ),
-                  child: Center(
-                    child: Text(c.icon, style: const TextStyle(fontSize: 30)),
-                  ),
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Tooltip(
+          message: "Changer l'icône",
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              key: const ValueKey('collection-icon'),
+              onTap: onChangeIcon,
+              borderRadius: AppTheme.radiusMd,
+              child: Ink(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: Color(c.color).withValues(alpha: 0.15),
+                  borderRadius: AppTheme.radiusMd,
+                ),
+                child: Center(
+                  child: Text(c.icon, style: const TextStyle(fontSize: 28)),
                 ),
               ),
             ),
           ),
-          const SizedBox(height: AppSpacing.lg),
-          Row(
+        ),
+        const SizedBox(width: AppSpacing.lg),
+        Expanded(
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  c.name,
-                  style: theme.textTheme.displaySmall,
-                  // Titre d'écran: l'échelle est plafonnée pour éviter les
-                  // coupures au milieu des mots.
-                  textScaler: MediaQuery.textScalerOf(
-                    context,
-                  ).clamp(maxScaleFactor: 1.4),
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: Text(
+                      c.name,
+                      style: theme.textTheme.displaySmall,
+                      textScaler: MediaQuery.textScalerOf(
+                        context,
+                      ).clamp(maxScaleFactor: 1.4),
+                    ),
+                  ),
+                  if (c.isDisabled) ...[
+                    const SizedBox(width: AppSpacing.md),
+                    const Padding(
+                      padding: EdgeInsets.only(top: AppSpacing.sm),
+                      child: DisabledBadge(label: 'Désactivée'),
+                    ),
+                  ],
+                ],
               ),
-              if (c.isDisabled) ...[
-                const SizedBox(width: AppSpacing.md),
-                const Padding(
-                  padding: EdgeInsets.only(top: AppSpacing.sm),
-                  child: DisabledBadge(label: 'Désactivée'),
+              if (c.description.trim().isNotEmpty) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  c.description,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: theme.textTheme.bodyLarge?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
               ],
             ],
           ),
-          if (c.description.trim().isNotEmpty) ...[
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              c.description,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
 
-class _CollectionStats extends StatelessWidget {
-  const _CollectionStats({required this.collection, this.stack = false});
+class _StudyButton extends StatelessWidget {
+  const _StudyButton({required this.onPressed, this.expanded = false});
+
+  final VoidCallback? onPressed;
+  final bool expanded;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final width = expanded
+            ? (constraints.maxWidth.isFinite
+                  ? constraints.maxWidth
+                  : AppTheme.contentMaxWidth)
+            : 160.0;
+        return SizedBox(
+          width: width,
+          height: 56,
+          child: FilledButton.icon(
+            onPressed: onPressed,
+            icon: const Icon(AppIcons.play, size: 20),
+            label: const Text('Étudier'),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _CollectionProgress extends StatelessWidget {
+  const _CollectionProgress({
+    required this.collection,
+    required this.onViewDue,
+  });
 
   final CollectionListItem collection;
-
-  /// Force l'empilement (stats à côté de l'identité).
-  final bool stack;
+  final VoidCallback? onViewDue;
 
   @override
   Widget build(BuildContext context) {
     final c = collection;
-    // Texte agrandi ou écran étroit: trois colonnes ne tiennent plus, on empile.
-    final stack =
-        this.stack ||
-        largeText(context) ||
-        MediaQuery.sizeOf(context).width < 340;
-    final cards = [
-      StatCard(
-        value: '${c.totalCards}',
-        label: 'cartes',
-        icon: AppIcons.layers,
-        horizontal: stack,
+    final theme = Theme.of(context);
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final horizontalStats =
+            constraints.maxWidth >= 480 && !largeText(context);
+        return Card(
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Progression',
+                        style: theme.textTheme.titleMedium,
+                      ),
+                    ),
+                    Text(
+                      '${(c.progress * 100).round()} %',
+                      style: theme.textTheme.titleSmall?.copyWith(
+                        fontFeatures: AppTheme.tabularFigures,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '${c.cardsDone} carte${c.cardsDone == 1 ? '' : 's'} étudiée${c.cardsDone == 1 ? '' : 's'} sur ${c.totalCards}',
+                  style: theme.textTheme.bodySmall,
+                ),
+                const SizedBox(height: AppSpacing.md),
+                Semantics(
+                  label: 'Progression de la collection',
+                  value: '${(c.progress * 100).round()} pour cent',
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: c.progress,
+                      minHeight: 6,
+                      backgroundColor: AppColors.surfaceHigh,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                if (horizontalStats)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: _ProgressValue(
+                          value: c.totalCards,
+                          label: 'Cartes',
+                        ),
+                      ),
+                      Expanded(
+                        child: _ProgressValue(
+                          value: c.cardsDone,
+                          label: 'Étudiées',
+                        ),
+                      ),
+                      Expanded(
+                        child: _ProgressValue(
+                          value: c.dueCards,
+                          label: 'À étudier / réviser',
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  Column(
+                    children: [
+                      _ProgressValue(
+                        value: c.totalCards,
+                        label: 'Cartes',
+                        horizontal: true,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _ProgressValue(
+                        value: c.cardsDone,
+                        label: 'Étudiées',
+                        horizontal: true,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      _ProgressValue(
+                        value: c.dueCards,
+                        label: 'À étudier / réviser',
+                        horizontal: true,
+                      ),
+                    ],
+                  ),
+                if (onViewDue != null) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: onViewDue,
+                      icon: const Icon(AppIcons.calendarDays, size: 18),
+                      label: const Text('Voir les échéances'),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _ProgressValue extends StatelessWidget {
+  const _ProgressValue({
+    required this.value,
+    required this.label,
+    this.horizontal = false,
+  });
+
+  final int value;
+  final String label;
+  final bool horizontal;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final valueText = Text(
+      '$value',
+      style: theme.textTheme.titleMedium?.copyWith(
+        fontFeatures: AppTheme.tabularFigures,
       ),
-      StatCard(
-        value: '${c.cardsDone}',
-        label: 'faites',
-        icon: AppIcons.circleCheck,
-        horizontal: stack,
+    );
+    final labelText = Text(
+      label,
+      textAlign: horizontal ? TextAlign.start : TextAlign.center,
+      style: theme.textTheme.bodySmall?.copyWith(
+        color: theme.colorScheme.onSurfaceVariant,
       ),
-      StatCard(
-        value: '${c.dueCards}',
-        label: 'à revoir',
-        icon: AppIcons.calendarDays,
-        horizontal: stack,
-      ),
-    ];
-    if (stack) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+    );
+    if (horizontal) {
+      return Row(
         children: [
-          for (var i = 0; i < cards.length; i++) ...[
-            if (i > 0) const SizedBox(height: AppSpacing.md),
-            cards[i],
-          ],
+          valueText,
+          const SizedBox(width: AppSpacing.md),
+          Expanded(child: labelText),
         ],
       );
     }
-    return IntrinsicHeight(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          for (var i = 0; i < cards.length; i++) ...[
-            if (i > 0) const SizedBox(width: AppSpacing.md),
-            Expanded(child: cards[i]),
-          ],
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        valueText,
+        const SizedBox(height: AppSpacing.xs),
+        labelText,
+      ],
     );
   }
 }
@@ -868,35 +1030,15 @@ class _DetailSkeleton extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _BackBar(),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SkeletonBox(
-                width: 64,
-                height: 64,
-                radius: AppTheme.radiusMd,
-              ),
-            ),
-            SizedBox(height: AppSpacing.lg),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: SkeletonBox(height: 40, width: 220),
-            ),
-            SizedBox(height: AppSpacing.xl),
             Row(
               children: [
-                Expanded(
-                  child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
-                ),
-                SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
-                ),
-                SizedBox(width: AppSpacing.md),
-                Expanded(
-                  child: SkeletonBox(height: 110, radius: AppTheme.radiusMd),
-                ),
+                SkeletonBox(width: 56, height: 56, radius: AppTheme.radiusMd),
+                SizedBox(width: AppSpacing.lg),
+                SkeletonBox(height: 36, width: 240),
               ],
             ),
+            SizedBox(height: AppSpacing.lg),
+            SkeletonBox(height: 180, radius: AppTheme.radiusMd),
             SizedBox(height: AppSpacing.xl),
             _DeckSkeletons(),
           ],
@@ -911,15 +1053,20 @@ class _DeckSkeletons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Column(
-      children: [
-        SkeletonBox(height: 104, radius: AppTheme.radiusMd),
-        SizedBox(height: AppSpacing.md),
-        SkeletonBox(height: 104, radius: AppTheme.radiusMd),
-        SizedBox(height: AppSpacing.md),
-        SkeletonBox(height: 104, radius: AppTheme.radiusMd),
-        SizedBox(height: AppSpacing.md),
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final columns = adaptiveColumns(context, constraints.maxWidth);
+        final placeholders = List<Widget>.generate(
+          4,
+          (_) => const SkeletonBox(height: 112, radius: AppTheme.radiusMd),
+        );
+        return Column(
+          children: [
+            for (var i = 0; i < placeholders.length; i += columns)
+              cardRow(placeholders.skip(i).take(columns).toList(), columns),
+          ],
+        );
+      },
     );
   }
 }
@@ -979,36 +1126,14 @@ class DeckCard extends StatelessWidget {
                           const SizedBox(height: AppSpacing.xs),
                         ],
                         Text(deck.name, style: theme.textTheme.titleMedium),
-                        const SizedBox(height: AppSpacing.xs),
+                        const SizedBox(height: AppSpacing.sm),
                         Text(
-                          '${deck.cardsDone} / ${deck.totalCards} cartes faites · ${deck.difficulty.label}',
+                          '${deck.totalCards} cartes · ${(deck.progress * 100).round()} % étudiées',
                           style: theme.textTheme.bodySmall,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        if (deck.dueCards > 0) ...[
-                          const SizedBox(height: AppSpacing.xs),
-                          Row(
-                            children: [
-                              Container(
-                                width: 8,
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: theme.colorScheme.primary,
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.sm),
-                              Expanded(
-                                child: Text(
-                                  '${deck.dueCards} à revoir',
-                                  style: theme.textTheme.bodySmall?.copyWith(
-                                    color: theme.colorScheme.onSurface,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                        const SizedBox(height: AppSpacing.md),
+                        const SizedBox(height: AppSpacing.sm),
                         ProgressPill(
                           value: deck.progress,
                           semanticsLabel: 'Progression de ${deck.name}',

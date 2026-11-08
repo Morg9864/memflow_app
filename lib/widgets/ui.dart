@@ -34,16 +34,22 @@ class AppScaffold extends StatelessWidget {
     return Scaffold(
       floatingActionButton: floatingActionButton,
       body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxWidth: maxContentWidth ?? AppTheme.contentMaxWidth,
-            ),
-            child: Padding(
-              padding: padding ?? EdgeInsets.fromLTRB(h, 16, h, 24),
-              child: child,
-            ),
-          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final contentWidth = math.min(
+              constraints.maxWidth,
+              maxContentWidth ?? AppTheme.contentMaxWidth,
+            );
+            return Center(
+              child: SizedBox(
+                width: contentWidth,
+                child: Padding(
+                  padding: padding ?? EdgeInsets.fromLTRB(h, 16, h, 24),
+                  child: child,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
