@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -187,10 +188,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               label: 'Compte',
               children: [
                 SettingsRow(
-                  icon: Icons.settings_outlined,
+                  icon: AppIcons.settings,
                   title: 'Paramètres du compte',
                   subtitle: 'Nom, email, mot de passe',
-                  trailing: const Icon(Icons.chevron_right_rounded),
+                  trailing: const Icon(AppIcons.chevronRight),
                   onTap: () => context.push('/settings'),
                 ),
               ],
@@ -201,13 +202,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             label: 'Révision',
             children: [
               SettingsRow(
-                icon: Icons.flag_outlined,
+                icon: AppIcons.target,
                 title: 'Objectif quotidien',
                 subtitle: '$dailyGoal cartes par jour',
-                trailing: const Icon(
-                  Icons.edit_outlined,
-                  semanticLabel: 'Modifier',
-                ),
+                trailing: const Icon(AppIcons.edit, semanticLabel: 'Modifier'),
                 onTap: _editDailyGoal,
               ),
             ],
@@ -221,14 +219,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
                 child: _SyncStatusLine(),
               ),
               SettingsRow(
-                icon: Icons.download_rounded,
+                icon: AppIcons.download,
                 leading: _busy ? const ButtonSpinner() : null,
                 title: 'Exporter les cartes en CSV',
                 enabled: !_busy,
                 onTap: _exportCsv,
               ),
               const SettingsRow(
-                icon: Icons.info_outline_rounded,
+                icon: AppIcons.info,
                 title: 'Version app',
                 subtitle: appVersion,
               ),
@@ -239,36 +237,36 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
             label: 'Légal',
             children: [
               SettingsRow(
-                icon: Icons.privacy_tip_outlined,
+                icon: AppIcons.shieldCheck,
                 title: 'Politique de confidentialité',
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(AppIcons.chevronRight),
                 onTap: () =>
                     context.push('/legal/${LegalDocument.privacy.slug}'),
               ),
               SettingsRow(
-                icon: Icons.description_outlined,
+                icon: AppIcons.fileText,
                 title: "Conditions d'utilisation",
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(AppIcons.chevronRight),
                 onTap: () => context.push('/legal/${LegalDocument.terms.slug}'),
               ),
               SettingsRow(
-                icon: Icons.gavel_rounded,
+                icon: AppIcons.scale,
                 title: 'Mentions légales',
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(AppIcons.chevronRight),
                 onTap: () =>
                     context.push('/legal/${LegalDocument.notices.slug}'),
               ),
               SettingsRow(
-                icon: Icons.cookie_outlined,
+                icon: AppIcons.cookie,
                 title: 'Cookies et stockage',
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(AppIcons.chevronRight),
                 onTap: () =>
                     context.push('/legal/${LegalDocument.cookies.slug}'),
               ),
               SettingsRow(
-                icon: Icons.article_outlined,
+                icon: AppIcons.fileText,
                 title: 'Licences open-source',
-                trailing: const Icon(Icons.chevron_right_rounded),
+                trailing: const Icon(AppIcons.chevronRight),
                 onTap: () => showMemFlowLicensePage(context),
               ),
             ],
@@ -279,13 +277,13 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
               label: 'Session',
               children: [
                 SettingsRow(
-                  icon: Icons.logout_rounded,
+                  icon: AppIcons.logOut,
                   title: 'Se déconnecter',
                   enabled: !_busy,
                   onTap: _signOut,
                 ),
                 SettingsRow(
-                  icon: Icons.delete_outline_rounded,
+                  icon: AppIcons.trash2,
                   title: 'Demander la suppression de mon compte',
                   destructive: true,
                   enabled: !_busy,
@@ -316,7 +314,7 @@ class _SyncStatusLine extends ConsumerWidget {
 
     final (icon, title, detail, color) = switch (status?.state) {
       SyncState.offline => (
-        Icons.cloud_off_outlined,
+        AppIcons.cloudOff,
         'Hors ligne',
         pending == 0
             ? 'Aucune modification en attente. Les données locales restent disponibles.'
@@ -324,7 +322,7 @@ class _SyncStatusLine extends ConsumerWidget {
         theme.colorScheme.error,
       ),
       SyncState.syncing => (
-        Icons.cloud_sync_outlined,
+        AppIcons.cloudSync,
         'Synchronisation en cours…',
         pending == 0
             ? 'Les dernières données sont en cours de vérification.'
@@ -332,14 +330,14 @@ class _SyncStatusLine extends ConsumerWidget {
         theme.colorScheme.primary,
       ),
       SyncState.error => (
-        Icons.cloud_off_outlined,
+        AppIcons.cloudOff,
         'Synchronisation impossible',
         status?.errorMessage ??
             'La synchronisation a échoué. Réessaie plus tard.',
         theme.colorScheme.error,
       ),
       null || SyncState.idle => (
-        Icons.cloud_done_outlined,
+        AppIcons.cloudCheck,
         'Synchronisé',
         pending == 0
             ? 'Toutes les modifications sont enregistrées.'
@@ -408,7 +406,7 @@ class _SyncStatusLine extends ConsumerWidget {
                 onPressed: status?.state == SyncState.syncing
                     ? null
                     : () => ref.read(syncServiceProvider).syncNow(),
-                icon: Icon(Icons.sync_rounded, size: 18, color: color),
+                icon: Icon(AppIcons.refreshCw, size: 18, color: color),
                 label: const Text('Synchroniser maintenant'),
               ),
             ),

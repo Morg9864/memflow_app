@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -87,7 +88,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
           autofocus: true,
           decoration: const InputDecoration(
             labelText: 'Ton adresse email',
-            prefixIcon: Icon(Icons.mail_outline_rounded),
+            prefixIcon: Icon(AppIcons.mail),
           ),
         ),
         actions: [
@@ -230,9 +231,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                                 autofillHints: const [AutofillHints.name],
                                 decoration: const InputDecoration(
                                   labelText: 'Nom',
-                                  prefixIcon: Icon(
-                                    Icons.person_outline_rounded,
-                                  ),
+                                  prefixIcon: Icon(AppIcons.userRound),
                                 ),
                                 validator: (value) =>
                                     (value ?? '').trim().isNotEmpty
@@ -292,7 +291,7 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                               autofillHints: const [AutofillHints.email],
                               decoration: const InputDecoration(
                                 labelText: 'Email',
-                                prefixIcon: Icon(Icons.mail_outline_rounded),
+                                prefixIcon: Icon(AppIcons.mail),
                               ),
                               validator: (value) =>
                                   _isValidEmail((value ?? '').trim())
@@ -314,17 +313,15 @@ class _AuthScreenState extends ConsumerState<AuthScreen> {
                               ],
                               decoration: InputDecoration(
                                 labelText: 'Mot de passe',
-                                prefixIcon: const Icon(
-                                  Icons.lock_outline_rounded,
-                                ),
+                                prefixIcon: const Icon(AppIcons.lockKeyhole),
                                 suffixIcon: IconButton(
                                   onPressed: () => setState(
                                     () => _obscurePassword = !_obscurePassword,
                                   ),
                                   icon: Icon(
                                     _obscurePassword
-                                        ? Icons.visibility_outlined
-                                        : Icons.visibility_off_outlined,
+                                        ? AppIcons.eye
+                                        : AppIcons.eyeOff,
                                   ),
                                   tooltip: _obscurePassword
                                       ? 'Afficher le mot de passe'

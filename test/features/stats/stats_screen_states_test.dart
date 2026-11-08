@@ -385,7 +385,12 @@ void main() {
             continue;
           }
           final style = span.style;
-          if (style?.fontFamily == 'MaterialIcons') continue; // icônes
+          if (style?.fontFamily == 'MaterialIcons' ||
+              span.text!.runes.any(
+                (rune) => rune >= 0xE000 && rune <= 0xF8FF,
+              )) {
+            continue; // glyphes d’icône
+          }
           texts++;
           final size = style?.fontSize;
           expect(size, isNotNull, reason: span.text);

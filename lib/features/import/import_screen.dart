@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:convert';
 
 import 'package:file_picker/file_picker.dart';
@@ -254,7 +255,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 children: [
                   Row(
                     children: [
-                      const IconTile(icon: Icons.upload_file_rounded),
+                      const IconTile(icon: AppIcons.fileUp),
                       const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
@@ -280,12 +281,12 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                           ? FilledButton.tonalIcon(
                               style: AppTheme.secondaryAction,
                               onPressed: _isImporting ? null : _pickFile,
-                              icon: const Icon(Icons.upload_file_rounded),
+                              icon: const Icon(AppIcons.fileUp),
                               label: const Text('Importer un fichier CSV'),
                             )
                           : FilledButton.icon(
                               onPressed: _isImporting ? null : _pickFile,
-                              icon: const Icon(Icons.upload_file_rounded),
+                              icon: const Icon(AppIcons.fileUp),
                               label: const Text('Importer un fichier CSV'),
                             ),
                     ),
@@ -323,7 +324,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 FilledButton.tonalIcon(
                   style: AppTheme.secondaryAction,
                   onPressed: _downloadTemplate,
-                  icon: const Icon(Icons.download_rounded),
+                  icon: const Icon(AppIcons.download),
                   label: const Text('Télécharger le template CSV'),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -332,7 +333,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                   onPressed: _isBusy ? null : _downloadBackup,
                   icon: _isBusy
                       ? const ButtonSpinner()
-                      : const Icon(Icons.save_alt_rounded),
+                      : const Icon(AppIcons.fileDown),
                   label: const Text('Sauvegarder toutes mes cartes'),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -363,14 +364,14 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 FilledButton.tonalIcon(
                   style: AppTheme.secondaryAction,
                   onPressed: _csvPrompt == null ? null : _copyPrompt,
-                  icon: const Icon(Icons.content_copy_rounded),
+                  icon: const Icon(AppIcons.copy),
                   label: const Text('Copier le prompt'),
                 ),
                 const SizedBox(height: AppSpacing.md),
                 FilledButton.tonalIcon(
                   style: AppTheme.secondaryAction,
                   onPressed: _csvPrompt == null ? null : _downloadPrompt,
-                  icon: const Icon(Icons.download_rounded),
+                  icon: const Icon(AppIcons.download),
                   label: const Text('Télécharger le .md'),
                 ),
                 const SizedBox(height: AppSpacing.lg),
@@ -420,7 +421,7 @@ class _MessageCard extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.error_outline_rounded, color: AppColors.error),
+          const Icon(AppIcons.triangleAlert, color: AppColors.error),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
@@ -509,15 +510,13 @@ class _PreviewCard extends StatelessWidget {
             ],
             const SizedBox(height: AppSpacing.md),
             _SummaryRow(
-              icon: Icons.check_circle_outline_rounded,
+              icon: AppIcons.circleCheck,
               text: preview.cards.length > 1
                   ? '${preview.cards.length} cartes détectées'
                   : '${preview.cards.length} carte détectée',
             ),
             _SummaryRow(
-              icon: hasIssues
-                  ? Icons.warning_amber_rounded
-                  : Icons.check_circle_outline_rounded,
+              icon: hasIssues ? AppIcons.triangleAlert : AppIcons.circleCheck,
               color: hasIssues ? AppColors.error : null,
               text: issues.length > 1
                   ? '${issues.length} lignes invalides'

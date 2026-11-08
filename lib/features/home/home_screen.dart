@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -90,7 +91,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       controller: _searchController,
                       decoration: const InputDecoration(
                         hintText: 'Rechercher une collection',
-                        prefixIcon: Icon(Icons.search_rounded),
+                        prefixIcon: Icon(AppIcons.search),
                       ),
                       onChanged: _onSearchChanged,
                     ),
@@ -158,7 +159,7 @@ class _Header extends StatelessWidget {
         IconButton.filledTonal(
           tooltip: 'Voir les statistiques',
           onPressed: () => context.go('/stats'),
-          icon: const Icon(Icons.insights_rounded),
+          icon: const Icon(AppIcons.chartNoAxesColumnIncreasing),
         ),
         const SizedBox(width: AppSpacing.sm),
         const SyncNowButton(),
@@ -185,7 +186,7 @@ class _HeroCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Icon(
-                    Icons.check_circle_outline_rounded,
+                    AppIcons.circleCheck,
                     size: 40,
                     color: theme.colorScheme.primary,
                   ),
@@ -227,7 +228,7 @@ class _HeroCard extends StatelessWidget {
                       child: FilledButton.icon(
                         key: const ValueKey('home-study-cta'),
                         onPressed: () => context.push('/study'),
-                        icon: const Icon(Icons.play_arrow_rounded),
+                        icon: const Icon(AppIcons.play),
                         label: const Text('Étudier maintenant'),
                       ),
                     ),
@@ -252,12 +253,15 @@ class _Overview extends StatelessWidget {
     final streak = StatCard(
       value: '${stats.streakDays} j',
       label: 'de série',
-      icon: Icons.local_fire_department_rounded,
+      iconContent: const Text(
+        '🔥',
+        style: TextStyle(fontSize: 20, color: AppColors.text),
+      ),
     );
     final success = StatCard(
       value: '${(stats.successRate * 100).round()} %',
       label: 'de réussite',
-      icon: Icons.task_alt_rounded,
+      icon: AppIcons.circleCheck,
     );
     final hero = _HeroCard(dueCards: stats.dueCards);
     return LayoutBuilder(
@@ -329,7 +333,7 @@ class _CollectionsHeader extends StatelessWidget {
         const SectionLabel('Collections'),
         TextButton.icon(
           onPressed: () => context.go('/import'),
-          icon: const Icon(Icons.upload_file_rounded),
+          icon: const Icon(AppIcons.fileUp),
           label: const Text('Importer CSV'),
         ),
       ],
@@ -450,12 +454,12 @@ class _CollectionsSliver extends StatelessWidget {
                     'collection.',
                 action: FilledButton.icon(
                   onPressed: () => context.go('/import'),
-                  icon: const Icon(Icons.upload_file_rounded),
+                  icon: const Icon(AppIcons.fileUp),
                   label: const Text('Importer un fichier CSV'),
                 ),
               )
             : EmptyState(
-                icon: Icons.search_off_rounded,
+                icon: AppIcons.searchX,
                 title: 'Aucun résultat',
                 message: 'Aucune collection ne correspond à « $search ».',
               ),
@@ -536,11 +540,7 @@ class _CollectionCard extends StatelessWidget {
                         color: Color(c.color).withValues(alpha: 0.15),
                         borderRadius: AppTheme.radiusSm,
                       ),
-                      child: Text(
-                        c.icon,
-                        textScaler: TextScaler.noScaling,
-                        style: const TextStyle(fontSize: 22),
-                      ),
+                      child: Text(c.icon, style: const TextStyle(fontSize: 22)),
                     ),
                     const SizedBox(width: AppSpacing.md),
                     Expanded(
@@ -593,7 +593,7 @@ class _CollectionCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.sm),
                       child: Icon(
-                        Icons.chevron_right_rounded,
+                        AppIcons.chevronRight,
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),

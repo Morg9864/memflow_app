@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -300,7 +301,7 @@ class _DueCardTile extends StatelessWidget {
             else
               PopupMenuButton<_DueCardAction>(
                 tooltip: 'Modifier la date',
-                icon: const Icon(Icons.more_horiz_rounded),
+                icon: const Icon(AppIcons.ellipsis),
                 onSelected: (action) {
                   switch (action) {
                     case _DueCardAction.edit:
@@ -314,7 +315,7 @@ class _DueCardTile extends StatelessWidget {
                     value: _DueCardAction.edit,
                     child: Row(
                       children: [
-                        Icon(Icons.edit_calendar_rounded, size: 20),
+                        Icon(AppIcons.calendarDays, size: 20),
                         SizedBox(width: AppSpacing.md),
                         Expanded(child: Text('Choisir une date')),
                       ],
@@ -324,7 +325,7 @@ class _DueCardTile extends StatelessWidget {
                     value: _DueCardAction.now,
                     child: Row(
                       children: [
-                        Icon(Icons.bolt_rounded, size: 20),
+                        Icon(AppIcons.zap, size: 20),
                         SizedBox(width: AppSpacing.md),
                         Expanded(child: Text('Remettre à now')),
                       ],

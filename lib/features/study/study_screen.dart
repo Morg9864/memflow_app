@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -1629,13 +1630,13 @@ class _ResultTone {
       text: AppColors.resultGoodText,
       background: AppColors.resultGoodSoft,
       border: AppColors.resultGood,
-      icon: Icons.check_circle_rounded,
+      icon: AppIcons.check,
     ),
     false => const _ResultTone(
       text: AppColors.resultBadText,
       background: AppColors.resultBadSoft,
       border: AppColors.resultBad,
-      icon: Icons.cancel_rounded,
+      icon: AppIcons.x,
     ),
     null => _ResultTone(
       text: theme.colorScheme.onSurface,
@@ -1725,11 +1726,7 @@ class _HintLine extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.only(top: 3),
-            child: Icon(
-              Icons.lightbulb_outline_rounded,
-              size: 16,
-              color: color,
-            ),
+            child: Icon(AppIcons.lightbulb, size: 16, color: color),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(
@@ -2217,13 +2214,9 @@ class _McqOptionTile extends StatelessWidget {
                       ),
                     ),
                     if (isCorrect)
-                      Icon(
-                        Icons.check_circle_rounded,
-                        color: foreground,
-                        size: 22,
-                      )
+                      Icon(AppIcons.check, color: foreground, size: 22)
                     else if (isWrong)
-                      Icon(Icons.cancel_rounded, color: foreground, size: 22),
+                      Icon(AppIcons.x, color: foreground, size: 22),
                   ],
                 ),
               ),
@@ -2472,9 +2465,7 @@ class _ClozeBlankChip extends StatelessWidget {
                   if (isValidated) ...[
                     const SizedBox(width: AppSpacing.xs),
                     Icon(
-                      isCorrect == true
-                          ? Icons.check_circle_rounded
-                          : Icons.cancel_rounded,
+                      isCorrect == true ? AppIcons.check : AppIcons.x,
                       size: 16,
                       color: foreground,
                     ),
@@ -2616,9 +2607,7 @@ class _TextEntryMode extends StatelessWidget {
               disabledBorder: hasValidated ? border() : null,
               suffixIcon: hasValidated
                   ? Icon(
-                      isCorrect == true
-                          ? Icons.check_circle_rounded
-                          : Icons.cancel_rounded,
+                      isCorrect == true ? AppIcons.check : AppIcons.x,
                       color: tone.text,
                       semanticLabel: isCorrect == true
                           ? 'Bonne réponse'
@@ -2748,10 +2737,10 @@ class _LevelBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final meta = switch (level) {
-      1 => ('Basique', Icons.visibility_rounded),
-      2 => ('Intermédiaire', Icons.auto_awesome_mosaic_rounded),
-      3 => ('Actif', Icons.bolt_rounded),
-      _ => ('Avancé', Icons.psychology_alt_rounded),
+      1 => ('Basique', AppIcons.eye),
+      2 => ('Intermédiaire', AppIcons.layoutDashboard),
+      3 => ('Actif', AppIcons.zap),
+      _ => ('Avancé', AppIcons.brain),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -2817,7 +2806,7 @@ class _StudyProgressHeader extends StatelessWidget {
             IconButton(
               tooltip: 'Quitter la session',
               onPressed: onClose,
-              icon: const Icon(Icons.close_rounded),
+              icon: const Icon(AppIcons.x),
             ),
             Expanded(
               child: Text(
@@ -2975,11 +2964,7 @@ class _ReviewButton extends StatelessWidget {
                     Positioned(
                       top: 4,
                       right: 4,
-                      child: Icon(
-                        Icons.check_circle_rounded,
-                        size: 14,
-                        color: tone,
-                      ),
+                      child: Icon(AppIcons.check, size: 14, color: tone),
                     ),
                 ],
               ),
@@ -3000,10 +2985,10 @@ extension _ReviewResultColors on ReviewResult {
   };
 
   IconData get icon => switch (this) {
-    ReviewResult.again => Icons.refresh_rounded,
-    ReviewResult.hard => Icons.terrain_rounded,
-    ReviewResult.good => Icons.thumb_up_alt_rounded,
-    ReviewResult.easy => Icons.rocket_launch_rounded,
+    ReviewResult.again => AppIcons.rotateCcw,
+    ReviewResult.hard => AppIcons.clock3,
+    ReviewResult.good => AppIcons.check,
+    ReviewResult.easy => AppIcons.star,
   };
 
   Color get background => switch (this) {

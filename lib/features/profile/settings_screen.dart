@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -29,7 +30,7 @@ class SettingsScreen extends ConsumerWidget {
               IconButton(
                 onPressed: () => popOrGo(context, '/profile'),
                 tooltip: 'Retour',
-                icon: const Icon(Icons.arrow_back_rounded),
+                icon: const Icon(AppIcons.arrowLeft),
               ),
               const SizedBox(width: AppSpacing.sm),
               Expanded(
@@ -48,7 +49,7 @@ class SettingsScreen extends ConsumerWidget {
             label: 'Mon compte',
             children: [
               SettingsRow(
-                icon: Icons.badge_outlined,
+                icon: AppIcons.badgeCheck,
                 title: 'Nom d\'affichage',
                 subtitle: displayName ?? '—',
                 trailing: const _EditIcon(),
@@ -56,7 +57,7 @@ class SettingsScreen extends ConsumerWidget {
                     _showEditNameDialog(context, ref, displayName ?? ''),
               ),
               SettingsRow(
-                icon: Icons.mail_outline_rounded,
+                icon: AppIcons.mail,
                 title: 'Adresse email',
                 subtitle: user.email ?? '—',
                 trailing: const _EditIcon(),
@@ -64,7 +65,7 @@ class SettingsScreen extends ConsumerWidget {
                     _showEditEmailDialog(context, ref, user.email ?? ''),
               ),
               SettingsRow(
-                icon: Icons.lock_outline_rounded,
+                icon: AppIcons.lockKeyhole,
                 title: 'Mot de passe',
                 subtitle: '••••••••',
                 trailing: const _EditIcon(),
@@ -77,7 +78,7 @@ class SettingsScreen extends ConsumerWidget {
             label: 'Révision',
             children: [
               SettingsRow(
-                icon: Icons.style_outlined,
+                icon: AppIcons.layers,
                 title: 'Cartes par session',
                 subtitle: '$sessionCardLimit cartes max par session',
                 trailing: const _EditIcon(),
@@ -179,7 +180,7 @@ class _EditIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const Icon(Icons.edit_outlined, semanticLabel: 'Modifier');
+      const Icon(AppIcons.edit, semanticLabel: 'Modifier');
 }
 
 /// Les dialogues possèdent leurs contrôleurs : ils sont libérés avec le
@@ -407,11 +408,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
             decoration: InputDecoration(
               labelText: 'Nouveau mot de passe',
               suffixIcon: IconButton(
-                icon: Icon(
-                  _obscure
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                ),
+                icon: Icon(_obscure ? AppIcons.eyeOff : AppIcons.eye),
                 onPressed: () => setState(() => _obscure = !_obscure),
               ),
             ),
@@ -423,11 +420,7 @@ class _PasswordDialogState extends State<_PasswordDialog> {
             decoration: InputDecoration(
               labelText: 'Confirmer le mot de passe',
               suffixIcon: IconButton(
-                icon: Icon(
-                  _obscureConfirm
-                      ? Icons.visibility_off_outlined
-                      : Icons.visibility_outlined,
-                ),
+                icon: Icon(_obscureConfirm ? AppIcons.eyeOff : AppIcons.eye),
                 onPressed: () =>
                     setState(() => _obscureConfirm = !_obscureConfirm),
               ),

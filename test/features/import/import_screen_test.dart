@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -210,7 +211,7 @@ void main() {
     await _pump(tester, parse: () => _preview(cards: 0, issues: 2));
     await _choose(tester);
     expect(find.text('Aucune carte exploitable'), findsOneWidget);
-    expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.triangleAlert), findsWidgets);
     expect(find.textContaining('Confirmer'), findsNothing);
     expect(find.text('APERÇU'), findsNothing);
   });

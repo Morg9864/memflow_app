@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../domain/models/models.dart';
@@ -96,7 +97,7 @@ class _ModeGroup {
 }
 
 const _adaptive = _ModeOptionData(
-  icon: Icons.auto_awesome_rounded,
+  icon: AppIcons.sparkles,
   label: 'Adaptatif',
   description: 'Le mode suit ta progression sur chaque carte',
 );
@@ -104,13 +105,13 @@ const _adaptive = _ModeOptionData(
 const _groups = <_ModeGroup>[
   _ModeGroup('Reconnaître', [
     _ModeOptionData(
-      icon: Icons.format_list_numbered_rounded,
+      icon: AppIcons.listOrdered,
       label: 'QCM',
       description: 'Choisis parmi plusieurs réponses',
       mode: TestMode.multipleChoice,
     ),
     _ModeOptionData(
-      icon: Icons.check_circle_outline_rounded,
+      icon: AppIcons.circleCheck,
       label: 'Vrai / Faux',
       description: 'Décide si l\'affirmation est correcte',
       mode: TestMode.trueFalse,
@@ -118,13 +119,13 @@ const _groups = <_ModeGroup>[
   ]),
   _ModeGroup('Retourner', [
     _ModeOptionData(
-      icon: Icons.flip_rounded,
+      icon: AppIcons.rotateCw,
       label: 'Flashcard',
       description: 'Retourne la carte pour voir la réponse',
       mode: TestMode.classicFlashcard,
     ),
     _ModeOptionData(
-      icon: Icons.swap_horiz_rounded,
+      icon: AppIcons.arrowLeftRight,
       label: 'Flashcard inversée',
       description: 'La réponse est la question',
       mode: TestMode.reversedFlashcard,
@@ -132,13 +133,13 @@ const _groups = <_ModeGroup>[
   ]),
   _ModeGroup('Se souvenir', [
     _ModeOptionData(
-      icon: Icons.edit_rounded,
+      icon: AppIcons.edit,
       label: 'Saisie libre',
       description: 'Écris la réponse de mémoire',
       mode: TestMode.freeText,
     ),
     _ModeOptionData(
-      icon: Icons.text_fields_rounded,
+      icon: AppIcons.textCursorInput,
       label: 'Texte à trous',
       description: 'Place les mots dans les trous',
       mode: TestMode.cloze,
@@ -180,7 +181,7 @@ class _ModeSelectionBody extends StatelessWidget {
                     IconButton(
                       tooltip: 'Fermer',
                       onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close_rounded),
+                      icon: const Icon(AppIcons.x),
                     ),
                   ],
                 )
@@ -312,7 +313,7 @@ class _ModeRow extends StatelessWidget {
                 child: Row(
                   children: [
                     IconTile(
-                      icon: disabled ? Icons.lock_outline_rounded : option.icon,
+                      icon: disabled ? AppIcons.lockKeyhole : option.icon,
                       size: featured ? 52 : 40,
                       background: featured
                           ? scheme.surface.withValues(alpha: 0.7)

@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../app/app_version.dart';
@@ -57,7 +58,7 @@ class LegalDocumentScreen extends StatelessWidget {
             ? null
             : IconButton(
                 tooltip: 'Retour',
-                icon: const Icon(Icons.arrow_back_rounded),
+                icon: const Icon(AppIcons.arrowLeft),
                 onPressed: () => popOrGo(context, '/profile'),
               ),
       ),

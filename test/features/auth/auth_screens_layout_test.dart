@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -156,7 +157,7 @@ void main() {
     await tester.pump();
     expect(find.text('Une erreur est survenue. Réessaie.'), findsOneWidget);
     expect(find.textContaining('secret internals'), findsNothing);
-    expect(find.byIcon(Icons.error_outline_rounded), findsOneWidget);
+    expect(find.byIcon(AppIcons.triangleAlert), findsOneWidget);
   });
 
   testWidgets('known auth failure is mapped to French', (tester) async {

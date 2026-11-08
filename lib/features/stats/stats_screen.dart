@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -14,22 +15,22 @@ import '../../widgets/ui.dart';
     1 => (
       title: 'Basique',
       subtitle: 'Fondations et reconnaissance',
-      icon: Icons.visibility_rounded,
+      icon: AppIcons.eye,
     ),
     2 => (
       title: 'Intermédiaire',
       subtitle: 'Compréhension guidée',
-      icon: Icons.tune_rounded,
+      icon: AppIcons.slidersHorizontal,
     ),
     3 => (
       title: 'Actif',
       subtitle: 'Rappel actif et reformulation',
-      icon: Icons.bolt_rounded,
+      icon: AppIcons.zap,
     ),
     _ => (
       title: 'Avancé',
       subtitle: 'Maîtrise contextuelle',
-      icon: Icons.psychology_alt_rounded,
+      icon: AppIcons.brain,
     ),
   };
 }
@@ -204,17 +205,23 @@ class _KpiRow extends StatelessWidget {
       (
         value: '${data.streakDays}',
         label: 'série',
-        icon: Icons.local_fire_department_rounded,
+        icon: AppIcons.bookOpen,
+        iconContent: const Text(
+          '🔥',
+          style: TextStyle(fontSize: 20, color: AppColors.text),
+        ),
       ),
       (
         value: '${data.totalReviews}',
         label: 'cartes vues',
-        icon: Icons.menu_book_rounded,
+        icon: AppIcons.bookOpen,
+        iconContent: null,
       ),
       (
         value: _pct(data.successRate),
         label: 'réussite',
-        icon: Icons.show_chart_rounded,
+        icon: AppIcons.circleCheck,
+        iconContent: null,
       ),
     ];
     return LayoutBuilder(
@@ -230,6 +237,7 @@ class _KpiRow extends StatelessWidget {
               value: i.value,
               label: i.label,
               icon: i.icon,
+              iconContent: i.iconContent,
             ),
         ];
         if (stacked) {

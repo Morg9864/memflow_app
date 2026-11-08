@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memflow/widgets/ui.dart';
@@ -17,7 +18,7 @@ void main() {
               horizontal: true,
               value: '729',
               label: 'à revoir',
-              icon: Icons.schedule_rounded,
+              icon: AppIcons.calendarDays,
             ),
           ),
         ),

@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -299,7 +300,7 @@ class _CollectionDetailScreenState
         onPressed: _busy || currentCollection?.isDisabled != false
             ? null
             : () => _launchStudy(),
-        icon: const Icon(Icons.play_arrow_rounded),
+        icon: const Icon(AppIcons.play),
         label: const Text('Étudier'),
       ),
       child: collection.when(
@@ -329,7 +330,7 @@ class _CollectionDetailScreenState
               menu: PopupMenuButton<_CollectionAction>(
                 tooltip: 'Options de la collection',
                 enabled: !_busy,
-                icon: const Icon(Icons.more_vert_rounded),
+                icon: const Icon(AppIcons.ellipsis),
                 onSelected: (action) {
                   switch (action) {
                     case _CollectionAction.toggleDisabled:
@@ -342,9 +343,7 @@ class _CollectionDetailScreenState
                   PopupMenuItem(
                     value: _CollectionAction.toggleDisabled,
                     child: _MenuRow(
-                      icon: item.isDisabled
-                          ? Icons.visibility_rounded
-                          : Icons.visibility_off_rounded,
+                      icon: item.isDisabled ? AppIcons.eye : AppIcons.eyeOff,
                       label: item.isDisabled
                           ? 'Réactiver la collection'
                           : 'Désactiver la collection',
@@ -353,7 +352,7 @@ class _CollectionDetailScreenState
                   const PopupMenuItem(
                     value: _CollectionAction.delete,
                     child: _MenuRow(
-                      icon: Icons.delete_outline_rounded,
+                      icon: AppIcons.trash2,
                       label: 'Supprimer la collection',
                       destructive: true,
                     ),
@@ -377,7 +376,7 @@ class _CollectionDetailScreenState
                         ),
                       ),
                     ),
-              icon: const Icon(Icons.schedule_rounded),
+              icon: const Icon(AppIcons.calendarDays),
               label: const Text('Voir les échéances'),
             ),
             Padding(
@@ -518,7 +517,7 @@ class _BackBar extends StatelessWidget {
           IconButton(
             onPressed: () => popOrGo(context, '/'),
             tooltip: 'Retour',
-            icon: const Icon(Icons.arrow_back_rounded),
+            icon: const Icon(AppIcons.arrowLeft),
           ),
           const Spacer(),
           const SyncNowButton(),
@@ -643,11 +642,7 @@ class _Identity extends StatelessWidget {
                     borderRadius: AppTheme.radiusMd,
                   ),
                   child: Center(
-                    child: Text(
-                      c.icon,
-                      textScaler: TextScaler.noScaling,
-                      style: const TextStyle(fontSize: 30),
-                    ),
+                    child: Text(c.icon, style: const TextStyle(fontSize: 30)),
                   ),
                 ),
               ),
@@ -712,19 +707,19 @@ class _CollectionStats extends StatelessWidget {
       StatCard(
         value: '${c.totalCards}',
         label: 'cartes',
-        icon: Icons.style_rounded,
+        icon: AppIcons.layers,
         horizontal: stack,
       ),
       StatCard(
         value: '${c.cardsDone}',
         label: 'faites',
-        icon: Icons.check_circle_outline_rounded,
+        icon: AppIcons.circleCheck,
         horizontal: stack,
       ),
       StatCard(
         value: '${c.dueCards}',
         label: 'à revoir',
-        icon: Icons.schedule_rounded,
+        icon: AppIcons.calendarDays,
         horizontal: stack,
       ),
     ];
@@ -784,7 +779,7 @@ class _DecksHeader extends StatelessWidget {
           if (selected) ...[
             const SizedBox(width: AppSpacing.md),
             Icon(
-              Icons.check_rounded,
+              AppIcons.check,
               size: 20,
               color: Theme.of(context).colorScheme.primary,
             ),
@@ -808,7 +803,7 @@ class _DecksHeader extends StatelessWidget {
         const SizedBox(width: AppSpacing.sm),
         PopupMenuButton<(_DeckSortField, _SortDirection)>(
           tooltip: 'Trier les decks',
-          icon: const Icon(Icons.sort_rounded),
+          icon: const Icon(AppIcons.arrowUpDown),
           onSelected: (sort) => onSort(sort.$1, sort.$2),
           itemBuilder: (_) => [
             _item(
@@ -816,28 +811,28 @@ class _DecksHeader extends StatelessWidget {
               _DeckSortField.importOrder,
               _SortDirection.ascending,
               'Importation croissant',
-              Icons.south_rounded,
+              AppIcons.arrowDown,
             ),
             _item(
               context,
               _DeckSortField.importOrder,
               _SortDirection.descending,
               'Importation décroissant',
-              Icons.north_rounded,
+              AppIcons.arrowUp,
             ),
             _item(
               context,
               _DeckSortField.name,
               _SortDirection.ascending,
               'Alphabet croissant',
-              Icons.sort_by_alpha_rounded,
+              AppIcons.arrowDownAZ,
             ),
             _item(
               context,
               _DeckSortField.name,
               _SortDirection.descending,
               'Alphabet décroissant',
-              Icons.sort_by_alpha_rounded,
+              AppIcons.arrowDownAZ,
             ),
           ],
         ),
@@ -853,7 +848,7 @@ class _ImportButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return OutlinedButton.icon(
       onPressed: () => context.go('/import'),
-      icon: const Icon(Icons.upload_file_rounded),
+      icon: const Icon(AppIcons.fileUp),
       label: const Text('Importer un CSV'),
     );
   }
@@ -972,11 +967,7 @@ class DeckCard extends StatelessWidget {
                       borderRadius: AppTheme.radiusSm,
                     ),
                     alignment: Alignment.center,
-                    child: Text(
-                      deck.icon,
-                      textScaler: TextScaler.noScaling,
-                      style: const TextStyle(fontSize: 20),
-                    ),
+                    child: const Icon(AppIcons.layers, size: 20),
                   ),
                   const SizedBox(width: AppSpacing.md),
                   Expanded(
@@ -1029,7 +1020,7 @@ class DeckCard extends StatelessWidget {
                   if (hasOptions)
                     PopupMenuButton<_DeckAction>(
                       tooltip: 'Options du deck',
-                      icon: const Icon(Icons.more_vert_rounded),
+                      icon: const Icon(AppIcons.ellipsis),
                       onSelected: (action) {
                         switch (action) {
                           case _DeckAction.viewCards:
@@ -1045,7 +1036,7 @@ class DeckCard extends StatelessWidget {
                           const PopupMenuItem(
                             value: _DeckAction.viewCards,
                             child: _MenuRow(
-                              icon: Icons.list_rounded,
+                              icon: AppIcons.list,
                               label: 'Voir les cartes',
                             ),
                           ),
@@ -1054,8 +1045,8 @@ class DeckCard extends StatelessWidget {
                             value: _DeckAction.toggleDisabled,
                             child: _MenuRow(
                               icon: deck.isDisabled
-                                  ? Icons.visibility_rounded
-                                  : Icons.visibility_off_rounded,
+                                  ? AppIcons.eye
+                                  : AppIcons.eyeOff,
                               label: deck.isDisabled
                                   ? 'Réactiver le deck'
                                   : 'Désactiver le deck',
@@ -1065,7 +1056,7 @@ class DeckCard extends StatelessWidget {
                           const PopupMenuItem(
                             value: _DeckAction.delete,
                             child: _MenuRow(
-                              icon: Icons.delete_outline_rounded,
+                              icon: AppIcons.trash2,
                               label: 'Supprimer le deck',
                               destructive: true,
                             ),
@@ -1076,7 +1067,7 @@ class DeckCard extends StatelessWidget {
                     Padding(
                       padding: const EdgeInsets.only(top: AppSpacing.sm),
                       child: Icon(
-                        Icons.chevron_right_rounded,
+                        AppIcons.chevronRight,
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     ),

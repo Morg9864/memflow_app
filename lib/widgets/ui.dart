@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -136,7 +137,7 @@ class SyncNowButton extends ConsumerWidget {
               dimension: 20,
               child: CircularProgressIndicator(strokeWidth: 2),
             )
-          : const Icon(Icons.sync_rounded),
+          : const Icon(AppIcons.refreshCw),
     );
   }
 }
@@ -148,22 +149,14 @@ void popOrGo(BuildContext context, String fallback) =>
 
 /// Les quatre onglets, partagés par la barre (téléphone) et le rail (tablette).
 const appNavItems = <({IconData icon, IconData? selectedIcon, String label})>[
+  (icon: AppIcons.house, selectedIcon: AppIcons.house, label: 'Accueil'),
   (
-    icon: Icons.home_outlined,
-    selectedIcon: Icons.home_rounded,
-    label: 'Accueil',
+    icon: AppIcons.chartNoAxesColumnIncreasing,
+    selectedIcon: null,
+    label: 'Stats',
   ),
-  (icon: Icons.insights_rounded, selectedIcon: null, label: 'Stats'),
-  (
-    icon: Icons.upload_file_outlined,
-    selectedIcon: Icons.upload_file_rounded,
-    label: 'Importer',
-  ),
-  (
-    icon: Icons.person_outline_rounded,
-    selectedIcon: Icons.person_rounded,
-    label: 'Profil',
-  ),
+  (icon: AppIcons.fileUp, selectedIcon: AppIcons.fileUp, label: 'Importer'),
+  (icon: AppIcons.userRound, selectedIcon: AppIcons.userRound, label: 'Profil'),
 ];
 
 class AppBottomNav extends StatelessWidget {
@@ -222,23 +215,30 @@ class StatCard extends StatelessWidget {
     super.key,
     required this.value,
     required this.label,
-    required this.icon,
+    this.icon,
+    this.iconContent,
     this.compact = false,
     this.horizontal = false,
-  });
+  }) : assert(icon != null || iconContent != null);
 
   final String value;
   final String label;
-  final IconData icon;
+  final IconData? icon;
+  final Widget? iconContent;
   final bool compact;
   final bool horizontal;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final iconWidget = compact
-        ? IconTile(icon: icon, size: 30)
-        : IconTile(icon: icon);
+    final iconWidget = iconContent != null
+        ? Container(
+            width: compact ? 30 : 40,
+            height: compact ? 30 : 40,
+            alignment: Alignment.center,
+            child: iconContent,
+          )
+        : IconTile(icon: icon!, size: compact ? 30 : 40);
     final textWidget = Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -378,7 +378,7 @@ class EmptyState extends StatelessWidget {
     required this.title,
     required this.message,
     this.action,
-    this.icon = Icons.auto_stories_rounded,
+    this.icon = AppIcons.bookOpen,
   });
 
   final String title;
@@ -438,7 +438,7 @@ class AppErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return EmptyState(
-      icon: Icons.error_outline_rounded,
+      icon: AppIcons.triangleAlert,
       title: title,
       message: message,
       action: onRetry == null

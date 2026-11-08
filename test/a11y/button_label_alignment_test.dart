@@ -1,6 +1,7 @@
 // A button label that wraps (large text) must be centred in its button, for
 // every Material button kind, not left-aligned. ButtonStyle has no textAlign,
 // so the theme centres it through foregroundBuilder.
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -51,7 +52,7 @@ void main() {
       'FilledButton.icon',
       (t) => FilledButton.icon(
         onPressed: () {},
-        icon: const Icon(Icons.add),
+        icon: const Icon(AppIcons.plus),
         label: Text(t),
       ),
     ),

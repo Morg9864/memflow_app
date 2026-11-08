@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -20,7 +21,7 @@ class NotFoundScreen extends StatelessWidget {
       child: Center(
         child: SingleChildScrollView(
           child: EmptyState(
-            icon: Icons.explore_off_rounded,
+            icon: AppIcons.compass,
             title: 'Page introuvable',
             message: 'Cette page n’existe pas ou n’est plus disponible.',
             action: Column(

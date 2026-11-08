@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -43,7 +44,7 @@ class AuthErrorText extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           ExcludeSemantics(
-            child: Icon(Icons.error_outline_rounded, size: 18, color: color),
+            child: Icon(AppIcons.triangleAlert, size: 18, color: color),
           ),
           const SizedBox(width: AppSpacing.sm),
           Expanded(

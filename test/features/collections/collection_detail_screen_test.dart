@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -69,7 +70,7 @@ void main() {
     );
     expect(tester.widget<DeckCard>(find.byType(DeckCard)).onTap, isNull);
 
-    await tester.tap(find.byIcon(Icons.more_vert_rounded).first);
+    await tester.tap(find.byIcon(AppIcons.ellipsis).first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Réactiver la collection'));
     await tester.pumpAndSettle();

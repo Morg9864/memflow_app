@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 
 import '../../theme/app_theme.dart';
@@ -32,7 +33,7 @@ class ListScreenHeader extends StatelessWidget {
             IconButton(
               onPressed: () => popOrGo(context, backFallback),
               tooltip: 'Retour',
-              icon: const Icon(Icons.arrow_back_rounded),
+              icon: const Icon(AppIcons.arrowLeft),
             ),
             const Spacer(),
             const SyncNowButton(),

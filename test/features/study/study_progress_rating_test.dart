@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -228,10 +229,10 @@ void main() {
       await _pump(tester, cards: [_card('a', TestMode.multipleChoice)]);
       await _answer(tester, TestMode.multipleChoice);
       const tones = {
-        'Encore': (Icons.refresh_rounded, AppColors.error),
-        'Difficile': (Icons.terrain_rounded, AppColors.ratingHard),
-        'Correct': (Icons.thumb_up_alt_rounded, AppColors.resultGood),
-        'Facile': (Icons.rocket_launch_rounded, AppColors.ratingEasy),
+        'Encore': (AppIcons.rotateCcw, AppColors.error),
+        'Difficile': (AppIcons.clock3, AppColors.ratingHard),
+        'Correct': (AppIcons.check, AppColors.resultGood),
+        'Facile': (AppIcons.star, AppColors.ratingEasy),
       };
       const descriptions = {
         'Encore': 'Je ne savais pas',
@@ -250,7 +251,15 @@ void main() {
           AppColors.text,
         );
         final icon = tester.widget<Icon>(
-          find.descendant(of: button, matching: find.byIcon(entry.value.$1)),
+          find.descendant(
+            of: button,
+            matching: find.byWidgetPredicate(
+              (widget) =>
+                  widget is Icon &&
+                  widget.icon == entry.value.$1 &&
+                  widget.size == 20,
+            ),
+          ),
         );
         expect(icon.color, entry.value.$2);
         expect(icon.size, 20);
@@ -277,7 +286,12 @@ void main() {
       expect(
         find.descendant(
           of: find.byKey(const Key('inline-review-controls')),
-          matching: find.byIcon(Icons.check_circle_rounded),
+          matching: find.byWidgetPredicate(
+            (widget) =>
+                widget is Icon &&
+                widget.icon == AppIcons.check &&
+                widget.size == 14,
+          ),
         ),
         findsOneWidget,
       );

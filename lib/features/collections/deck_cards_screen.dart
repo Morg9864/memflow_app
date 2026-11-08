@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -220,10 +221,7 @@ class _CardTile extends StatelessWidget {
               ),
             ),
             IconButton(
-              icon: Icon(
-                Icons.delete_outline_rounded,
-                color: theme.colorScheme.error,
-              ),
+              icon: Icon(AppIcons.trash2, color: theme.colorScheme.error),
               tooltip: 'Supprimer',
               onPressed: onDelete,
             ),

@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -208,10 +209,7 @@ void main() {
       expect(_decoration(tester, wrong).color, AppColors.resultBadSoft);
       expect(_borderColor(tester, wrong), AppColors.resultBad);
       expect(
-        find.descendant(
-          of: wrong.first,
-          matching: find.byIcon(Icons.cancel_rounded),
-        ),
+        find.descendant(of: wrong.first, matching: find.byIcon(AppIcons.x)),
         findsOneWidget,
       );
       expect(
@@ -227,10 +225,7 @@ void main() {
       expect(_decoration(tester, right).color, AppColors.resultGoodSoft);
       expect(_borderColor(tester, right), AppColors.resultGood);
       expect(
-        find.descendant(
-          of: right.first,
-          matching: find.byIcon(Icons.check_circle_rounded),
-        ),
+        find.descendant(of: right.first, matching: find.byIcon(AppIcons.check)),
         findsOneWidget,
       );
       expect(
@@ -265,13 +260,13 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: right.first,
-          matching: find.byIcon(Icons.check_circle_rounded),
-        ),
+        find.descendant(of: right.first, matching: find.byIcon(AppIcons.check)),
         findsOneWidget,
       );
-      expect(find.byIcon(Icons.cancel_rounded), findsNothing);
+      expect(
+        find.descendant(of: right.first, matching: find.byIcon(AppIcons.x)),
+        findsNothing,
+      );
     });
 
     testWidgets('border width never changes between states', (tester) async {
@@ -323,10 +318,7 @@ void main() {
       final good = _tileBox(right);
       expect(_decoration(tester, good).color, AppColors.resultGoodSoft);
       expect(
-        find.descendant(
-          of: good.first,
-          matching: find.byIcon(Icons.check_circle_rounded),
-        ),
+        find.descendant(of: good.first, matching: find.byIcon(AppIcons.check)),
         findsOneWidget,
       );
     });
@@ -340,7 +332,7 @@ void main() {
       expect(
         find.descendant(
           of: _feedbackCard('BONNE RÉPONSE'),
-          matching: find.byIcon(Icons.check_circle_rounded),
+          matching: find.byIcon(AppIcons.check),
         ),
         findsOneWidget,
       );
@@ -357,7 +349,7 @@ void main() {
       expect(
         find.descendant(
           of: _feedbackCard('RÉPONSE ATTENDUE'),
-          matching: find.byIcon(Icons.cancel_rounded),
+          matching: find.byIcon(AppIcons.x),
         ),
         findsNWidgets(1),
       );
@@ -504,7 +496,7 @@ void main() {
       expect(tester.widget<TextField>(find.byType(TextField)).enabled, isFalse);
       expect(find.text('RÉPONSE'), findsOneWidget);
       // Wrong answer: bad tone border icon on the field.
-      expect(find.byIcon(Icons.cancel_rounded), findsWidgets);
+      expect(find.byIcon(AppIcons.x), findsWidgets);
     });
 
     testWidgets('keyboard done on an empty field behaves as the button', (
@@ -526,7 +518,7 @@ void main() {
       expect(
         find.descendant(
           of: find.byType(TextField),
-          matching: find.byIcon(Icons.check_circle_rounded),
+          matching: find.byIcon(AppIcons.check),
         ),
         findsOneWidget,
       );
@@ -582,17 +574,11 @@ void main() {
       final first = find.widgetWithText(InkWell, 'réplication');
       final second = find.widgetWithText(InkWell, 'ribosome');
       expect(
-        find.descendant(
-          of: first.first,
-          matching: find.byIcon(Icons.check_circle_rounded),
-        ),
+        find.descendant(of: first.first, matching: find.byIcon(AppIcons.check)),
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: second.first,
-          matching: find.byIcon(Icons.cancel_rounded),
-        ),
+        find.descendant(of: second.first, matching: find.byIcon(AppIcons.x)),
         findsOneWidget,
       );
     });

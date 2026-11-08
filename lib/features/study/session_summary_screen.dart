@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -20,25 +21,25 @@ class SessionSummaryScreen extends StatelessWidget {
       _CountTile(
         value: counts[ReviewResult.again] ?? 0,
         label: 'encore',
-        icon: Icons.refresh_rounded,
+        icon: AppIcons.rotateCcw,
         tone: AppColors.error,
       ),
       _CountTile(
         value: counts[ReviewResult.hard] ?? 0,
         label: 'difficile',
-        icon: Icons.terrain_rounded,
+        icon: AppIcons.clock3,
         tone: AppColors.ratingHard,
       ),
       _CountTile(
         value: counts[ReviewResult.good] ?? 0,
         label: 'correct',
-        icon: Icons.thumb_up_alt_rounded,
+        icon: AppIcons.check,
         tone: AppColors.resultGood,
       ),
       _CountTile(
         value: counts[ReviewResult.easy] ?? 0,
         label: 'facile',
-        icon: Icons.rocket_launch_rounded,
+        icon: AppIcons.star,
         tone: AppColors.ratingEasy,
       ),
     ];
@@ -99,7 +100,7 @@ class SessionSummaryScreen extends StatelessWidget {
                   _CountTile(
                     value: summary.totalCards,
                     label: 'cartes vues',
-                    icon: Icons.style_rounded,
+                    icon: AppIcons.layers,
                     tone: theme.colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(height: 24),
@@ -107,7 +108,7 @@ class SessionSummaryScreen extends StatelessWidget {
                     TextButton.icon(
                       onPressed: () =>
                           context.go('/study/errors', extra: summary),
-                      icon: const Icon(Icons.replay_rounded),
+                      icon: const Icon(AppIcons.rotateCcw),
                       label: Text(
                         'Revoir mes erreurs (${summary.incorrectCount})',
                       ),

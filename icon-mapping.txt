@@ -1,0 +1,50 @@
+Memflow functional icon registry
+================================
+
+Framework-independent keys map to Lucide icon names. Use the same Lucide name
+on Web (lucide-react) and Flutter (lucide_icons_flutter). Functional icons use
+a 1.75-equivalent stroke, inherit the current text/accent color, and use 16,
+20, or 24 px logical size. User-selected collection emojis are content markers,
+not functional interface icons. The 🔥 emoji is also used only for study streaks.
+
+navigation.home                 house
+navigation.statistics           chart-no-axes-column-increasing
+statistics.reviews              book-open
+statistics.success              circle-check
+statistics.activeDays            calendar-days
+navigation.import               file-up
+navigation.profile              user-round
+collection.fallback             library-big
+collection.picker               user-selected emoji from the shared set below
+deck                             layers
+study                            book-open
+study.start                      play
+study.review                     rotate-ccw
+study.due                        calendar-days
+progress                         chart-no-axes-column-increasing
+mastered                         circle-check
+settings                         settings
+search                           search
+delete                           trash-2
+warning                          triangle-alert
+success                          check
+information                      info
+options                          ellipsis
+streak                           🔥
+study.keyboard                   keyboard
+study.ratingAgain                rotate-ccw
+study.ratingHard                 clock-3
+study.ratingEasy                 star
+navigation.back                  arrow-left
+navigation.next                  arrow-right
+search.openResult                corner-down-left
+data.export                      download
+session.signOut                  log-out
+goal                             target
+
+Collection emoji picker (same options on Web and Flutter):
+🔢 🧪 🧲 🧬 💻 🌍 🏛️ ⚖️ 📈 🧠 💬 📚 🗣️ 🎨 🎬 🎵 🩺 🏃 🌿 🛠️
+
+Collection icon fields remain user data and their chosen emoji is rendered in
+collection markers. Deck icon fields also remain untouched, but deck markers
+always use the Lucide `layers` icon, regardless of the stored legacy value.

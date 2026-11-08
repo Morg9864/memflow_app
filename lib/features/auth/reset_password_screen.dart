@@ -1,3 +1,4 @@
+import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -64,9 +65,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
   Widget _visibilityButton(bool obscured, VoidCallback onToggle) {
     return IconButton(
       onPressed: onToggle,
-      icon: Icon(
-        obscured ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-      ),
+      icon: Icon(obscured ? AppIcons.eye : AppIcons.eyeOff),
       tooltip: obscured
           ? 'Afficher le mot de passe'
           : 'Masquer le mot de passe',
@@ -118,9 +117,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                               autofillHints: const [AutofillHints.newPassword],
                               decoration: InputDecoration(
                                 labelText: 'Nouveau mot de passe',
-                                prefixIcon: const Icon(
-                                  Icons.lock_outline_rounded,
-                                ),
+                                prefixIcon: const Icon(AppIcons.lockKeyhole),
                                 suffixIcon: _visibilityButton(
                                   _obscurePassword,
                                   () => setState(
@@ -143,9 +140,7 @@ class _ResetPasswordScreenState extends ConsumerState<ResetPasswordScreen> {
                               autofillHints: const [AutofillHints.newPassword],
                               decoration: InputDecoration(
                                 labelText: 'Confirmer le mot de passe',
-                                prefixIcon: const Icon(
-                                  Icons.lock_outline_rounded,
-                                ),
+                                prefixIcon: const Icon(AppIcons.lockKeyhole),
                                 suffixIcon: _visibilityButton(
                                   _obscureConfirm,
                                   () => setState(
