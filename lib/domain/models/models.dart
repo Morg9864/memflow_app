@@ -468,10 +468,15 @@ class DifficultCardStatistics {
 }
 
 class CsvImportIssue {
-  const CsvImportIssue({required this.rowNumber, required this.message});
+  const CsvImportIssue({
+    required this.rowNumber,
+    required this.message,
+    this.sourceName,
+  });
 
   final int rowNumber;
   final String message;
+  final String? sourceName;
 }
 
 class CsvImportCardDraft {

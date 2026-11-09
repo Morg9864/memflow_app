@@ -27,7 +27,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
   bool _isImporting = false;
   bool _readFailed = false;
   bool _importFailed = false;
-  String? _fileName;
+  List<String> _fileNames = const [];
   String? _csvPrompt;
 
   @override
@@ -60,6 +60,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
           await (widget.pickFiles?.call() ??
               FilePicker.pickFiles(
                 withData: true,
+                allowMultiple: true,
                 type: FileType.custom,
                 allowedExtensions: const ['csv', 'txt'],
               ));
@@ -70,20 +71,53 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
     if (result == null || result.files.isEmpty || !mounted) {
       return;
     }
-    final file = result.files.single;
-    final bytes = file.bytes;
-    CsvImportPreview? preview;
-    if (bytes != null) {
+    final files = result.files;
+    final fileNames = files.map((file) => file.name).toList();
+    final parser = ref.read(csvImportServiceProvider);
+    final previews = <({String name, CsvImportPreview preview})>[];
+    final unreadable = <String>[];
+    for (final file in files) {
+      final bytes = file.bytes;
+      if (bytes == null) {
+        unreadable.add(file.name);
+        continue;
+      }
       try {
-        preview = ref.read(csvImportServiceProvider).parse(bytes);
+        previews.add((name: file.name, preview: parser.parse(bytes)));
       } catch (_) {
-        preview = null;
+        unreadable.add(file.name);
       }
     }
+    final isSingleUnreadable = files.length == 1 && unreadable.isNotEmpty;
+    final preview = isSingleUnreadable
+        ? null
+        : CsvImportPreview(
+            cards: [for (final entry in previews) ...entry.preview.cards],
+            issues: [
+              for (final entry in previews)
+                for (final issue in entry.preview.issues)
+                  CsvImportIssue(
+                    rowNumber: issue.rowNumber,
+                    message: issue.message,
+                    sourceName: files.length > 1 ? entry.name : null,
+                  ),
+              for (final name in unreadable)
+                CsvImportIssue(
+                  rowNumber: 0,
+                  message: 'Impossible de lire ce fichier.',
+                  sourceName: files.length > 1 ? name : null,
+                ),
+            ],
+            delimiter: previews.length == 1
+                ? previews.single.preview.delimiter
+                : 'multi',
+            withHeader:
+                previews.length == 1 && previews.single.preview.withHeader,
+          );
     setState(() {
       _preview = preview;
-      _fileName = file.name;
-      _readFailed = preview == null;
+      _fileNames = fileNames;
+      _readFailed = isSingleUnreadable;
       _importFailed = false;
     });
   }
@@ -160,7 +194,13 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       final messenger = ScaffoldMessenger.of(context);
       context.go('/');
       messenger.showSnackBar(
-        SnackBar(content: Text('${preview.cards.length} cartes importées.')),
+        SnackBar(
+          content: Text(
+            preview.cards.length == 1
+                ? '1 carte importée.'
+                : '${preview.cards.length} cartes importées.',
+          ),
+        ),
       );
     } catch (_) {
       if (mounted) setState(() => _importFailed = true);
@@ -198,7 +238,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       state = _PreviewCard(
         key: ValueKey(preview),
         preview: preview,
-        fileName: _fileName,
+        fileNames: _fileNames,
         isImporting: _isImporting,
         importFailed: _importFailed,
         onConfirm: _confirmImport,
@@ -230,7 +270,7 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                   ),
                   const SizedBox(height: AppSpacing.md),
                   Text(
-                    'Fichiers CSV ou TXT, séparés par ; , ou tabulation, avec ou sans ligne d’en-tête.',
+                    'Sélectionne un ou plusieurs fichiers CSV ou TXT, séparés par ; , ou tabulation, avec ou sans ligne d’en-tête.',
                     style: theme.textTheme.bodyMedium,
                   ),
                   const SizedBox(height: AppSpacing.lg),
@@ -245,12 +285,12 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                               style: AppTheme.secondaryAction,
                               onPressed: _isImporting ? null : _pickFile,
                               icon: const Icon(AppIcons.fileUp),
-                              label: const Text('Importer un fichier CSV'),
+                              label: const Text('Choisir d’autres fichiers CSV'),
                             )
                           : FilledButton.icon(
                               onPressed: _isImporting ? null : _pickFile,
                               icon: const Icon(AppIcons.fileUp),
-                              label: const Text('Importer un fichier CSV'),
+                              label: const Text('Choisir des fichiers CSV'),
                             ),
                     ),
                   ),
@@ -424,7 +464,7 @@ class _PreviewCard extends StatelessWidget {
   const _PreviewCard({
     super.key,
     required this.preview,
-    required this.fileName,
+    required this.fileNames,
     required this.isImporting,
     required this.importFailed,
     required this.onConfirm,
@@ -433,7 +473,7 @@ class _PreviewCard extends StatelessWidget {
   static const _maxIssues = 20;
 
   final CsvImportPreview preview;
-  final String? fileName;
+  final List<String> fileNames;
   final bool isImporting;
   final bool importFailed;
   final VoidCallback onConfirm;
@@ -451,9 +491,25 @@ class _PreviewCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text('Prévisualisation', style: theme.textTheme.titleLarge),
-            if (fileName != null && fileName!.isNotEmpty) ...[
+            if (fileNames.length > 1) ...[
               const SizedBox(height: AppSpacing.xs),
-              Text(fileName!, style: theme.textTheme.bodySmall, maxLines: 2),
+              Text(
+                '${fileNames.length} fichiers sélectionnés',
+                style: theme.textTheme.bodySmall,
+              ),
+              Text(
+                '${fileNames.take(5).join(', ')}${fileNames.length > 5 ? ', …' : ''}',
+                style: theme.textTheme.bodySmall,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ] else if (fileNames.isNotEmpty) ...[
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                fileNames.single,
+                style: theme.textTheme.bodySmall,
+                maxLines: 2,
+              ),
             ],
             const SizedBox(height: AppSpacing.md),
             _SummaryRow(
@@ -469,17 +525,23 @@ class _PreviewCard extends StatelessWidget {
                   ? '${issues.length} lignes invalides'
                   : '${issues.length} ligne invalide',
             ),
-            Text(
-              'Séparateur : ${preview.delimiter == '\t' ? 'tabulation' : preview.delimiter}'
-              ' · Header : ${preview.withHeader ? 'oui' : 'non'}',
-              style: theme.textTheme.bodySmall,
-            ),
+            if (fileNames.length > 1)
+              Text(
+                'Les fichiers sont regroupés dans un seul import.',
+                style: theme.textTheme.bodySmall,
+              )
+            else
+              Text(
+                'Séparateur : ${preview.delimiter == '\t' ? 'tabulation' : preview.delimiter}'
+                ' · Header : ${preview.withHeader ? 'oui' : 'non'}',
+                style: theme.textTheme.bodySmall,
+              ),
             if (noCards) ...[
               const SizedBox(height: AppSpacing.lg),
               const _MessageCard(
                 title: 'Aucune carte exploitable',
                 message:
-                    'Aucune carte n’a pu être lue dans ce fichier. Vérifie le séparateur et que chaque ligne contient au moins une question et sa bonne réponse.',
+                    'Aucune carte n’a pu être lue dans ${fileNames.length > 1 ? 'ces fichiers' : 'ce fichier'}. Vérifie le séparateur et que chaque ligne contient au moins une question et sa bonne réponse.',
               ),
             ],
             if (hasIssues) ...[
@@ -490,7 +552,11 @@ class _PreviewCard extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpacing.sm),
                   child: Text(
-                    'Ligne ${issue.rowNumber} : ${issue.message}',
+                    issue.sourceName == null
+                        ? 'Ligne ${issue.rowNumber} : ${issue.message}'
+                        : issue.rowNumber == 0
+                        ? '${issue.sourceName} : ${issue.message}'
+                        : '${issue.sourceName} · ligne ${issue.rowNumber} : ${issue.message}',
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),
