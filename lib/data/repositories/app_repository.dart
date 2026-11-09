@@ -1464,12 +1464,12 @@ class AppRepository {
     List<ReviewLogRecord> logs,
     DateTime now,
   ) {
-    final localNow = now.toLocal();
+    final utcNow = now.toUtc();
     final heatmap = List.generate(14, (index) {
-      final date = DateTime(
-        localNow.year,
-        localNow.month,
-        localNow.day,
+      final date = DateTime.utc(
+        utcNow.year,
+        utcNow.month,
+        utcNow.day,
       ).subtract(Duration(days: 13 - index));
       final count = totals.dayCounts[date] ?? 0;
       return HeatmapCell(
@@ -1486,13 +1486,13 @@ class AppRepository {
     final maxLevel = levelCounts.values.fold<int>(1, math.max);
 
     final trend = List.generate(14, (index) {
-      final date = DateTime(
-        localNow.year,
-        localNow.month,
-        localNow.day,
+      final date = DateTime.utc(
+        utcNow.year,
+        utcNow.month,
+        utcNow.day,
       ).subtract(Duration(days: 13 - index));
       final dayLogs = logs.where((log) {
-        final created = log.createdAt.toLocal();
+        final created = log.createdAt.toUtc();
         return created.year == date.year &&
             created.month == date.month &&
             created.day == date.day;
@@ -1584,8 +1584,8 @@ class AppRepository {
       return 0;
     }
 
-    final localNow = now.toLocal();
-    var cursor = DateTime(localNow.year, localNow.month, localNow.day);
+    final utcNow = now.toUtc();
+    var cursor = DateTime.utc(utcNow.year, utcNow.month, utcNow.day);
     var streak = 0;
     while (daySet.contains(cursor)) {
       streak += 1;
@@ -1774,8 +1774,9 @@ class AppRepository {
       correct += row.read<int?>('correct') ?? 0;
       final createdAt = DateTime.fromMillisecondsSinceEpoch(
         row.read<int>('day'),
-      ).toLocal();
-      final day = DateTime(createdAt.year, createdAt.month, createdAt.day);
+        isUtc: true,
+      );
+      final day = DateTime.utc(createdAt.year, createdAt.month, createdAt.day);
       dayCounts.update(
         day,
         (value) => value + rowTotal,
