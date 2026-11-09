@@ -1,3 +1,4 @@
+import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memflow/data/local/database.dart';
 import 'package:memflow/data/repositories/app_repository.dart';
@@ -113,6 +114,71 @@ void main() {
     expect(session.cards, hasLength(2));
     expect(session.deckTitle, 'Révision');
   });
+
+  for (final scope in ['global', 'collection', 'deck']) {
+    test(
+      'les cartes dues passent avant les futures en session $scope',
+      () async {
+        await importDrafts([
+          for (var i = 0; i < 30; i++) draft(question: 'Q$i'),
+        ]);
+        final now = DateTime.now();
+        final imported = await database.select(database.flashcards).get();
+        final byQuestion = {for (final card in imported) card.question: card};
+        for (var i = 0; i < 30; i++) {
+          final card = byQuestion['Q$i']!;
+          await (database.update(
+            database.flashcards,
+          )..where((row) => row.id.equals(card.id))).write(
+            FlashcardsCompanion(
+              createdAt: Value(now.subtract(Duration(minutes: 30 - i))),
+              dueAt: Value(
+                i < 12
+                    ? now.add(Duration(days: [1, 3, 8][i % 3]))
+                    : now.subtract(const Duration(minutes: 1)),
+              ),
+              repetitions: Value(i < 12 ? 1 : 0),
+            ),
+          );
+        }
+
+        Future<StudySessionState> start() => repository.startStudySession(
+          collectionId: scope == 'global' ? null : imported.first.collectionId,
+          deckId: scope == 'deck' ? imported.first.deckId : null,
+          forcedMode: scope == 'deck' ? TestMode.multipleChoice : null,
+          sessionCardLimit: 12,
+        );
+
+        final first = await start();
+        expect(
+          first.cards.map((card) => card.question),
+          [for (var i = 12; i < 24; i++) 'Q$i'],
+          reason: 'Les 12 anciennes cartes futures ne doivent pas masquer now.',
+        );
+        for (final card in first.cards) {
+          await repository.submitReview(
+            cardId: card.id,
+            reviewResult: ReviewResult.good,
+            wasCorrect: true,
+            playedMode: card.currentTestMode,
+          );
+        }
+        await repository.saveStudySession(first.copyWith(isCompleted: true));
+
+        final next = await start();
+        expect(next.cards.take(6).map((card) => card.question), [
+          'Q24',
+          'Q25',
+          'Q26',
+          'Q27',
+          'Q28',
+          'Q29',
+        ], reason: 'Les 6 cartes encore dues ouvrent la session suivante.');
+        expect(next.cards, hasLength(12));
+        expect(next.cards.map((card) => card.id).toSet(), hasLength(12));
+      },
+    );
+  }
 
   test('la difficulté du deck est inférée par moyenne des niveaux', () async {
     await importDrafts([

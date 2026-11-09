@@ -1205,6 +1205,7 @@ class AppRepository {
       retryCards,
       fillerCards,
       sessionCardLimit,
+      now: now,
     );
     if (forcedMode == null) return selected;
     // A forced mode is explicit: incompatible cards are excluded rather than
@@ -1243,8 +1244,9 @@ class AppRepository {
   List<FlashcardRecord> _takeSessionCards(
     Iterable<FlashcardRecord> retryCards,
     Iterable<FlashcardRecord> fillerCards,
-    int sessionCardLimit,
-  ) {
+    int sessionCardLimit, {
+    required DateTime now,
+  }) {
     int byImportOrder(FlashcardRecord a, FlashcardRecord b) {
       final byCreatedAt = a.createdAt.compareTo(b.createdAt);
       if (byCreatedAt != 0) {
@@ -1253,8 +1255,15 @@ class AppRepository {
       return a.id.compareTo(b.id);
     }
 
-    List<FlashcardRecord> sorted(Iterable<FlashcardRecord> cards) {
-      return [...cards]..sort(byImportOrder);
+    List<FlashcardRecord> sortedByDuePriority(Iterable<FlashcardRecord> cards) {
+      return [...cards]..sort((a, b) {
+        final aIsFuture = _isDueInFuture(a.dueAt, now);
+        final bIsFuture = _isDueInFuture(b.dueAt, now);
+        if (aIsFuture != bIsFuture) return aIsFuture ? 1 : -1;
+        // Preserve import order within each group without allowing an older
+        // future card to displace material that is due now.
+        return byImportOrder(a, b);
+      });
     }
 
     // Les cartes ratées passent de la plus ancienne à la plus récente : une
@@ -1284,7 +1293,7 @@ class AppRepository {
     final selectedIds = <String>{};
     for (final card in [
       ...promotedRetryCards,
-      ...sorted(
+      ...sortedByDuePriority(
         fillerCards,
       ).where((card) => !deferredRetryIds.contains(card.id)),
       // Filet de sécurité : si le rattrapage est le seul contenu disponible,
