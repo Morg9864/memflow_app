@@ -24,7 +24,6 @@ class ImportScreen extends ConsumerStatefulWidget {
 
 class _ImportScreenState extends ConsumerState<ImportScreen> {
   CsvImportPreview? _preview;
-  bool _isBusy = false;
   bool _isImporting = false;
   bool _readFailed = false;
   bool _importFailed = false;
@@ -87,42 +86,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
       _readFailed = preview == null;
       _importFailed = false;
     });
-  }
-
-  Future<void> _downloadTemplate() async {
-    try {
-      final template = ref.read(csvExportServiceProvider).buildTemplate();
-      await FilePicker.saveFile(
-        dialogTitle: 'Télécharger le template CSV',
-        fileName: 'memflow_template.csv',
-        type: FileType.custom,
-        allowedExtensions: const ['csv'],
-        bytes: utf8.encode(template),
-      );
-    } catch (_) {
-      _snack('Impossible d’enregistrer le template.');
-    }
-  }
-
-  Future<void> _downloadBackup() async {
-    setState(() => _isBusy = true);
-    try {
-      final csv = await ref.read(appRepositoryProvider).exportAllCardsCsv();
-      final stamp = DateTime.now().toIso8601String().substring(0, 10);
-      await FilePicker.saveFile(
-        dialogTitle: 'Sauvegarder mes cartes',
-        fileName: 'memflow_backup_$stamp.csv',
-        type: FileType.custom,
-        allowedExtensions: const ['csv'],
-        bytes: utf8.encode(csv),
-      );
-    } catch (_) {
-      _snack('Impossible d’enregistrer la sauvegarde.');
-    } finally {
-      if (mounted) {
-        setState(() => _isBusy = false);
-      }
-    }
   }
 
   Future<void> _downloadPrompt() async {
@@ -321,22 +284,6 @@ class _ImportScreenState extends ConsumerState<ImportScreen> {
                 style: theme.textTheme.titleLarge,
               ),
               children: [
-                FilledButton.tonalIcon(
-                  style: AppTheme.secondaryAction,
-                  onPressed: _downloadTemplate,
-                  icon: const Icon(AppIcons.download),
-                  label: const Text('Télécharger le template CSV'),
-                ),
-                const SizedBox(height: AppSpacing.md),
-                FilledButton.tonalIcon(
-                  style: AppTheme.secondaryAction,
-                  onPressed: _isBusy ? null : _downloadBackup,
-                  icon: _isBusy
-                      ? const ButtonSpinner()
-                      : const Icon(AppIcons.fileDown),
-                  label: const Text('Sauvegarder toutes mes cartes'),
-                ),
-                const SizedBox(height: AppSpacing.lg),
                 Align(
                   alignment: Alignment.centerLeft,
                   child: SelectableText(

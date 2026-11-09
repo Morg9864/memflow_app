@@ -271,8 +271,6 @@ void main() {
     await tester.tap(find.text('Options avancées'));
     await _expand(tester);
     for (final label in [
-      'Télécharger le template CSV',
-      'Sauvegarder toutes mes cartes',
       'Prompt CSV Memflow',
       'Copier le prompt',
       'Télécharger le .md',
@@ -283,6 +281,8 @@ void main() {
         reason: label,
       );
     }
+    expect(find.text('Télécharger le template CSV'), findsNothing);
+    expect(find.text('Sauvegarder toutes mes cartes'), findsNothing);
     expect(find.textContaining('Format recommandé'), findsOneWidget);
   });
 
