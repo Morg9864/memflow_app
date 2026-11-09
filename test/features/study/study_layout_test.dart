@@ -175,7 +175,14 @@ Finder _lastOption(WidgetTester tester) {
 Future<void> _answer(WidgetTester tester, TestMode mode) async {
   switch (mode) {
     case TestMode.multipleChoice:
-      await _reachAndTap(tester, _lastOption(tester));
+      final option = _lastOption(tester).first;
+      // Shuffling can put a very long answer last. Its text may be taller
+      // than the viewport; the option must still be reachable and tappable.
+      await Scrollable.ensureVisible(tester.element(option), alignment: 0.5);
+      await tester.pumpAndSettle();
+      expect(option.hitTestable(), findsOneWidget);
+      await tester.tap(option);
+      await tester.pump();
     case TestMode.trueFalse:
       await _reachAndTap(tester, find.text('Faux'));
     case TestMode.freeText:

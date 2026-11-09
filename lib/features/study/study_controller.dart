@@ -187,6 +187,9 @@ class StudyController {
     sessionCardLimit: sessionCardLimit,
   );
 
+  List<String> buildMultipleChoiceOptions(StudyCard card) =>
+      rules.buildMultipleChoiceOptions(card);
+
   bool evaluateMultipleChoice(
     StudyCard card,
     int selectedIndex,

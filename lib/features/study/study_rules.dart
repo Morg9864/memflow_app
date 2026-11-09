@@ -16,6 +16,16 @@ class StudyRules {
   StudyRules({math.Random? random}) : _random = random ?? math.Random();
   final math.Random _random;
 
+  List<String> buildMultipleChoiceOptions(StudyCard card) {
+    final seen = <String>{};
+    final options = <String>[];
+    for (final answer in [card.correctAnswer, ...card.wrongAnswers]) {
+      final key = answer.trim().toLowerCase();
+      if (key.isNotEmpty && seen.add(key)) options.add(answer);
+    }
+    return options..shuffle(_random);
+  }
+
   bool evaluateMultipleChoice(
     StudyCard card,
     int selectedIndex,

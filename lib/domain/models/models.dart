@@ -691,17 +691,6 @@ class StudyCard {
   final List<String> clozeWordBank;
   final List<String> acceptedAnswers;
   final int level;
-
-  List<String> buildOptions() {
-    final seen = <String>{};
-    final options = <String>[];
-    for (final answer in [correctAnswer, ...wrongAnswers]) {
-      final key = answer.trim().toLowerCase();
-      if (answer.trim().isNotEmpty && seen.add(key)) options.add(answer);
-    }
-    options.sort((a, b) => a.hashCode.compareTo(b.hashCode));
-    return options;
-  }
 }
 
 class FlashcardSummary {

@@ -41,10 +41,43 @@ Future<String> _databasePath() async {
   return File('${directory.path}/memflow.sqlite').path;
 }
 
+void _verifyDatabaseCanBeOpened(String path, String key) {
+  final database = sqlite.sqlite3.open(path);
+  try {
+    _configureEncryptedDatabase(database, key);
+    database.select('PRAGMA user_version');
+  } finally {
+    database.close();
+  }
+}
+
+Future<void> _preserveUnreadableDatabase(String path) async {
+  final timestamp = DateTime.now().millisecondsSinceEpoch;
+  final backupPath = '$path.unreadable-$timestamp';
+  for (final suffix in ['', '-wal', '-shm', '-journal']) {
+    final file = File('$path$suffix');
+    if (await file.exists()) {
+      await file.rename('$backupPath$suffix');
+    }
+  }
+  // ignore: avoid_print
+  print('MemFlow: unreadable local database preserved at $backupPath');
+}
+
 Future<QueryExecutor> openMemFlowConnectionWithKey() async {
   final key = await LocalDatabaseKeyStore().readOrCreate();
   final path = await _databasePath();
   await migratePlaintextDatabase(path, key);
+  try {
+    _verifyDatabaseCanBeOpened(path, key);
+  } on sqlite.SqliteException catch (error) {
+    if (error.resultCode != 26) rethrow;
+
+    // Android may restore the encrypted database without its installation key.
+    // Keep that file intact, then let account sync repopulate a fresh database.
+    await _preserveUnreadableDatabase(path);
+    _verifyDatabaseCanBeOpened(path, key);
+  }
   return NativeDatabase.createInBackground(
     File(path),
     setup: (database) => _configureEncryptedDatabase(database, key),

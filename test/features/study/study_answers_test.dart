@@ -187,6 +187,47 @@ void main() {
   });
 
   group('option tile states', () {
+    testWidgets('QCM shuffles each card and keeps keyboard choices stable', (
+      tester,
+    ) async {
+      await _pump(
+        tester,
+        cards: [
+          for (var i = 0; i < 16; i++) _card('qcm-$i', TestMode.multipleChoice),
+        ],
+      );
+      final correctPositions = <int>{};
+      const keys = [
+        LogicalKeyboardKey.digit1,
+        LogicalKeyboardKey.digit2,
+        LogicalKeyboardKey.digit3,
+        LogicalKeyboardKey.digit4,
+      ];
+      List<String> visibleOrder() => [_good, _bad1, _bad2, _bad3]
+        ..sort(
+          (a, b) => tester
+              .getTopLeft(_tileBox(a).first)
+              .dy
+              .compareTo(tester.getTopLeft(_tileBox(b).first).dy),
+        );
+
+      for (var i = 0; i < 16; i++) {
+        final order = visibleOrder();
+        final correctIndex = order.indexOf(_good);
+        correctPositions.add(correctIndex);
+        // A rebuild must not reshuffle the choices under the user's fingers.
+        tester.view.physicalSize = Size(i.isEven ? 361 : 360, 800);
+        await tester.pump();
+        expect(visibleOrder(), order);
+        await tester.sendKeyEvent(keys[correctIndex]);
+        await tester.pumpAndSettle();
+        expect(find.text('BONNE RÉPONSE'), findsOneWidget);
+        expect(visibleOrder(), order);
+        if (i < 15) await _tap(tester, find.text('Correct'));
+      }
+      expect(correctPositions.length, greaterThan(1));
+    });
+
     testWidgets('normal tiles use the surface with a neutral border', (
       tester,
     ) async {

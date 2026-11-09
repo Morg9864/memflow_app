@@ -51,6 +51,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
   bool _choosingMode = false;
   late final StudyController _controller;
   final TextEditingController _freeTextController = TextEditingController();
+  List<String> _multipleChoiceOptions = const [];
   List<String?> _clozeSelections = const [];
   List<String> _clozeWordBank = const [];
   int? _activeClozeGapIndex;
@@ -98,7 +99,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
         LogicalKeyboardKey.digit4 => 3,
         _ => null,
       };
-      final options = state.currentCard.buildOptions();
+      final options = _multipleChoiceOptions;
       if (index != null && index < options.length) {
         _selectOption(index, options);
         return KeyEventResult.handled;
@@ -281,6 +282,9 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
 
   void _prepareCardInputState(StudyCard card) {
     _freeTextController.clear();
+    _multipleChoiceOptions = card.currentTestMode == TestMode.multipleChoice
+        ? _controller.buildMultipleChoiceOptions(card)
+        : const [];
     _activeClozeGapIndex = null;
     if (card.currentTestMode != TestMode.cloze) {
       _clozeSelections = const [];
@@ -604,9 +608,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
     final suggested = _controller.suggestedResult(
       state.currentAnswerWasCorrect,
     );
-    final options = mode == TestMode.multipleChoice
-        ? card.buildOptions()
-        : const <String>[];
+    final options = _multipleChoiceOptions;
     final clozeTokens = mode == TestMode.cloze
         ? _controller.buildClozeTokens(card)
         : const <ClozeToken>[];

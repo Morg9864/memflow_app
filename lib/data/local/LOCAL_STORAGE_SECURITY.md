@@ -30,4 +30,9 @@ SQLite3MultipleCiphers).
 
 La suppression du trousseau, la réinstallation de l'application ou un appareil
 réinitialisé rendent la base chiffrée irrécupérable sans sauvegarde exportée,
-ce qui est le comportement attendu d'une clé par installation.
+car la clé est liée à l'installation. Sur Android, la sauvegarde système est
+désactivée pour éviter de restaurer le fichier chiffré sans la clé du Keystore.
+Si une base native existante ne peut pas être ouverte avec sa clé, le fichier
+et ses fichiers WAL/SHM sont conservés sous un nom de sauvegarde avant qu'une
+base vide soit créée. La synchronisation du compte peut alors restaurer les
+données déjà envoyées au serveur.

@@ -95,6 +95,44 @@ void main() {
     );
   }
 
+  test('QCM reshuffles the same card without changing its answers', () {
+    final rules = StudyRules(random: math.Random(0));
+    final card = buildCard('a');
+    final correctPositions = <int>{};
+    for (var i = 0; i < 64; i++) {
+      final options = rules.buildMultipleChoiceOptions(card);
+      expect(options, unorderedEquals(['Réponse a', 'A', 'B', 'C']));
+      final correctIndex = options.indexOf('Réponse a');
+      correctPositions.add(correctIndex);
+      for (var j = 0; j < options.length; j++) {
+        expect(
+          rules.evaluateMultipleChoice(card, j, options),
+          j == correctIndex,
+        );
+      }
+    }
+    expect(correctPositions, {0, 1, 2, 3});
+  });
+
+  test('QCM removes empty and duplicate choices before shuffling', () {
+    final rules = StudyRules(random: math.Random(0));
+    final card = buildTrueFalseCard(
+      wrongAnswers: [' paris ', '', '  ', 'Lyon', 'LYON', 'Bordeaux'],
+    );
+    expect(
+      rules.buildMultipleChoiceOptions(card),
+      unorderedEquals(['Paris', 'Lyon', 'Bordeaux']),
+    );
+    expect(card.wrongAnswers, [
+      ' paris ',
+      '',
+      '  ',
+      'Lyon',
+      'LYON',
+      'Bordeaux',
+    ]);
+  });
+
   test('la session garde un ordre fixe et ne rejoue aucune carte', () {
     final controller = StudyRules(random: math.Random(0));
     final initialState = buildState([
