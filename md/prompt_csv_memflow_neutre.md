@@ -1,6 +1,6 @@
 # Prompt CSV Memflow
 
-À partir du document fourni, génère un fichier CSV UTF-8 directement importable dans Memflow.
+À partir des documents fournis, génère un fichier CSV UTF-8 directement importable dans Memflow.
 
 La sortie finale doit respecter le contrat technique et pédagogique ci-dessous. Avant de répondre, effectue le contrôle qualité final décrit à la fin du prompt.
 
@@ -118,12 +118,42 @@ Exemple bon indice :
 
 ## Explication
 
-L'explication doit :
+Le champ `explanation` est obligatoire pour chaque carte, y compris les cartes de niveau 1. Il doit aider une personne qui s'est trompée à comprendre la notion et à éviter de refaire la même erreur.
 
-- justifier la bonne réponse ;
-- clarifier brièvement la notion ;
-- rester fidèle au document ;
-- faire idéalement entre 2 et 5 phrases.
+Rédige une explication propre à chaque question, idéalement en 2 à 5 phrases. Elle doit :
+
+- expliquer la notion et pourquoi la réponse est correcte, au lieu de seulement répéter `correct_answer` ;
+- apporter au moins un élément pédagogique supplémentaire présent dans le document : mécanisme, lien logique, conséquence, condition, limite, distinction entre notions proches ou exemple significatif ;
+- pour une définition, préciser ce que désigne le terme et son rôle ou son contexte ; pour un mécanisme, expliquer comment il fonctionne ; pour un calcul, expliquer la relation utilisée et les grandeurs concernées ;
+- clarifier une confusion plausible lorsque c'est utile, en expliquant la différence réelle entre les notions ;
+- être compréhensible sans relire les quatre choix du QCM ;
+- rester entièrement fondée sur le document, sans ajouter d'information externe ni inventer d'exemple.
+
+Sont interdites comme explications :
+
+- les simples reformulations de la bonne réponse, sans apport pédagogique ;
+- les formules « Le cours indique X », « La bonne réponse est X » ou « X est correct et Y est faux » utilisées à la place d'une explication ;
+- la reprise d'un distracteur suivie de « ne correspond pas à ce point », sans expliquer la confusion ;
+- les phrases de remplissage comme « Cette notion figure dans la section… » : la référence appartient au champ `source` ;
+- les modèles génériques répétés mécaniquement d'une carte à l'autre. Avoir deux phrases ne suffit pas si elles n'expliquent rien.
+
+Exemple de question :
+
+> Que désigne le terme « end systems » ?
+
+Explication insuffisante :
+
+> Le cours indique : « Les hôtes situés en périphérie du réseau ». La proposition « Les routeurs situés au cœur du réseau » ne correspond pas à ce point.
+
+Explication attendue, si ces éléments figurent dans le document :
+
+> Les « end systems », également appelés « hosts » (hôtes), sont les appareils situés à la périphérie du réseau. Ils exécutent les applications réseau et envoient ou reçoivent des données, tandis que les routeurs du cœur acheminent les paquets entre les liaisons.
+
+Autre exemple, pour distinguer deux mécanismes décrits dans le document :
+
+> Le FDM divise la capacité du support en bandes de fréquences et attribue une bande à chaque communication. Les communications peuvent ainsi transmettre simultanément sur des bandes distinctes, tandis que le TDM leur attribue des créneaux dans le temps.
+
+Si le document ne permet pas un développement plus long, reste concis et explicite la relation qu'il donne. N'invente pas de détails et n'ajoute pas de remplissage pour atteindre un nombre de phrases.
 
 ## Texte à trou
 
@@ -229,8 +259,8 @@ Contraintes techniques obligatoires :
 - Ne pas créer de doublons inutiles : deux cartes ne doivent pas poser la même question sur la même information, même avec une reformulation superficielle.
 - Ne pas faire de questions trop vagues.
 - Ne jamais créer de questions liés à des images, graphiques, schémas ou tableaux, sauf si le texte les décrit explicitement.
-- Les champs obligatoires sont toujours remplis : `collection`, `deck`, `question`, `correct_answer`, `wrong_answer_1`, `wrong_answer_2`, `wrong_answer_3`, `level` et `source`.
-- Les champs optionnels `hint`, `explanation`, `tags`, `cloze_text`, `accepted_answers`, `cloze_answers` et `cloze_word_bank` peuvent être vides uniquement lorsque leur usage n'est pas pertinent. N'utilise jamais `-` comme valeur technique de remplacement, sauf pour `hint` d'une carte de niveau 1.
+- Les champs obligatoires sont toujours remplis : `collection`, `deck`, `question`, `correct_answer`, `wrong_answer_1`, `wrong_answer_2`, `wrong_answer_3`, `explanation`, `level` et `source`.
+- Les champs optionnels `hint`, `tags`, `cloze_text`, `accepted_answers`, `cloze_answers` et `cloze_word_bank` peuvent être vides uniquement lorsque leur usage n'est pas pertinent. N'utilise jamais `-` comme valeur technique de remplacement, sauf pour `hint` d'une carte de niveau 1.
 - Respecter exactement le format CSV décrit.
 - Pour une carte sans texte à trous, laisse `cloze_text`, `cloze_answers` et `cloze_word_bank` vides.
 - Pour une carte avec texte à trous, remplis toujours les trois champs cloze et respecte toutes les règles cloze.
@@ -260,7 +290,9 @@ Avant de produire la réponse finale, contrôle chaque ligne comme si elle allai
 6. vérifie l'unicité de la bonne réponse et des mauvaises réponses, ainsi que l'absence de doublons de questions ;
 7. pour chaque cloze, compte les occurrences de `{{...}}`, compare ce nombre à `cloze_answers`, vérifie que le contenu des placeholders correspond aux réponses dans le même ordre, puis vérifie que chaque réponse apparaît dans `cloze_word_bank` avec la bonne multiplicité ;
 8. vérifie que `source` permet de retrouver la partie du document à l'origine de la carte ;
-9. supprime tout texte situé avant ou après le CSV.
+9. relis chaque `explanation` comme une personne qui vient de se tromper : vérifie qu'elle explique la notion et apporte une aide concrète au-delà de la réponse elle-même, avec des éléments retrouvables dans le document ; réécris toute simple reformulation, opposition « X plutôt que Y » non expliquée ou phrase de remplissage ;
+10. vérifie que les explications sont adaptées à leurs questions et ne reposent pas sur un modèle générique répété ;
+11. supprime tout texte situé avant ou après le CSV.
 
 Si une ligne ne respecte pas une contrainte, corrige-la avant de répondre. Ne remplace pas une erreur par une explication textuelle hors du CSV.
 
@@ -272,6 +304,6 @@ Le CSV est réussi si une personne qui maîtrise toutes les questions générée
 
 ## Exemple format (pour un cours de droit)
 
-Droit des contrats informatiques;Chapitre 1 — Droit des obligations et des contrats;Le droit des obligations est une branche de quel droit ?;Le droit civil;Le droit pénal;Le droit administratif;Le droit commercial;-;Le droit des obligations est une branche du droit civil.;1;obligation|droit-civil;Chapitre 1 — Droit des obligations et des contrats;Le droit des obligations est une branche du {{droit civil}}.;le droit civil|droit civil;droit civil;droit civil|droit pénal|droit administratif|droit commercial
+Droit des contrats informatiques;Chapitre 1 — Droit des obligations et des contrats;Le droit des obligations est une branche de quel droit ?;Le droit civil;Le droit pénal;Le droit administratif;Le droit commercial;-;Le droit des obligations relève du droit civil et étudie les liens juridiques entre créanciers et débiteurs. Il permet notamment de déterminer ce qu'une personne peut exiger d'une autre et ce que cette dernière doit accomplir.;1;obligation|droit-civil;Chapitre 1 — Droit des obligations et des contrats;Le droit des obligations est une branche du {{droit civil}}.;le droit civil|droit civil;droit civil;droit civil|droit pénal|droit administratif|droit commercial
 
-Droit des contrats informatiques;Chapitre 1 — Droit des obligations et des contrats;En droit civil, qu'est-ce qu'une obligation ?;Un lien juridique entre deux personnes (créancier et débiteur);Une sanction pénale imposée par un juge;Un droit de propriété sur un bien;Une obligation fiscale envers l'État;Revois la définition d'une obligation.;Une obligation est un lien juridique entre un créancier et un débiteur, par lequel le débiteur s'engage à faire, ne pas faire ou donner quelque chose au créancier.;3;obligation|definition;Chapitre 1 — Droit des obligations et des contrats;Une obligation est un {{lien juridique}} entre un {{créancier}} et un {{débiteur}}.;Un lien juridique entre deux personnes (créancier et débiteur)|Un lien juridique entre un créancier et un débiteur|lien juridique entre un créancier et un débiteur;lien juridique|créancier|débiteur;lien juridique|créancier|débiteur|propriétaire|juge|administration
+Droit des contrats informatiques;Chapitre 1 — Droit des obligations et des contrats;En droit civil, qu'est-ce qu'une obligation ?;Un lien juridique entre deux personnes (créancier et débiteur);Une sanction pénale imposée par un juge;Un droit de propriété sur un bien;Une obligation fiscale envers l'État;Revois la définition d'une obligation.;Une obligation est un lien juridique entre un créancier et un débiteur, par lequel le débiteur s'engage à faire, ne pas faire ou donner quelque chose au créancier. Le créancier peut exiger la prestation et le débiteur doit l'exécuter : leurs rôles se définissent par cette relation.;3;obligation|definition;Chapitre 1 — Droit des obligations et des contrats;Une obligation est un {{lien juridique}} entre un {{créancier}} et un {{débiteur}}.;Un lien juridique entre deux personnes (créancier et débiteur)|Un lien juridique entre un créancier et un débiteur|lien juridique entre un créancier et un débiteur;lien juridique|créancier|débiteur;lien juridique|créancier|débiteur|propriétaire|juge|administration
