@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -417,6 +418,26 @@ class SyncService {
     final ids = {for (final type in SyncEntityType.values) type: <String>{}};
     for (final entry in await _db.pendingSyncEntries()) {
       ids[entry.entityType]!.add(entry.entityId);
+    }
+    // Keep every card in the persisted study session while applying a remote
+    // snapshot. A card absent from Supabase may still be on screen; deleting
+    // it here makes the next review fail its local lookup. Missing session
+    // cards are queued for upload by _applyRemoteRows, like other protected
+    // local data.
+    final rawSession = await _db.readMetaString(
+      AppDatabase.activeStudySessionKey,
+    );
+    if (rawSession != null) {
+      try {
+        final session = jsonDecode(rawSession);
+        if (session is Map<String, dynamic> && session['card_ids'] is List) {
+          ids[SyncEntityType.flashcard]!.addAll(
+            (session['card_ids'] as List).whereType<String>(),
+          );
+        }
+      } on FormatException {
+        // An unreadable envelope cannot identify cards to protect.
+      }
     }
     final logs = await (_db.select(
       _db.reviewLogs,

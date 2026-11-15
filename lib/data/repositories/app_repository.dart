@@ -36,7 +36,6 @@ class AppRepository {
   final SpacedRepetitionService _spacedRepetitionService;
   final CardModeService _cardModeService;
   final Uuid _uuid = const Uuid();
-  static const _activeStudySessionKey = 'active_study_session';
 
   // ---------------------------------------------------------------------
   // Listes et tableaux de bord
@@ -277,11 +276,11 @@ class AppRepository {
   /// the normal flashcard table, so edits/deletions are detected on restore.
   Future<void> saveStudySession(StudySessionState state) async {
     if (state.isCompleted) {
-      await _db.deleteMeta(AppRepository._activeStudySessionKey);
+      await _db.deleteMeta(AppDatabase.activeStudySessionKey);
       return;
     }
     await _db.writeMetaString(
-      _activeStudySessionKey,
+      AppDatabase.activeStudySessionKey,
       jsonEncode({
         'session_id': state.sessionId,
         'collection_id': state.collectionId,
@@ -311,7 +310,7 @@ class AppRepository {
     required TestMode? forcedMode,
     Set<String>? onlyCardIds,
   }) async {
-    final raw = await _db.readMetaString(_activeStudySessionKey);
+    final raw = await _db.readMetaString(AppDatabase.activeStudySessionKey);
     if (raw == null) return null;
     try {
       final data = jsonDecode(raw) as Map<String, dynamic>;
@@ -335,7 +334,7 @@ class AppRepository {
       );
       final byId = {for (final record in records) record.id: record};
       if (ids.any((id) => !byId.containsKey(id))) {
-        await _db.deleteMeta(_activeStudySessionKey);
+        await _db.deleteMeta(AppDatabase.activeStudySessionKey);
         return null;
       }
       final cards = ids
@@ -378,7 +377,7 @@ class AppRepository {
         cardDisplayedAt: DateTime.now(),
       );
     } catch (_) {
-      await _db.deleteMeta(_activeStudySessionKey);
+      await _db.deleteMeta(AppDatabase.activeStudySessionKey);
       return null;
     }
   }

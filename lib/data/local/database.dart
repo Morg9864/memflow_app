@@ -299,6 +299,7 @@ class AppDatabase extends _$AppDatabase {
 
   static const ownerKey = 'owner_user_id';
   static const reviewLogCursorKey = 'review_log_cursor';
+  static const activeStudySessionKey = 'active_study_session';
 
   Future<bool> isEmpty() async {
     final row = await customSelect(
