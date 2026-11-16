@@ -1513,7 +1513,7 @@ class _FlashcardModeState extends State<_FlashcardMode>
               ),
               if (hint != null) ...[
                 const SizedBox(height: AppSpacing.md),
-                _HintLine(hint: hint),
+                _HintDisclosure(hint: hint),
               ],
               // Sur tablette, « Révéler » suffit ; le glissement marche toujours.
               if (!tablet) ...[
@@ -1655,12 +1655,14 @@ class _QuestionCard extends StatelessWidget {
     required this.label,
     required this.question,
     this.hint,
+    this.showHint = true,
     this.body,
   });
 
   final String label;
   final String question;
   final String? hint;
+  final bool showHint;
   final Widget? body;
 
   @override
@@ -1695,9 +1697,9 @@ class _QuestionCard extends StatelessWidget {
                   tablet: !compact,
                 ),
               ),
-              if (hint != null) ...[
+              if (hint != null && showHint) ...[
                 const SizedBox(height: AppSpacing.md),
-                _HintLine(hint: hint!),
+                _HintDisclosure(hint: hint!),
               ],
               if (body != null) ...[
                 SizedBox(height: compact ? AppSpacing.md : AppSpacing.lg),
@@ -1711,8 +1713,8 @@ class _QuestionCard extends StatelessWidget {
   }
 }
 
-class _HintLine extends StatelessWidget {
-  const _HintLine({required this.hint});
+class _HintDisclosure extends StatelessWidget {
+  const _HintDisclosure({required this.hint});
 
   final String hint;
 
@@ -1720,24 +1722,29 @@ class _HintLine extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final color = theme.colorScheme.onSurfaceVariant;
-    return Semantics(
-      label: 'Indice : $hint',
-      excludeSemantics: true,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+    return Theme(
+      data: theme.copyWith(dividerColor: Colors.transparent),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        childrenPadding: const EdgeInsets.only(left: AppSpacing.lg),
+        visualDensity: VisualDensity.compact,
+        leading: Icon(AppIcons.lightbulb, size: 18, color: color),
+        title: Text(
+          'Afficher l’indice',
+          style: theme.textTheme.bodyMedium?.copyWith(color: color),
+        ),
         children: [
-          Padding(
-            padding: const EdgeInsets.only(top: 3),
-            child: Icon(AppIcons.lightbulb, size: 16, color: color),
-          ),
-          const SizedBox(width: AppSpacing.sm),
-          Expanded(
-            child: Text(
-              hint,
-              style: theme.textTheme.bodyLarge?.copyWith(
-                fontFamily: 'Lora',
-                fontStyle: FontStyle.italic,
-                color: color,
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: Text(
+                hint,
+                style: theme.textTheme.bodyLarge?.copyWith(
+                  fontFamily: 'Lora',
+                  fontStyle: FontStyle.italic,
+                  color: color,
+                ),
               ),
             ),
           ),
@@ -1932,6 +1939,7 @@ class _McqMode extends StatelessWidget {
           label: 'Question',
           question: card.question,
           hint: card.hint,
+          showHint: !hasValidatedAnswer,
         ),
         SizedBox(height: compact ? 10 : AppSpacing.lg),
         if (gridAnswers)
@@ -2280,6 +2288,7 @@ class _ClozeMode extends StatelessWidget {
           label: 'Question',
           question: prompt,
           hint: hint,
+          showHint: !hasValidated,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -2594,6 +2603,7 @@ class _TextEntryMode extends StatelessWidget {
           label: title,
           question: prompt,
           hint: hint,
+          showHint: !hasValidated,
           body: TextField(
             controller: controller,
             enabled: !hasValidated,
@@ -2683,6 +2693,7 @@ class _TrueFalseMode extends StatelessWidget {
           label: 'Question',
           question: card.question,
           hint: card.hint,
+          showHint: !hasValidatedAnswer,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
