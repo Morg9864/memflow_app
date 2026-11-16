@@ -15,9 +15,10 @@ import 'stream_combine.dart';
 
 /// Accès unique aux données de l'application.
 ///
-/// Toutes les lectures viennent de la base locale : l'interface n'attend
-/// jamais le réseau et fonctionne à l'identique hors ligne. Toutes les
-/// écritures sont appliquées localement puis déposées dans la file de
+/// Les lectures viennent du cache local pour que l'interface fonctionne hors
+/// ligne. Supabase reste la source de vérité : une synchronisation réussie
+/// remplace le cache par l'état distant, sauf les écritures encore en attente.
+/// Les écritures sont appliquées localement puis déposées dans la file de
 /// synchronisation, que [SyncService] pousse dès qu'une connexion est
 /// disponible.
 class AppRepository {

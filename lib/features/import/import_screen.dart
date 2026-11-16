@@ -538,7 +538,7 @@ class _PreviewCard extends StatelessWidget {
               ),
             if (noCards) ...[
               const SizedBox(height: AppSpacing.lg),
-              const _MessageCard(
+              _MessageCard(
                 title: 'Aucune carte exploitable',
                 message:
                     'Aucune carte n’a pu être lue dans ${fileNames.length > 1 ? 'ces fichiers' : 'ce fichier'}. Vérifie le séparateur et que chaque ligne contient au moins une question et sa bonne réponse.',

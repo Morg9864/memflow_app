@@ -24,9 +24,9 @@
 
 ## Aperçu
 
-MemFlow est une application de révision pensée pour rester fluide sans connexion et agréable à utiliser sur mobile comme sur le web. La base locale SQLite fait foi pour tout ce qui est affiché ; Supabase fait foi entre appareils et se synchronise en arrière-plan.
+MemFlow est une application de révision pensée pour rester fluide sans connexion et agréable à utiliser sur mobile comme sur le web. Supabase est la source de vérité des cartes ; SQLite (mobile) et IndexedDB (web) servent de caches hors ligne et se réalignent après chaque synchronisation réussie.
 
-> Local d'abord, toujours. Le réseau rattrape son retard tout seul.
+> Le cache garde l’application disponible hors ligne ; Supabase tranche l’état partagé entre appareils.
 
 ## Points forts
 

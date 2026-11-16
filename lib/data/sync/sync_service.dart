@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:convert';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -31,8 +30,8 @@ class SyncStatus {
   bool get hasPendingWrites => pendingCount > 0;
 }
 
-/// Fait le pont entre la base locale, qui fait foi pour l'affichage, et
-/// Supabase, qui fait foi entre appareils.
+/// Fait le pont entre le cache local, utilisé hors ligne, et Supabase, qui
+/// fait foi dès qu'une synchronisation aboutit.
 ///
 /// Deux sens indépendants :
 ///
@@ -44,8 +43,8 @@ class SyncStatus {
 ///   l'utilisateur n'est jamais écrasée par une version distante plus ancienne
 ///   qu'elle n'a pas encore vue.
 ///
-/// Hors ligne, tout échoue silencieusement et reste en file. Rien n'est perdu,
-/// rien ne bloque l'interface.
+/// Les écritures locales en attente restent protégées jusqu'à leur confirmation
+/// par le serveur. Hors ligne, elles restent en file sans bloquer l'interface.
 class SyncService {
   SyncService({
     required AppDatabase database,
@@ -419,26 +418,6 @@ class SyncService {
     for (final entry in await _db.pendingSyncEntries()) {
       ids[entry.entityType]!.add(entry.entityId);
     }
-    // Keep every card in the persisted study session while applying a remote
-    // snapshot. A card absent from Supabase may still be on screen; deleting
-    // it here makes the next review fail its local lookup. Missing session
-    // cards are queued for upload by _applyRemoteRows, like other protected
-    // local data.
-    final rawSession = await _db.readMetaString(
-      AppDatabase.activeStudySessionKey,
-    );
-    if (rawSession != null) {
-      try {
-        final session = jsonDecode(rawSession);
-        if (session is Map<String, dynamic> && session['card_ids'] is List) {
-          ids[SyncEntityType.flashcard]!.addAll(
-            (session['card_ids'] as List).whereType<String>(),
-          );
-        }
-      } on FormatException {
-        // An unreadable envelope cannot identify cards to protect.
-      }
-    }
     final logs = await (_db.select(
       _db.reviewLogs,
     )..where((row) => row.id.isIn(ids[SyncEntityType.reviewLog]!))).get();
@@ -504,17 +483,12 @@ class SyncService {
       if (protectedIds.contains(id)) {
         continue;
       }
-      final remoteUpdatedAt = DateTime.parse(row['updated_at'] as String);
-      final localUpdatedAt = await _db.readEntityUpdatedAt(entityType, id);
-      if (localUpdatedAt != null && localUpdatedAt.isAfter(remoteUpdatedAt)) {
-        continue;
-      }
       await _db.applyRemoteRecord(
         RemoteSyncRecord(
           entityType: entityType,
           entityId: id,
           payload: row,
-          updatedAt: remoteUpdatedAt,
+          updatedAt: DateTime.parse(row['updated_at'] as String),
         ),
       );
     }
@@ -570,13 +544,17 @@ class SyncService {
       }
       final page = await query
           .order('created_at', ascending: true)
+          .order('id', ascending: true)
           .range(offset, offset + pageSize - 1);
       _checkSession(session);
       final mapped = (page as List)
           .map((row) => Map<String, dynamic>.from(row as Map))
           .toList();
       rows.addAll(mapped);
-      if (mapped.length < pageSize) {
+      // PostgREST can cap a requested range below pageSize. A short page is
+      // therefore not proof that the snapshot is complete; keep paging until
+      // the next offset is empty before reconciliation prunes local rows.
+      if (mapped.isEmpty) {
         return rows;
       }
       offset += mapped.length;
