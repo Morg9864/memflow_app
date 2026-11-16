@@ -101,19 +101,19 @@ Attention sur un point : Les mauvaises réponses doivent faire plus ou moins la 
 
 ## Indice
 
-L'indice doit aider sans donner directement la réponse.
+L'indice est masqué pendant la révision et l'apprenant choisit de l'afficher ou non. Prévois donc un indice utile quel que soit le niveau de la carte, y compris au niveau 1 : ne laisse pas l'indice vide ou égal à "-" uniquement parce que la question est facile.
 
-Il doit être court, clair et utile, tout en restant suffisamment vague pour encourager la réflexion. 
+L'indice doit être court, clair, lié à la question et assez précis pour aider réellement l'apprenant à retrouver la réponse. Ajuste sa précision à la difficulté : pour une question facile, un rappel du concept ou du contexte suffit ; pour les niveaux supérieurs, tu peux orienter vers la règle, la relation entre notions ou l'étape de raisonnement pertinente.
 
-Si la question est de niveau 1, l'indice doit être "-". Les niveaux supérieurs doivent avoir un indice plus informatif, mais sans jamais révéler la réponse, ni donner une partie de la réponse.
+Même s'il peut être plus précis qu'un simple encouragement à réfléchir, l'indice ne doit pas devenir une réponse déguisée. Ne recopie pas la réponse, ne la reformule pas presque à l'identique et ne donne pas son élément décisif. Après avoir lu l'indice, l'apprenant doit encore se rappeler ou raisonner pour produire la réponse.
 
-Exemple mauvais indice : 
+Exemple mauvais indice :
 
-> Question : Qu'est-ce qu'une obligation en droit civil ? Hint : C'est un lien juridique entre deux personnes.
+> Question : Qu'est-ce qu'une obligation en droit civil ? Réponse : Un lien juridique entre un créancier et un débiteur qui porte sur une prestation. Hint : C'est un lien juridique entre un créancier et un débiteur qui porte sur une prestation.
 
 Exemple bon indice :
 
-> Question : Qu'est-ce qu'une obligation en droit civil ? Hint : Revois la définition d'une obligation.
+> Question : Qu'est-ce qu'une obligation en droit civil ? Réponse : Un lien juridique entre un créancier et un débiteur qui porte sur une prestation. Hint : Pense aux rôles de la personne qui peut réclamer et de celle qui doit exécuter.
 
 
 ## Explication
@@ -260,7 +260,7 @@ Contraintes techniques obligatoires :
 - Ne pas faire de questions trop vagues.
 - Ne jamais créer de questions liés à des images, graphiques, schémas ou tableaux, sauf si le texte les décrit explicitement.
 - Les champs obligatoires sont toujours remplis : `collection`, `deck`, `question`, `correct_answer`, `wrong_answer_1`, `wrong_answer_2`, `wrong_answer_3`, `explanation`, `level` et `source`.
-- Les champs optionnels `hint`, `tags`, `cloze_text`, `accepted_answers`, `cloze_answers` et `cloze_word_bank` peuvent être vides uniquement lorsque leur usage n'est pas pertinent. N'utilise jamais `-` comme valeur technique de remplacement, sauf pour `hint` d'une carte de niveau 1.
+- Les champs optionnels `hint`, `tags`, `cloze_text`, `accepted_answers`, `cloze_answers` et `cloze_word_bank` peuvent être vides uniquement lorsque leur usage n'est pas pertinent. Prévois normalement un `hint` à chaque niveau ; ne le laisse pas vide en raison du niveau de difficulté et n'utilise jamais `-` comme valeur de remplacement.
 - Respecter exactement le format CSV décrit.
 - Pour une carte sans texte à trous, laisse `cloze_text`, `cloze_answers` et `cloze_word_bank` vides.
 - Pour une carte avec texte à trous, remplis toujours les trois champs cloze et respecte toutes les règles cloze.
@@ -306,4 +306,4 @@ Le CSV est réussi si une personne qui maîtrise toutes les questions générée
 
 Droit des contrats informatiques;Chapitre 1 — Droit des obligations et des contrats;Le droit des obligations est une branche de quel droit ?;Le droit civil;Le droit pénal;Le droit administratif;Le droit commercial;-;Le droit des obligations relève du droit civil et étudie les liens juridiques entre créanciers et débiteurs. Il permet notamment de déterminer ce qu'une personne peut exiger d'une autre et ce que cette dernière doit accomplir.;1;obligation|droit-civil;Chapitre 1 — Droit des obligations et des contrats;Le droit des obligations est une branche du {{droit civil}}.;le droit civil|droit civil;droit civil;droit civil|droit pénal|droit administratif|droit commercial
 
-Droit des contrats informatiques;Chapitre 1 — Droit des obligations et des contrats;En droit civil, qu'est-ce qu'une obligation ?;Un lien juridique entre deux personnes (créancier et débiteur);Une sanction pénale imposée par un juge;Un droit de propriété sur un bien;Une obligation fiscale envers l'État;Revois la définition d'une obligation.;Une obligation est un lien juridique entre un créancier et un débiteur, par lequel le débiteur s'engage à faire, ne pas faire ou donner quelque chose au créancier. Le créancier peut exiger la prestation et le débiteur doit l'exécuter : leurs rôles se définissent par cette relation.;3;obligation|definition;Chapitre 1 — Droit des obligations et des contrats;Une obligation est un {{lien juridique}} entre un {{créancier}} et un {{débiteur}}.;Un lien juridique entre deux personnes (créancier et débiteur)|Un lien juridique entre un créancier et un débiteur|lien juridique entre un créancier et un débiteur;lien juridique|créancier|débiteur;lien juridique|créancier|débiteur|propriétaire|juge|administration
+Droit des contrats informatiques;Chapitre 1 — Droit des obligations et des contrats;En droit civil, qu'est-ce qu'une obligation ?;Un lien juridique entre deux personnes (créancier et débiteur);Une sanction pénale imposée par un juge;Un droit de propriété sur un bien;Une obligation fiscale envers l'État;Distingue le rôle du créancier de celui du débiteur.;Une obligation est un lien juridique entre un créancier et un débiteur, par lequel le débiteur s'engage à faire, ne pas faire ou donner quelque chose au créancier. Le créancier peut exiger la prestation et le débiteur doit l'exécuter : leurs rôles se définissent par cette relation.;3;obligation|definition;Chapitre 1 — Droit des obligations et des contrats;Une obligation est un {{lien juridique}} entre un {{créancier}} et un {{débiteur}}.;Un lien juridique entre deux personnes (créancier et débiteur)|Un lien juridique entre un créancier et un débiteur|lien juridique entre un créancier et un débiteur;lien juridique|créancier|débiteur;lien juridique|créancier|débiteur|propriétaire|juge|administration
