@@ -178,6 +178,13 @@ class AppRepository {
     required Set<String> cardIds,
     required int sessionCardLimit,
   }) async {
+    final restored = await _restoreStudySession(
+      collectionId: collectionId,
+      deckId: deckId,
+      forcedMode: null,
+      onlyCardIds: cardIds,
+    );
+    if (restored != null) return restored;
     final session = await startStudySession(
       collectionId: collectionId,
       deckId: deckId,
@@ -199,6 +206,26 @@ class AppRepository {
     );
     await saveStudySession(filtered);
     return filtered;
+  }
+
+  Future<StudySessionState> startDeckErrorReviewSession({
+    required String deckId,
+    required int sessionCardLimit,
+  }) async {
+    final deck = await _fetchDeck(deckId);
+    if (deck == null) throw StateError('Deck introuvable.');
+    final cardIds = (await _fetchFailedFlashcards(
+      deckId: deckId,
+    )).map((card) => card.id).toSet();
+    if (cardIds.isEmpty) {
+      throw StateError('Aucune carte erronée dans ce deck.');
+    }
+    return startErrorReviewSession(
+      collectionId: deck.collectionId,
+      deckId: deck.id,
+      cardIds: cardIds,
+      sessionCardLimit: sessionCardLimit,
+    );
   }
 
   Future<StudySessionState> startStudySession({
@@ -305,6 +332,33 @@ class AppRepository {
     );
   }
 
+  /// Résumé de la session sauvegardée, s'il y en a une à reprendre.
+  Future<SavedStudySession?> savedStudySession() async {
+    final raw = await _db.readMetaString(AppDatabase.activeStudySessionKey);
+    if (raw == null) return null;
+    try {
+      final data = jsonDecode(raw) as Map<String, dynamic>;
+      final ids = (data['card_ids'] as List<dynamic>).cast<String>();
+      final index = (data['current_index'] as num).toInt();
+      if (ids.isEmpty || index < 0 || index >= ids.length) return null;
+      final modeName = data['requested_mode'] as String?;
+      TestMode? mode;
+      for (final candidate in TestMode.values) {
+        if (candidate.name == modeName) mode = candidate;
+      }
+      return SavedStudySession(
+        collectionId: data['collection_id'] as String?,
+        deckId: data['deck_id'] as String?,
+        deckTitle: data['deck_title'] as String? ?? 'Révision',
+        currentIndex: index,
+        totalCards: ids.length,
+        requestedMode: mode,
+      );
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<StudySessionState?> _restoreStudySession({
     required String? collectionId,
     required String? deckId,
@@ -327,22 +381,35 @@ class AppRepository {
       if (savedMode != forcedMode) return null;
       final ids = (data['card_ids'] as List<dynamic>).cast<String>();
       if (onlyCardIds != null && ids.any((id) => !onlyCardIds.contains(id))) {
-        return null;
+        final savedIndex = (data['current_index'] as num).toInt();
+        final unresolvedIds = ids
+            .asMap()
+            .entries
+            .where((entry) => entry.key >= savedIndex)
+            .map((entry) => entry.value);
+        if (unresolvedIds.any((id) => !onlyCardIds.contains(id))) return null;
       }
+      final savedIndex = (data['current_index'] as num).toInt();
+      if (savedIndex < 0 || savedIndex >= ids.length) return null;
+      final restoredIds = onlyCardIds == null
+          ? ids
+          : ids.where(onlyCardIds.contains).toList();
+      final restoredIndex = onlyCardIds == null
+          ? savedIndex
+          : ids.take(savedIndex).where(onlyCardIds.contains).length;
       final records = await _fetchFlashcards(
         collectionId: collectionId,
         deckId: deckId,
       );
       final byId = {for (final record in records) record.id: record};
-      if (ids.any((id) => !byId.containsKey(id))) {
+      if (restoredIds.any((id) => !byId.containsKey(id))) {
         await _db.deleteMeta(AppDatabase.activeStudySessionKey);
         return null;
       }
-      final cards = ids
+      final cards = restoredIds
           .map((id) => _mapStudyCard(byId[id]!, forcedMode: savedMode))
           .toList();
-      final index = (data['current_index'] as num).toInt();
-      if (index < 0 || index >= cards.length) return null;
+      if (restoredIndex < 0 || restoredIndex >= cards.length) return null;
       final rawCounts = (data['review_counts'] as Map<String, dynamic>?) ?? {};
       final counts = {
         for (final result in ReviewResult.values)
@@ -355,7 +422,7 @@ class AppRepository {
         collectionId: collectionId,
         deckId: deckId,
         cards: cards,
-        currentIndex: index,
+        currentIndex: restoredIndex,
         revealed: false,
         selectedOptionIndex: null,
         hasValidatedAnswer: false,
@@ -1409,6 +1476,9 @@ class AppRepository {
       status: status,
       createdAt: deck.createdAt,
       updatedAt: deck.updatedAt,
+      errorCount: flashcards
+          .where((card) => card.repetitions == 0 && card.lapses > 0)
+          .length,
       isDisabled: deck.isDisabled,
     );
   }

@@ -103,6 +103,10 @@ final appRepositoryProvider = Provider<AppRepository>((ref) {
   );
 });
 
+final activeStudySessionProvider = FutureProvider<SavedStudySession?>((ref) {
+  return ref.watch(appRepositoryProvider).savedStudySession();
+});
+
 /// Rattache la base locale au compte connecté : elle est adoptée et
 /// synchronisée à la connexion, purgée à la déconnexion.
 final sessionSyncProvider = Provider<void>((ref) {

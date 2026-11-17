@@ -210,6 +210,10 @@ class _CollectionDetailScreenState
     }
   }
 
+  void _launchDeckErrors(DeckListItem deck) {
+    context.push('/study/deck-errors/${Uri.encodeComponent(deck.id)}');
+  }
+
   Future<void> _deleteCollection(CollectionListItem item) async {
     final ok = await _confirmDeletion(
       context,
@@ -293,6 +297,10 @@ class _CollectionDetailScreenState
   Widget build(BuildContext context) {
     final collection = ref.watch(collectionProvider(widget.collectionId));
     final decks = ref.watch(collectionDecksProvider(widget.collectionId));
+    final savedSession = ref.watch(activeStudySessionProvider).asData?.value;
+    final collectionCanResume =
+        savedSession?.collectionId == widget.collectionId &&
+        savedSession?.deckId == null;
 
     return AppScaffold(
       child: collection.when(
@@ -369,6 +377,7 @@ class _CollectionDetailScreenState
                       ? null
                       : () => _launchStudy(),
                   inlineStudy: inlineStudy,
+                  canResume: collectionCanResume,
                   onViewDue: item.isDisabled
                       ? null
                       : () => Navigator.of(context).push(
@@ -411,6 +420,7 @@ class _CollectionDetailScreenState
                             ? null
                             : () => _launchStudy(),
                         expanded: true,
+                        canResume: collectionCanResume,
                       ),
                     ),
                 ],
@@ -506,8 +516,18 @@ class _CollectionDetailScreenState
   }
 
   Widget _buildDeckCard(CollectionListItem collection, DeckListItem deck) {
+    final savedSession = ref.watch(activeStudySessionProvider).asData?.value;
+    final canResume = savedSession?.deckId == deck.id;
     return DeckCard(
       deck: deck,
+      canResume: canResume,
+      onStudyErrors:
+          collection.isDisabled || deck.isDisabled || deck.errorCount == 0
+          ? null
+          : () => _launchDeckErrors(deck),
+      resumeProgress: canResume
+          ? 'À reprendre · carte ${savedSession!.currentIndex + 1} sur ${savedSession.totalCards}'
+          : null,
       onTap: collection.isDisabled ? null : () => _launchStudy(deckId: deck.id),
       onDelete: _busy ? null : () => _deleteDeck(deck),
       onToggleDisabled: _busy ? null : () => _toggleDeckDisabled(deck),
@@ -584,6 +604,7 @@ class _Summary extends StatelessWidget {
     required this.onChangeIcon,
     required this.onStudy,
     required this.inlineStudy,
+    required this.canResume,
     required this.onViewDue,
   });
 
@@ -591,6 +612,7 @@ class _Summary extends StatelessWidget {
   final VoidCallback? onChangeIcon;
   final VoidCallback? onStudy;
   final bool inlineStudy;
+  final bool canResume;
   final VoidCallback? onViewDue;
 
   @override
@@ -615,7 +637,7 @@ class _Summary extends StatelessWidget {
                   ),
                   if (inlineStudy) ...[
                     const SizedBox(width: AppSpacing.xl),
-                    _StudyButton(onPressed: onStudy),
+                    _StudyButton(onPressed: onStudy, canResume: canResume),
                   ],
                 ],
               ),
@@ -710,10 +732,15 @@ class _Identity extends StatelessWidget {
 }
 
 class _StudyButton extends StatelessWidget {
-  const _StudyButton({required this.onPressed, this.expanded = false});
+  const _StudyButton({
+    required this.onPressed,
+    this.expanded = false,
+    this.canResume = false,
+  });
 
   final VoidCallback? onPressed;
   final bool expanded;
+  final bool canResume;
 
   @override
   Widget build(BuildContext context) {
@@ -730,7 +757,7 @@ class _StudyButton extends StatelessWidget {
           child: FilledButton.icon(
             onPressed: onPressed,
             icon: const Icon(AppIcons.play, size: 20),
-            label: const Text('Étudier'),
+            label: Text(canResume ? 'Reprendre' : 'Étudier'),
           ),
         );
       },
@@ -1076,6 +1103,9 @@ class DeckCard extends StatelessWidget {
     super.key,
     required this.deck,
     required this.onTap,
+    this.canResume = false,
+    this.resumeProgress,
+    this.onStudyErrors,
     this.onDelete,
     this.onViewCards,
     this.onToggleDisabled,
@@ -1083,6 +1113,9 @@ class DeckCard extends StatelessWidget {
 
   final DeckListItem deck;
   final VoidCallback? onTap;
+  final bool canResume;
+  final String? resumeProgress;
+  final VoidCallback? onStudyErrors;
   final VoidCallback? onDelete;
   final VoidCallback? onViewCards;
   final VoidCallback? onToggleDisabled;
@@ -1091,7 +1124,10 @@ class DeckCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final hasOptions =
-        onDelete != null || onViewCards != null || onToggleDisabled != null;
+        onDelete != null ||
+        onViewCards != null ||
+        onToggleDisabled != null ||
+        onStudyErrors != null;
     final isUnavailable = deck.isDisabled || onTap == null;
     return Pressable(
       enabled: !isUnavailable,
@@ -1134,6 +1170,15 @@ class DeckCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: AppSpacing.sm),
+                        if (canResume) ...[
+                          Text(
+                            resumeProgress ?? 'À reprendre',
+                            style: theme.textTheme.labelMedium?.copyWith(
+                              color: theme.colorScheme.primary,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                        ],
                         ProgressPill(
                           value: deck.progress,
                           semanticsLabel: 'Progression de ${deck.name}',
@@ -1154,6 +1199,8 @@ class DeckCard extends StatelessWidget {
                             onToggleDisabled?.call();
                           case _DeckAction.delete:
                             onDelete?.call();
+                          case _DeckAction.studyErrors:
+                            onStudyErrors?.call();
                         }
                       },
                       itemBuilder: (_) => [
@@ -1163,6 +1210,14 @@ class DeckCard extends StatelessWidget {
                             child: _MenuRow(
                               icon: AppIcons.list,
                               label: 'Voir les cartes',
+                            ),
+                          ),
+                        if (onStudyErrors != null)
+                          PopupMenuItem(
+                            value: _DeckAction.studyErrors,
+                            child: _MenuRow(
+                              icon: AppIcons.triangleAlert,
+                              label: 'Réviser les erreurs (${deck.errorCount})',
                             ),
                           ),
                         if (onToggleDisabled != null)
@@ -1206,4 +1261,4 @@ class DeckCard extends StatelessWidget {
   }
 }
 
-enum _DeckAction { viewCards, delete, toggleDisabled }
+enum _DeckAction { viewCards, delete, toggleDisabled, studyErrors }

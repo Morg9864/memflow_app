@@ -27,6 +27,7 @@ class StudyScreen extends ConsumerStatefulWidget {
     this.deckId,
     this.forcedMode,
     this.errorCardIds,
+    this.errorDeckId,
     this.controller,
   });
 
@@ -34,6 +35,7 @@ class StudyScreen extends ConsumerStatefulWidget {
   final String? deckId;
   final TestMode? forcedMode;
   final Set<String>? errorCardIds;
+  final String? errorDeckId;
   final StudyController? controller;
 
   @override
@@ -126,6 +128,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
     WidgetsBinding.instance.addObserver(this);
     _controller =
         widget.controller ?? StudyController(ref.read(appRepositoryProvider));
+    if (widget.errorDeckId != null) {
+      Future.microtask(() => _load());
+      return;
+    }
     if (widget.forcedMode != null) {
       Future.microtask(() => _load(forcedMode: widget.forcedMode));
       return;
@@ -136,6 +142,16 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
 
   Future<void> _askModeAndLoad() async {
     if (!mounted) return;
+    final saved = await _controller.savedSession();
+    if (!mounted) return;
+    if (widget.errorCardIds == null &&
+        widget.errorDeckId == null &&
+        saved != null &&
+        saved.collectionId == widget.collectionId &&
+        saved.deckId == widget.deckId) {
+      await _load(forcedMode: saved.requestedMode);
+      return;
+    }
     final StudyModeAvailability availability;
     try {
       availability = await _controller.modeAvailability(
@@ -168,7 +184,12 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
 
   Future<void> _load({TestMode? forcedMode}) async {
     try {
-      final session = widget.errorCardIds == null
+      final session = widget.errorDeckId != null
+          ? await _controller.loadDeckErrorsOnly(
+              deckId: widget.errorDeckId!,
+              sessionCardLimit: ref.read(sessionCardLimitProvider),
+            )
+          : widget.errorCardIds == null
           ? await _controller.load(
               collectionId: widget.collectionId,
               deckId: widget.deckId,
@@ -472,6 +493,30 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
     context.go('/');
   }
 
+  Future<void> _pauseStudy() async {
+    final current = _state;
+    if (current == null || _isApplyingReview) return;
+    final paused = _stateWithCapturedActiveTime(current);
+    _activeSegmentStartedAt = null;
+    try {
+      await _controller.saveSession(paused);
+      if (!mounted) return;
+      setState(() => _state = paused);
+      ref.invalidate(activeStudySessionProvider);
+      _exitStudy();
+    } catch (_) {
+      if (!mounted) return;
+      appScaffoldMessengerKey.currentState
+        ?..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('La sauvegarde locale a échoué. Réessaie.'),
+          ),
+        );
+      _activeSegmentStartedAt = DateTime.now();
+    }
+  }
+
   bool _canPopStudy() {
     return Navigator.of(context).canPop();
   }
@@ -491,6 +536,9 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
 
     if (rawMessage.contains('Aucune carte disponible')) {
       return 'Il n’y a aucune carte à réviser ici pour le moment.';
+    }
+    if (rawMessage.contains('Aucune carte erronée')) {
+      return 'Il n’y a aucune carte erronée à réviser dans ce deck.';
     }
     if (rawMessage.contains('Deck introuvable')) {
       return 'Ce deck n’est plus disponible.';
@@ -829,7 +877,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                                   currentIndex: state.currentIndex,
                                   total: state.cards.length,
                                   level: card.level,
-                                  onClose: _exitStudy,
+                                  onClose: _pauseStudy,
                                 ),
                                 SizedBox(height: isTablet ? 32 : 8),
                                 Expanded(
@@ -2817,9 +2865,9 @@ class _StudyProgressHeader extends StatelessWidget {
         Row(
           children: [
             IconButton(
-              tooltip: 'Quitter la session',
+              tooltip: 'Mettre en pause',
               onPressed: onClose,
-              icon: const Icon(AppIcons.x),
+              icon: const Icon(Icons.pause_rounded),
             ),
             Expanded(
               child: Text(

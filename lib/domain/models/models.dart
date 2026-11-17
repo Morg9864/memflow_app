@@ -142,6 +142,7 @@ class DeckListItem {
     required this.status,
     required this.createdAt,
     required this.updatedAt,
+    this.errorCount = 0,
     this.isDisabled = false,
   });
 
@@ -157,6 +158,7 @@ class DeckListItem {
   final DeckStatus status;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int errorCount;
   final bool isDisabled;
 
   String get badgeLabel {
@@ -660,6 +662,25 @@ class StudySessionState {
       answerValidatedAt: answerValidatedAt ?? this.answerValidatedAt,
     );
   }
+}
+
+/// Résumé local de la session interrompue, utilisé pour proposer sa reprise.
+class SavedStudySession {
+  const SavedStudySession({
+    required this.collectionId,
+    required this.deckId,
+    required this.deckTitle,
+    required this.currentIndex,
+    required this.totalCards,
+    required this.requestedMode,
+  });
+
+  final String? collectionId;
+  final String? deckId;
+  final String deckTitle;
+  final int currentIndex;
+  final int totalCards;
+  final TestMode? requestedMode;
 }
 
 class StudyCard {

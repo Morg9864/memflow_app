@@ -130,6 +130,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/study/deck-errors/:deckId',
+        builder: (context, state) => StudyScreen(
+          deckId: state.pathParameters['deckId'],
+          errorDeckId: state.pathParameters['deckId'],
+        ),
+      ),
+      GoRoute(
         path: '/study/:deckId',
         builder: (context, state) =>
             StudyScreen(deckId: state.pathParameters['deckId']),

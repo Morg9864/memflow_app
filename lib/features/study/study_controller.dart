@@ -14,8 +14,10 @@ class StudyController {
       _submitReview = repository.submitReview,
       _submitReviewWithId = repository.submitReview,
       _saveSession = repository.saveStudySession,
+      _savedSession = repository.savedStudySession,
       _modeAvailability = repository.studyModeAvailability,
       _loadErrorSession = repository.startErrorReviewSession,
+      _loadDeckErrorSession = repository.startDeckErrorReviewSession,
       rules = StudyRules(random: random);
 
   /// Dependency-injected persistence boundary, useful for UI tests and other
@@ -36,6 +38,7 @@ class StudyController {
     })
     submitReview,
     Future<void> Function(StudySessionState state)? saveSession,
+    Future<SavedStudySession?> Function()? savedSession,
     Future<void> Function({
       String? reviewId,
       required String cardId,
@@ -56,6 +59,11 @@ class StudyController {
       required int sessionCardLimit,
     })?
     loadErrorSession,
+    Future<StudySessionState> Function({
+      required String deckId,
+      required int sessionCardLimit,
+    })?
+    loadDeckErrorSession,
     math.Random? random,
   }) : _loadSession = loadSession,
        _submitReview = submitReview,
@@ -74,6 +82,7 @@ class StudyController {
              playedMode: playedMode,
            )),
        _saveSession = saveSession ?? ((_) async {}),
+       _savedSession = savedSession ?? (() async => null),
        _modeAvailability =
            modeAvailability ??
            (({String? collectionId, String? deckId}) async =>
@@ -91,6 +100,11 @@ class StudyController {
              forcedMode: null,
              sessionCardLimit: sessionCardLimit,
            )),
+       _loadDeckErrorSession =
+           loadDeckErrorSession ??
+           (({required deckId, required sessionCardLimit}) async {
+             throw StateError('Révision des erreurs par deck indisponible.');
+           }),
        rules = StudyRules(random: random);
 
   final Future<StudySessionState> Function({
@@ -116,6 +130,7 @@ class StudyController {
   })
   _submitReviewWithId;
   final Future<void> Function(StudySessionState state) _saveSession;
+  final Future<SavedStudySession?> Function() _savedSession;
   final Future<StudyModeAvailability> Function({
     String? collectionId,
     String? deckId,
@@ -128,6 +143,11 @@ class StudyController {
     required int sessionCardLimit,
   })
   _loadErrorSession;
+  final Future<StudySessionState> Function({
+    required String deckId,
+    required int sessionCardLimit,
+  })
+  _loadDeckErrorSession;
   final StudyRules rules;
 
   Future<StudySessionState> load({
@@ -170,6 +190,8 @@ class StudyController {
 
   Future<void> saveSession(StudySessionState state) => _saveSession(state);
 
+  Future<SavedStudySession?> savedSession() => _savedSession();
+
   Future<StudyModeAvailability> modeAvailability({
     String? collectionId,
     String? deckId,
@@ -186,6 +208,12 @@ class StudyController {
     cardIds: cardIds,
     sessionCardLimit: sessionCardLimit,
   );
+
+  Future<StudySessionState> loadDeckErrorsOnly({
+    required String deckId,
+    required int sessionCardLimit,
+  }) =>
+      _loadDeckErrorSession(deckId: deckId, sessionCardLimit: sessionCardLimit);
 
   List<String> buildMultipleChoiceOptions(StudyCard card) =>
       rules.buildMultipleChoiceOptions(card);
