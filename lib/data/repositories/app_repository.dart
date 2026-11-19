@@ -7,6 +7,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../domain/models/models.dart';
+import '../../domain/models/study_planning.dart';
 import '../../domain/services/card_mode_service.dart';
 import '../../domain/services/spaced_repetition_service.dart';
 import '../local/database.dart';
@@ -27,119 +28,360 @@ class AppRepository {
     required SyncService syncService,
     required SpacedRepetitionService spacedRepetitionService,
     required CardModeService cardModeService,
+    String? Function()? currentAccountId,
   }) : _db = database,
        _sync = syncService,
        _spacedRepetitionService = spacedRepetitionService,
-       _cardModeService = cardModeService;
+       _cardModeService = cardModeService,
+       _currentAccountId = currentAccountId;
 
   final AppDatabase _db;
   final SyncService _sync;
   final SpacedRepetitionService _spacedRepetitionService;
   final CardModeService _cardModeService;
+  final String? Function()? _currentAccountId;
   final Uuid _uuid = const Uuid();
 
   // ---------------------------------------------------------------------
   // Listes et tableaux de bord
   // ---------------------------------------------------------------------
 
+  Stream<PlanningOverview> watchPlanningOverview() => combineLatest2(
+    _db
+        .customSelect(
+          'SELECT 1',
+          readsFrom: {
+            _db.collections,
+            _db.decks,
+            _db.flashcards,
+            _db.studyPlans,
+            _db.studyPreferences,
+            _db.reviewLogs,
+          },
+        )
+        .watch(),
+    _clockStream(),
+    (_, now) => now,
+  ).asyncMap((_) => _db.transaction(() => _readPlanning(DateTime.now())));
+
+  Stream<bool> watchSrsEnabled() => _db
+      .select(_db.studyPreferences)
+      .watchSingleOrNull()
+      .map(
+        (row) =>
+            row != null &&
+            (_currentAccountId == null || row.userId == _currentAccountId()) &&
+            row.srsEnabled,
+      );
+
+  Future<void> setSrsEnabled(bool enabled) async {
+    final owner = await _planningOwner();
+    await _db.transaction(() async {
+      await _requireOwner(owner);
+      await _db
+          .into(_db.studyPreferences)
+          .insertOnConflictUpdate(
+            StudyPreferencesCompanion.insert(
+              userId: owner!,
+              srsEnabled: enabled,
+              updatedAt: DateTime.now(),
+            ),
+          );
+      await _db.enqueueSync(
+        entityType: SyncEntityType.studyPreference,
+        entityId: owner,
+        operation: SyncOperation.upsert,
+      );
+    });
+    _requestSync();
+  }
+
+  Future<void> saveStudyPlan({
+    String? id,
+    required String collectionId,
+    String? deckId,
+    required DateTime startDate,
+    required Set<int> weekdays,
+  }) async {
+    final owner = await _planningOwner();
+    final date = studyDay(startDate);
+    if (parseStudyDay(studyDayKey(date)) == null ||
+        weekdays.any((day) => day < 1 || day > 7)) {
+      throw ArgumentError('Date ou jours de révision invalides.');
+    }
+    await _db.transaction(() async {
+      await _requireOwner(owner);
+      final collection = await _fetchCollection(collectionId);
+      final deck = deckId == null ? null : await _fetchDeck(deckId);
+      if (collection == null ||
+          (deckId != null &&
+              (deck == null || deck.collectionId != collectionId))) {
+        throw StateError('Cours introuvable.');
+      }
+      final existing = id == null ? null : await _fetchPlan(id);
+      if (id != null && existing == null) {
+        throw StateError('Séance introuvable.');
+      }
+      final keepHistory =
+          existing != null &&
+          existing.startDate == date &&
+          existing.collectionId == collectionId &&
+          existing.deckId == deckId &&
+          !existing.isRecurring &&
+          weekdays.isEmpty;
+      await _writePlan(
+        StudyPlan(
+          id: id ?? _uuid.v4(),
+          collectionId: collectionId,
+          deckId: deckId,
+          startDate: date,
+          weekdays: weekdays,
+          followUps: keepHistory ? existing.followUps : const {},
+        ),
+      );
+    });
+    _requestSync();
+  }
+
+  Future<void> deleteStudyPlan(String id) async {
+    final owner = await _planningOwner();
+    await _db.transaction(() async {
+      await _requireOwner(owner);
+      await (_db.delete(
+        _db.studyPlans,
+      )..where((row) => row.id.equals(id))).go();
+      await _db.enqueueSync(
+        entityType: SyncEntityType.studyPlan,
+        entityId: id,
+        operation: SyncOperation.delete,
+      );
+    });
+    _requestSync();
+  }
+
+  Future<void> decideStudyFollowUp({
+    required String planId,
+    required DateTime occurrence,
+    required DateTime? nextDate,
+  }) async {
+    final owner = await _planningOwner();
+    await _db.transaction(() async {
+      await _requireOwner(owner);
+      final planning = await _readPlanning(DateTime.now());
+      final day = studyDay(occurrence);
+      final plan = _firstWhereOrNull(
+        planning.pendingFollowUps,
+        (plan) => plan.id == planId,
+      );
+      if (day != planning.today || plan == null) {
+        throw StateError(
+          'Cette séance a changé. Ouvre le planning pour vérifier.',
+        );
+      }
+      final next = nextDate == null ? null : studyDay(nextDate);
+      if (next != null && !next.isAfter(day)) {
+        throw ArgumentError(
+          'La prochaine date doit être ultérieure à la séance.',
+        );
+      }
+      await _writePlan(
+        StudyPlan(
+          id: plan.id,
+          collectionId: plan.collectionId,
+          deckId: plan.deckId,
+          startDate: plan.startDate,
+          followUps: {...plan.followUps, day: next},
+        ),
+      );
+    });
+    _requestSync();
+  }
+
+  Future<String?> _planningOwner() async => _currentAccountId == null
+      ? _db.readMetaString(AppDatabase.ownerKey)
+      : _currentAccountId();
+
+  Future<void> _requireOwner(String? owner) async {
+    if (owner == null ||
+        owner != await _db.readMetaString(AppDatabase.ownerKey) ||
+        (_currentAccountId != null && owner != _currentAccountId())) {
+      throw StateError('Le compte a changé. Réessaie après la connexion.');
+    }
+  }
+
+  Future<void> _writePlan(StudyPlan plan) async {
+    await _db
+        .into(_db.studyPlans)
+        .insertOnConflictUpdate(
+          AppDatabase.studyPlanCompanion(plan, DateTime.now()),
+        );
+    await _db.enqueueSync(
+      entityType: SyncEntityType.studyPlan,
+      entityId: plan.id,
+      operation: SyncOperation.upsert,
+    );
+  }
+
+  Future<StudyPlan?> _fetchPlan(String id) async {
+    final row = await (_db.select(
+      _db.studyPlans,
+    )..where((row) => row.id.equals(id))).getSingleOrNull();
+    return row == null
+        ? null
+        : StudyPlan.fromPayload(AppDatabase.studyPlanPayload(row));
+  }
+
+  Future<PlanningOverview> _readPlanning(DateTime now) async {
+    if (_currentAccountId != null) {
+      final owner = await _db.readMetaString(AppDatabase.ownerKey);
+      if (owner == null || owner != _currentAccountId()) {
+        return PlanningOverview(
+          plans: const [],
+          collections: const [],
+          decks: const [],
+          activeCards: const [],
+          srsEnabled: false,
+          now: now,
+          logs: const [],
+        );
+      }
+    }
+    final collections = await _fetchCollections();
+    final decks = await _fetchDecks();
+    final flashcards = await _fetchFlashcards();
+    final planRows = await _db.select(_db.studyPlans).get();
+    final preference = await _db.select(_db.studyPreferences).getSingleOrNull();
+    final cutoff = studyDay(now).subtract(const Duration(days: 13));
+    final recentLogs =
+        await (_db.select(_db.reviewLogs)..where(
+              (row) => row.createdAt.isBiggerOrEqualValue(
+                cutoff.millisecondsSinceEpoch,
+              ),
+            ))
+            .get();
+
+    return PlanningOverview(
+      plans: planRows
+          .map(AppDatabase.studyPlanPayload)
+          .map(StudyPlan.fromPayload)
+          .nonNulls
+          .toList(),
+      collections: collections,
+      decks: decks,
+      activeCards: _excludeUnavailableCards(
+        flashcards,
+        collections: collections,
+        decks: decks,
+      ),
+      srsEnabled: preference?.srsEnabled ?? false,
+      now: now,
+      logs: recentLogs.map(_toReviewRecord).toList(),
+    );
+  }
+
   Stream<List<CollectionListItem>> watchCollections({String search = ''}) {
     final lowered = search.trim().toLowerCase();
-    return combineLatest5(
-      _watchCollections(),
-      _watchDecks(),
-      _watchFlashcards(),
+    return combineLatest2(
+      watchPlanningOverview(),
       _watchErrorCountsByCollection(),
-      _clockStream(),
-      (collections, decks, flashcards, errorCounts, now) {
-        final activeCards = _excludeDisabledDeckCards(flashcards, decks);
-        final items =
-            collections
-                .map(
-                  (collection) => _buildCollectionListItem(
-                    collection,
-                    activeCards
-                        .where((card) => card.collectionId == collection.id)
-                        .toList(),
-                    errorCounts[collection.id] ?? 0,
-                    now,
-                  ),
-                )
-                .where(
-                  (item) =>
-                      lowered.isEmpty ||
-                      item.name.toLowerCase().contains(lowered),
-                )
-                .toList()
-              ..sort(
-                (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
-              );
-        return items;
+      (planning, errorCounts) {
+        final items = [
+          for (final collection in planning.collections)
+            if (lowered.isEmpty ||
+                collection.name.toLowerCase().contains(lowered))
+              _buildCollectionListItem(
+                collection,
+                planning.activeCards
+                    .where((card) => card.collectionId == collection.id)
+                    .toList(),
+                errorCounts[collection.id] ?? 0,
+                planning,
+              ),
+        ];
+        return items..sort(
+          (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
       },
     );
   }
 
-  Stream<CollectionListItem?> watchCollection(String id) {
-    return watchCollections().map(
-      (items) => _firstWhereOrNull(items, (item) => item.id == id),
-    );
-  }
+  Stream<CollectionListItem?> watchCollection(String id) => watchCollections()
+      .map((items) => _firstWhereOrNull(items, (item) => item.id == id));
 
   Stream<List<DeckListItem>> watchDecksForCollection(String collectionId) {
-    return combineLatest3(
-      _watchDecks(collectionId: collectionId),
+    return combineLatest2(
+      watchPlanningOverview(),
       _watchFlashcards(collectionId: collectionId),
-      _clockStream(),
-      (decks, flashcards, now) {
-        final items =
-            decks
-                .map(
-                  (deck) => _buildDeckListItem(
-                    deck,
-                    flashcards.where((card) => card.deckId == deck.id).toList(),
-                    now,
-                  ),
-                )
-                .toList()
-              ..sort((a, b) => a.createdAt.compareTo(b.createdAt));
-        return items;
+      (planning, cards) {
+        final items = [
+          for (final deck in planning.decks)
+            if (deck.collectionId == collectionId)
+              _buildDeckListItem(
+                deck,
+                cards.where((card) => card.deckId == deck.id).toList(),
+                planning,
+              ),
+        ];
+        return items..sort((a, b) => a.createdAt.compareTo(b.createdAt));
       },
     );
   }
 
-  Stream<HomeStats> watchHomeStats() {
-    return combineLatest5(
+  Stream<HomeStats> watchHomeStats() => combineLatest2(
+    watchPlanningOverview(),
+    _watchReviewTotals(),
+    (planning, totals) {
+      final today = planning.progress();
+      return HomeStats(
+        streakDays: _calculateStreak(totals.dayCounts.keys, now: planning.now),
+        successRate: today.successRate ?? 0,
+        dueCards: today.remaining.length,
+        totalCardsSeen: totals.total,
+        planning: planning,
+      );
+    },
+  );
+
+  Stream<StatisticsOverview> watchStatisticsOverview() => _watchStatistics();
+
+  Stream<StatisticsOverview> watchScopedStatistics({
+    required String collectionId,
+    String? deckId,
+  }) => _watchStatistics(collectionId: collectionId, deckId: deckId);
+
+  Stream<StatisticsOverview> _watchStatistics({
+    String? collectionId,
+    String? deckId,
+  }) {
+    return combineLatest4(
       _watchCollections(),
-      _watchDecks(),
-      _watchFlashcards(),
-      _watchReviewTotals(),
+      _watchFlashcards(collectionId: collectionId, deckId: deckId),
+      _watchReviewLogs(collectionId: collectionId, deckId: deckId),
       _clockStream(),
-      (collections, decks, flashcards, totals, now) {
-        final available = _excludeUnavailableCards(
+      (collections, flashcards, logs, now) {
+        final dayCounts = <DateTime, int>{};
+        var correct = 0;
+        for (final log in logs) {
+          dayCounts.update(
+            studyDay(log.createdAt),
+            (count) => count + 1,
+            ifAbsent: () => 1,
+          );
+          if (log.wasCorrect) correct++;
+        }
+        final totals = _ReviewTotals(
+          total: logs.length,
+          correct: correct,
+          dayCounts: dayCounts,
+        );
+        return _buildStatisticsOverview(
+          collections,
           flashcards,
-          collections: collections,
-          decks: decks,
-        );
-        return HomeStats(
-          streakDays: _calculateStreak(totals.dayCounts.keys, now: now),
-          successRate: totals.successRate,
-          dueCards: available
-              .where((card) => !_isDueInFuture(card.dueAt, now))
-              .length,
-          totalCardsSeen: totals.total,
+          totals,
+          logs,
+          now,
         );
       },
-    );
-  }
-
-  Stream<StatisticsOverview> watchStatisticsOverview() {
-    return combineLatest5(
-      _watchCollections(),
-      _watchFlashcards(),
-      _watchReviewTotals(),
-      _watchReviewLogs(),
-      _clockStream(),
-      (collections, flashcards, totals, logs, now) =>
-          _buildStatisticsOverview(collections, flashcards, totals, logs, now),
     );
   }
 
@@ -171,6 +413,75 @@ class AppRepository {
       ),
     );
   }
+
+  Future<StudyModeAvailability> planningModeAvailability({
+    String? collectionId,
+    String? deckId,
+    String? planId,
+  }) async {
+    final planning = await _db.transaction(() => _readPlanning(DateTime.now()));
+    return _cardModeService.availability(
+      _remainingPlannedCards(planning, collectionId, deckId, planId),
+    );
+  }
+
+  List<FlashcardRecord> _remainingPlannedCards(
+    PlanningOverview planning,
+    String? collectionId,
+    String? deckId,
+    String? planId,
+  ) {
+    final plan = _firstWhereOrNull(
+      planning.todaysPlans,
+      (plan) => plan.id == planId,
+    );
+    if (planId != null && plan == null) return const [];
+    return planning
+        .progress(collectionId: collectionId, deckId: deckId, plan: plan)
+        .remaining;
+  }
+
+  Future<StudySessionState> startPlannedStudySession({
+    String? collectionId,
+    String? deckId,
+    String? planId,
+    TestMode? forcedMode,
+    required int sessionCardLimit,
+  }) => _db.transaction(() async {
+    final planning = await _readPlanning(DateTime.now());
+    final cards = _remainingPlannedCards(planning, collectionId, deckId, planId)
+        .where(
+          (card) =>
+              forcedMode == null || card.allowedTestModes.contains(forcedMode),
+        )
+        .toList();
+    final restored = await _restoreStudySession(
+      collectionId: collectionId,
+      deckId: deckId,
+      forcedMode: forcedMode,
+      onlyCardIds: cards.map((card) => card.id).toSet(),
+      planningDay: planning.today,
+      planId: planId,
+    );
+    if (restored != null) return restored;
+
+    final selected = _takeSessionCards(
+      cards.where((card) => card.repetitions == 0 && card.lapses > 0),
+      cards,
+      sessionCardLimit,
+      now: planning.now,
+      prioritizeDue: planning.srsEnabled,
+    );
+    return _createStudySession(
+      cards: selected,
+      collectionId: collectionId,
+      deckId: deckId,
+      forcedMode: forcedMode,
+      now: planning.now,
+      planningDay: planning.today,
+      planId: planId,
+    );
+  });
 
   Future<StudySessionState> startErrorReviewSession({
     String? collectionId,
@@ -252,11 +563,29 @@ class AppRepository {
       onlyCardIds: onlyCardIds,
     );
 
+    return _createStudySession(
+      cards: cards,
+      collectionId: collectionId,
+      deckId: deckId,
+      forcedMode: forcedMode,
+      now: now,
+    );
+  }
+
+  Future<StudySessionState> _createStudySession({
+    required List<FlashcardRecord> cards,
+    String? collectionId,
+    String? deckId,
+    TestMode? forcedMode,
+    required DateTime now,
+    DateTime? planningDay,
+    String? planId,
+  }) async {
     if (cards.isEmpty) {
       throw StateError('Aucune carte disponible pour cette session.');
     }
 
-    var title = 'Révision';
+    var title = planningDay == null ? 'Révision' : 'Planning du jour';
     if (deckId != null) {
       final deck = await _fetchDeck(deckId);
       if (deck == null) {
@@ -295,6 +624,8 @@ class AppRepository {
       sessionId: _uuid.v4(),
       requestedMode: forcedMode,
       cardDisplayedAt: now,
+      planningDay: planningDay,
+      planId: planId,
     );
     await saveStudySession(session);
     return session;
@@ -316,6 +647,10 @@ class AppRepository {
         'deck_title': state.deckTitle,
         'card_ids': state.cards.map((card) => card.id).toList(),
         'requested_mode': state.requestedMode?.name,
+        'planning_day': state.planningDay == null
+            ? null
+            : studyDayKey(state.planningDay!),
+        'plan_id': state.planId,
         'current_index': state.currentIndex,
         'review_counts': {
           for (final entry in state.reviewCounts.entries)
@@ -353,6 +688,8 @@ class AppRepository {
         currentIndex: index,
         totalCards: ids.length,
         requestedMode: mode,
+        planningDay: parseStudyDay(data['planning_day']),
+        planId: data['plan_id'] as String?,
       );
     } catch (_) {
       return null;
@@ -364,12 +701,17 @@ class AppRepository {
     required String? deckId,
     required TestMode? forcedMode,
     Set<String>? onlyCardIds,
+    DateTime? planningDay,
+    String? planId,
   }) async {
     final raw = await _db.readMetaString(AppDatabase.activeStudySessionKey);
     if (raw == null) return null;
     try {
       final data = jsonDecode(raw) as Map<String, dynamic>;
-      if (data['collection_id'] != collectionId || data['deck_id'] != deckId) {
+      if (data['collection_id'] != collectionId ||
+          data['deck_id'] != deckId ||
+          parseStudyDay(data['planning_day']) != planningDay ||
+          data['plan_id'] != planId) {
         return null;
       }
       final savedMode = data['requested_mode'] == null
@@ -391,10 +733,10 @@ class AppRepository {
       }
       final savedIndex = (data['current_index'] as num).toInt();
       if (savedIndex < 0 || savedIndex >= ids.length) return null;
-      final restoredIds = onlyCardIds == null
+      final restoredIds = onlyCardIds == null || planningDay != null
           ? ids
           : ids.where(onlyCardIds.contains).toList();
-      final restoredIndex = onlyCardIds == null
+      final restoredIndex = onlyCardIds == null || planningDay != null
           ? savedIndex
           : ids.take(savedIndex).where(onlyCardIds.contains).length;
       final records = await _fetchFlashcards(
@@ -417,6 +759,8 @@ class AppRepository {
       };
       return StudySessionState(
         sessionId: data['session_id'] as String?,
+        planningDay: planningDay,
+        planId: planId,
         requestedMode: savedMode,
         deckTitle: data['deck_title'] as String? ?? 'Révision',
         collectionId: collectionId,
@@ -463,9 +807,9 @@ class AppRepository {
   }) async {
     final now = DateTime.now();
     if (reviewId != null) {
-      final alreadyApplied = await (_db.select(_db.reviewLogs)
-            ..where((row) => row.id.equals(reviewId)))
-          .getSingleOrNull();
+      final alreadyApplied = await (_db.select(
+        _db.reviewLogs,
+      )..where((row) => row.id.equals(reviewId))).getSingleOrNull();
       if (alreadyApplied != null) return;
     }
     final card = await _fetchFlashcard(cardId);
@@ -781,53 +1125,49 @@ class AppRepository {
 
   Stream<List<FlashcardDueItem>> watchDueCardsForCollection(
     String collectionId,
+  ) => watchPlanningOverview().map(
+    (planning) => _dueCards(planning, collectionId),
+  );
+
+  List<FlashcardDueItem> _dueCards(
+    PlanningOverview planning,
+    String collectionId,
   ) {
-    return combineLatest4(
-      _watchCollections(),
-      _watchFlashcards(collectionId: collectionId),
-      _watchDecks(collectionId: collectionId),
-      _clockStream(),
-      (collections, cards, decks, now) {
-        final deckNames = {for (final deck in decks) deck.id: deck.name};
-        final sortedCards =
-            [
-              ..._excludeUnavailableCards(
-                cards,
-                collections: collections,
-                decks: decks,
-              ),
-            ]..sort((a, b) {
-              final byDueAt = a.dueAt.compareTo(b.dueAt);
-              if (byDueAt != 0) {
-                return byDueAt;
-              }
-
-              final byDeckName = (deckNames[a.deckId] ?? '')
-                  .toLowerCase()
-                  .compareTo((deckNames[b.deckId] ?? '').toLowerCase());
-              if (byDeckName != 0) {
-                return byDeckName;
-              }
-
-              return a.question.toLowerCase().compareTo(
-                b.question.toLowerCase(),
-              );
-            });
-
-        return sortedCards
-            .map(
-              (card) => FlashcardDueItem(
-                id: card.id,
+    final deckNames = {for (final deck in planning.decks) deck.id: deck.name};
+    final planningDates = <(String, bool), DateTime?>{};
+    final items = <FlashcardDueItem>[];
+    for (final card in planning.activeCards) {
+      if (card.collectionId != collectionId) continue;
+      final worked = planning.wasReviewedToday(card.id);
+      final date = planning.srsEnabled
+          ? card.dueAt
+          : planningDates.putIfAbsent(
+              (card.deckId, worked),
+              () => planning.nextPlanFor(
+                collectionId,
                 deckId: card.deckId,
-                deckName: deckNames[card.deckId] ?? 'Deck',
-                question: card.question,
-                dueAt: card.dueAt,
-                isDueNow: !_isDueInFuture(card.dueAt, now),
+                includeToday: !worked,
               ),
-            )
-            .toList();
-      },
-    );
+            );
+      if (date == null) continue;
+      items.add(
+        FlashcardDueItem(
+          id: card.id,
+          deckId: card.deckId,
+          deckName: deckNames[card.deckId] ?? 'Deck',
+          question: card.question,
+          dueAt: date,
+          isDueNow: planning.srsEnabled
+              ? !date.isAfter(planning.now)
+              : date == planning.today,
+          usesPlanningDate: !planning.srsEnabled,
+        ),
+      );
+    }
+    return items..sort((a, b) {
+      final byDate = a.dueAt.compareTo(b.dueAt);
+      return byDate != 0 ? byDate : a.id.compareTo(b.id);
+    });
   }
 
   Future<PaginatedSlice<FlashcardDueItem>> fetchDueCardsForCollectionPage({
@@ -835,6 +1175,20 @@ class AppRepository {
     required int offset,
     required int limit,
   }) async {
+    final srsEnabled =
+        (await _db.select(_db.studyPreferences).getSingleOrNull())
+            ?.srsEnabled ??
+        false;
+    if (!srsEnabled) {
+      final planning = await _db.transaction(
+        () => _readPlanning(DateTime.now()),
+      );
+      final items = _dueCards(planning, collectionId);
+      return PaginatedSlice(
+        items: items.skip(offset).take(limit).toList(),
+        totalCount: items.length,
+      );
+    }
     final collection = await _fetchCollection(collectionId);
     if (collection == null || collection.isDisabled) {
       return const PaginatedSlice(items: [], totalCount: 0);
@@ -889,8 +1243,14 @@ class AppRepository {
     );
   }
 
-  Stream<int> watchDueCardsForCollectionRevision() =>
-      _tableTicks({_db.flashcards, _db.decks, _db.collections});
+  Stream<int> watchDueCardsForCollectionRevision() => _tableTicks({
+    _db.flashcards,
+    _db.decks,
+    _db.collections,
+    _db.studyPlans,
+    _db.studyPreferences,
+    _db.reviewLogs,
+  });
 
   // ---------------------------------------------------------------------
   // Écritures
@@ -928,6 +1288,7 @@ class AppRepository {
 
   Future<void> deleteDeck(String deckId) async {
     await _db.transaction(() async {
+      await _deletePlansMatching((row) => row.deckId.equals(deckId));
       await (_db.delete(
         _db.reviewLogs,
       )..where((table) => table.deckId.equals(deckId))).go();
@@ -948,6 +1309,9 @@ class AppRepository {
 
   Future<void> deleteCollection(String collectionId) async {
     await _db.transaction(() async {
+      await _deletePlansMatching(
+        (row) => row.collectionId.equals(collectionId),
+      );
       await (_db.delete(
         _db.reviewLogs,
       )..where((table) => table.collectionId.equals(collectionId))).go();
@@ -967,6 +1331,21 @@ class AppRepository {
       );
     });
     _requestSync();
+  }
+
+  Future<void> _deletePlansMatching(
+    Expression<bool> Function(StudyPlans) matches,
+  ) async {
+    final plans = _db.selectOnly(_db.studyPlans)
+      ..addColumns([_db.studyPlans.id])
+      ..where(matches(_db.studyPlans));
+    await (_db.delete(_db.syncQueueEntries)..where(
+          (row) =>
+              row.entityType.equalsValue(SyncEntityType.studyPlan) &
+              row.entityId.isInQuery(plans),
+        ))
+        .go();
+    await (_db.delete(_db.studyPlans)..where(matches)).go();
   }
 
   Future<void> setDeckDisabled(String deckId, bool isDisabled) async {
@@ -1062,14 +1441,6 @@ class AppRepository {
         .map((rows) => rows.map(_toCollectionRecord).toList());
   }
 
-  Stream<List<DeckRecord>> _watchDecks({String? collectionId}) {
-    final query = _db.select(_db.decks);
-    if (collectionId != null) {
-      query.where((table) => table.collectionId.equals(collectionId));
-    }
-    return query.watch().map((rows) => rows.map(_toDeckRecord).toList());
-  }
-
   Stream<List<FlashcardRecord>> _watchFlashcards({
     String? collectionId,
     String? deckId,
@@ -1098,27 +1469,16 @@ class AppRepository {
         .map(_toReviewTotals);
   }
 
-  Stream<List<ReviewLogRecord>> _watchReviewLogs() {
-    return _db
-        .select(_db.reviewLogs)
-        .watch()
-        .map(
-          (rows) => rows
-              .map(
-                (row) => ReviewLogRecord(
-                  id: row.id,
-                  flashcardId: row.flashcardId,
-                  collectionId: row.collectionId,
-                  deckId: row.deckId,
-                  reviewResult: row.reviewResult,
-                  testMode: row.testMode,
-                  wasCorrect: row.wasCorrect,
-                  createdAt: row.createdAt,
-                  scheduledDueAt: row.scheduledDueAt,
-                ),
-              )
-              .toList(),
-        );
+  Stream<List<ReviewLogRecord>> _watchReviewLogs({
+    String? collectionId,
+    String? deckId,
+  }) {
+    final query = _db.select(_db.reviewLogs);
+    if (collectionId != null) {
+      query.where((row) => row.collectionId.equals(collectionId));
+    }
+    if (deckId != null) query.where((row) => row.deckId.equals(deckId));
+    return query.watch().map((rows) => rows.map(_toReviewRecord).toList());
   }
 
   Stream<Map<String, int>> _watchErrorCountsByCollection() {
@@ -1236,21 +1596,39 @@ class AppRepository {
         !disabledDeckIds.contains(card.deckId) &&
         !disabledCollectionIds.contains(card.collectionId);
 
-    final retryCards = (await _fetchFailedFlashcards(
-      collectionId: collectionId,
-      deckId: deckId,
-    )).where((card) => isActive(card) && (onlyCardIds == null || onlyCardIds.contains(card.id))).toList();
+    final retryCards =
+        (await _fetchFailedFlashcards(
+              collectionId: collectionId,
+              deckId: deckId,
+            ))
+            .where(
+              (card) =>
+                  isActive(card) &&
+                  (onlyCardIds == null || onlyCardIds.contains(card.id)),
+            )
+            .toList();
 
-    final dueActiveCards = (await _fetchFlashcards(
-      collectionId: collectionId,
-      deckId: deckId,
-      dueBeforeOrAt: now,
-    )).where((card) => isActive(card) && (onlyCardIds == null || onlyCardIds.contains(card.id))).toList();
+    final dueActiveCards =
+        (await _fetchFlashcards(
+              collectionId: collectionId,
+              deckId: deckId,
+              dueBeforeOrAt: now,
+            ))
+            .where(
+              (card) =>
+                  isActive(card) &&
+                  (onlyCardIds == null || onlyCardIds.contains(card.id)),
+            )
+            .toList();
 
-    final allActiveCards = (await _fetchFlashcards(
-      collectionId: collectionId,
-      deckId: deckId,
-    )).where((card) => isActive(card) && (onlyCardIds == null || onlyCardIds.contains(card.id))).toList();
+    final allActiveCards =
+        (await _fetchFlashcards(collectionId: collectionId, deckId: deckId))
+            .where(
+              (card) =>
+                  isActive(card) &&
+                  (onlyCardIds == null || onlyCardIds.contains(card.id)),
+            )
+            .toList();
     // Due cards retain priority, then new/non-due cards fill the requested
     // session size without pulling future reviews ahead of due material.
     final fillerCards = [
@@ -1313,6 +1691,7 @@ class AppRepository {
     Iterable<FlashcardRecord> fillerCards,
     int sessionCardLimit, {
     required DateTime now,
+    bool prioritizeDue = true,
   }) {
     int byImportOrder(FlashcardRecord a, FlashcardRecord b) {
       final byCreatedAt = a.createdAt.compareTo(b.createdAt);
@@ -1324,6 +1703,7 @@ class AppRepository {
 
     List<FlashcardRecord> sortedByDuePriority(Iterable<FlashcardRecord> cards) {
       return [...cards]..sort((a, b) {
+        if (!prioritizeDue) return byImportOrder(a, b);
         final aIsFuture = _isDueInFuture(a.dueAt, now);
         final bIsFuture = _isDueInFuture(b.dueAt, now);
         if (aIsFuture != bIsFuture) return aIsFuture ? 1 : -1;
@@ -1426,7 +1806,7 @@ class AppRepository {
     CollectionRecord collection,
     List<FlashcardRecord> flashcards,
     int errorCount,
-    DateTime now,
+    PlanningOverview planning,
   ) {
     return CollectionListItem(
       id: collection.id,
@@ -1435,9 +1815,10 @@ class AppRepository {
       icon: collection.icon,
       totalCards: flashcards.length,
       cardsDone: flashcards.where((card) => card.repetitions > 0).length,
-      dueCards: flashcards
-          .where((card) => !_isDueInFuture(card.dueAt, now))
-          .length,
+      dueCards: planning.progress(collectionId: collection.id).remaining.length,
+      nextReviewAt: planning.srsEnabled
+          ? _earliestDue(flashcards)
+          : planning.nextPlanFor(collection.id),
       color: collection.color,
       createdAt: collection.createdAt,
       updatedAt: collection.updatedAt,
@@ -1449,12 +1830,10 @@ class AppRepository {
   DeckListItem _buildDeckListItem(
     DeckRecord deck,
     List<FlashcardRecord> flashcards,
-    DateTime now,
+    PlanningOverview planning,
   ) {
     final cardsDone = flashcards.where((card) => card.repetitions > 0).length;
-    final dueCards = flashcards
-        .where((card) => !_isDueInFuture(card.dueAt, now))
-        .length;
+    final dueCards = planning.progress(deckId: deck.id).remaining.length;
     final masteredCards = flashcards.where((card) => card.mastered).length;
     final totalCards = flashcards.length;
     final status = dueCards > 0
@@ -1480,27 +1859,20 @@ class AppRepository {
           .where((card) => card.repetitions == 0 && card.lapses > 0)
           .length,
       isDisabled: deck.isDisabled,
+      nextReviewAt: planning.srsEnabled
+          ? _earliestDue(
+              planning.activeCards.where((card) => card.deckId == deck.id),
+            )
+          : planning.nextPlanFor(deck.collectionId, deckId: deck.id),
     );
   }
 
-  /// Retire les cartes d'un deck désactivé pour qu'elles ne comptent plus dans
-  /// les sessions ni dans les totaux « à revoir ». Les journaux de révision ne
-  /// sont jamais filtrés ainsi.
-  List<FlashcardRecord> _excludeDisabledDeckCards(
-    List<FlashcardRecord> flashcards,
-    List<DeckRecord> decks,
-  ) {
-    final disabledDeckIds = {
-      for (final deck in decks)
-        if (deck.isDisabled) deck.id,
-    };
-    if (disabledDeckIds.isEmpty) {
-      return flashcards;
-    }
-    return flashcards
-        .where((card) => !disabledDeckIds.contains(card.deckId))
-        .toList();
-  }
+  DateTime? _earliestDue(Iterable<FlashcardRecord> cards) => cards
+      .map((card) => card.dueAt)
+      .fold<DateTime?>(
+        null,
+        (first, date) => first == null || date.isBefore(first) ? date : first,
+      );
 
   List<FlashcardRecord> _excludeUnavailableCards(
     List<FlashcardRecord> flashcards, {
@@ -1801,6 +2173,18 @@ class AppRepository {
       updatedAt: card.updatedAt,
     );
   }
+
+  ReviewLogRecord _toReviewRecord(ReviewLog row) => ReviewLogRecord(
+    id: row.id,
+    flashcardId: row.flashcardId,
+    collectionId: row.collectionId,
+    deckId: row.deckId,
+    testMode: row.testMode,
+    reviewResult: row.reviewResult,
+    wasCorrect: row.wasCorrect,
+    createdAt: row.createdAt,
+    scheduledDueAt: row.scheduledDueAt,
+  );
 
   ReviewLogsCompanion _reviewLogCompanion(ReviewLogRecord log) {
     return ReviewLogsCompanion.insert(

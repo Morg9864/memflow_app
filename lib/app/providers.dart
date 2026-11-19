@@ -8,6 +8,8 @@ import 'app_bootstrap.dart';
 import '../data/local/database.dart';
 import '../data/repositories/app_repository.dart';
 import '../data/sync/sync_service.dart';
+import '../domain/models/models.dart';
+import '../domain/models/study_planning.dart';
 import '../domain/services/auth_service.dart';
 import '../domain/services/card_mode_service.dart';
 import '../domain/services/csv_export_service.dart';
@@ -95,13 +97,23 @@ final syncStatusProvider = StreamProvider<SyncStatus>((ref) {
 });
 
 final appRepositoryProvider = Provider<AppRepository>((ref) {
+  final auth = ref.watch(authServiceProvider);
   return AppRepository(
     database: ref.watch(appDatabaseProvider),
     syncService: ref.watch(syncServiceProvider),
     spacedRepetitionService: ref.watch(spacedRepetitionServiceProvider),
     cardModeService: ref.watch(cardModeServiceProvider),
+    currentAccountId: () => auth.currentUser?.id,
   );
 });
+
+final planningOverviewProvider = StreamProvider.autoDispose<PlanningOverview>(
+  (ref) => ref.watch(appRepositoryProvider).watchPlanningOverview(),
+);
+
+final srsEnabledProvider = StreamProvider.autoDispose<bool>(
+  (ref) => ref.watch(appRepositoryProvider).watchSrsEnabled(),
+);
 
 final activeStudySessionProvider = FutureProvider<SavedStudySession?>((ref) {
   return ref.watch(appRepositoryProvider).savedStudySession();

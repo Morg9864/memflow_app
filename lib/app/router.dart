@@ -15,6 +15,7 @@ import '../features/import/import_screen.dart';
 import '../features/legal/legal_document_screen.dart';
 import '../features/legal/legal_acceptance_screen.dart';
 import '../features/navigation/not_found_screen.dart';
+import '../features/planning/planning_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/settings_screen.dart';
 import '../features/stats/stats_screen.dart';
@@ -96,6 +97,13 @@ final routerProvider = Provider<GoRouter>((ref) {
     },
     routes: [
       // Hors coque: pas de barre de navigation.
+      GoRoute(
+        path: '/planning',
+        builder: (context, state) => PlanningScreen(
+          collectionId: state.uri.queryParameters['collectionId'],
+          deckId: state.uri.queryParameters['deckId'],
+        ),
+      ),
       GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
       GoRoute(
         path: '/legal/accept',
@@ -116,6 +124,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => StudyScreen(
           collectionId: state.uri.queryParameters['collectionId'],
           deckId: state.uri.queryParameters['deckId'],
+          isPlanned: state.uri.queryParameters['planned'] == '1',
+          planId: state.uri.queryParameters['planId'],
         ),
       ),
       GoRoute(

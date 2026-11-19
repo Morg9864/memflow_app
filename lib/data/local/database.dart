@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../domain/models/models.dart';
+import '../../domain/models/study_planning.dart';
 import 'connection/connection.dart';
 
 part 'database.g.dart';
@@ -269,6 +270,37 @@ class AppMetaEntries extends Table {
   Set<Column<Object>> get primaryKey => {key};
 }
 
+@DataClassName('StudyPlanData')
+class StudyPlans extends Table {
+  TextColumn get id => text()();
+
+  TextColumn get collectionId => text().references(Collections, #id)();
+
+  TextColumn get deckId => text().nullable().references(Decks, #id)();
+
+  TextColumn get startDate => text()();
+
+  TextColumn get weekdays => text()();
+
+  TextColumn get followUps => text()();
+
+  IntColumn get updatedAt => integer().map(const DateTimeConverter())();
+
+  @override
+  Set<Column<Object>> get primaryKey => {id};
+}
+
+class StudyPreferences extends Table {
+  TextColumn get userId => text()();
+
+  BoolColumn get srsEnabled => boolean()();
+
+  IntColumn get updatedAt => integer().map(const DateTimeConverter())();
+
+  @override
+  Set<Column<Object>> get primaryKey => {userId};
+}
+
 @DriftDatabase(
   tables: [
     Collections,
@@ -277,6 +309,8 @@ class AppMetaEntries extends Table {
     ReviewLogs,
     SyncQueueEntries,
     AppMetaEntries,
+    StudyPlans,
+    StudyPreferences,
   ],
 )
 class AppDatabase extends _$AppDatabase {
@@ -291,14 +325,23 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.memory() : super(openMemoryConnection());
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
 
   @override
-  MigrationStrategy get migration =>
-      MigrationStrategy(onCreate: (migrator) => migrator.createAll());
+  MigrationStrategy get migration => MigrationStrategy(
+    onCreate: (migrator) => migrator.createAll(),
+    onUpgrade: (migrator, from, to) async {
+      if (from < 2) {
+        await transaction(() async {
+          await migrator.createTable(studyPlans);
+          await migrator.createTable(studyPreferences);
+        });
+      }
+    },
+  );
 
   static const ownerKey = 'owner_user_id';
-  static const reviewLogCursorKey = 'review_log_cursor';
+  static const reviewLogReceiptCursorKey = 'review_log_receipt_cursor';
   static const activeStudySessionKey = 'active_study_session';
 
   Future<bool> isEmpty() async {
@@ -326,6 +369,12 @@ class AppDatabase extends _$AppDatabase {
   /// cartes, mais la réconciliation locale ne voit que les identifiants
   /// disparus de la table qu'elle compare.
   Future<void> deleteOrphans() async {
+    await customUpdate(
+      'DELETE FROM study_plans WHERE collection_id NOT IN (SELECT id FROM collections) '
+      'OR (deck_id IS NOT NULL AND deck_id NOT IN (SELECT id FROM decks))',
+      updates: {studyPlans},
+      updateKind: UpdateKind.delete,
+    );
     await customStatement(
       'DELETE FROM decks WHERE collection_id NOT IN (SELECT id FROM collections)',
     );
@@ -340,6 +389,8 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> clearAllUserData() async {
     await transaction(() async {
+      await delete(studyPlans).go();
+      await delete(studyPreferences).go();
       await delete(reviewLogs).go();
       await delete(flashcards).go();
       await delete(decks).go();
@@ -448,6 +499,16 @@ class AppDatabase extends _$AppDatabase {
               reviewLogs,
             )..where((table) => table.id.equals(entityId))).getSingleOrNull())
             ?.createdAt;
+      case SyncEntityType.studyPlan:
+        return (await (select(
+              studyPlans,
+            )..where((table) => table.id.equals(entityId))).getSingleOrNull())
+            ?.updatedAt;
+      case SyncEntityType.studyPreference:
+        return (await (select(studyPreferences)
+                  ..where((table) => table.userId.equals(entityId)))
+                .getSingleOrNull())
+            ?.updatedAt;
     }
   }
 
@@ -466,11 +527,52 @@ class AppDatabase extends _$AppDatabase {
           flashcards,
         ).insertOnConflictUpdate(_flashcardFromPayload(record.payload));
       case SyncEntityType.reviewLog:
-        await into(
-          reviewLogs,
-        ).insertOnConflictUpdate(_reviewLogFromPayload(record.payload));
+        await into(reviewLogs).insert(
+          _reviewLogFromPayload(record.payload),
+          mode: InsertMode.insertOrIgnore,
+        );
+      case SyncEntityType.studyPlan:
+        final plan = StudyPlan.fromPayload(record.payload);
+        if (plan != null) {
+          await into(
+            studyPlans,
+          ).insertOnConflictUpdate(studyPlanCompanion(plan, record.updatedAt));
+        }
+      case SyncEntityType.studyPreference:
+        final enabled = record.payload['srs_enabled'];
+        if (enabled is bool) {
+          await into(studyPreferences).insertOnConflictUpdate(
+            StudyPreferencesCompanion.insert(
+              userId: record.entityId,
+              srsEnabled: enabled,
+              updatedAt: record.updatedAt,
+            ),
+          );
+        }
     }
   }
+
+  static StudyPlansCompanion studyPlanCompanion(StudyPlan plan, DateTime now) {
+    return StudyPlansCompanion.insert(
+      id: plan.id,
+      collectionId: plan.collectionId,
+      deckId: Value(plan.deckId),
+      startDate: studyDayKey(plan.startDate),
+      weekdays: jsonEncode(plan.weekdays.toList()..sort()),
+      followUps: jsonEncode(plan.followUpPayload),
+      updatedAt: now,
+    );
+  }
+
+  static Map<String, dynamic> studyPlanPayload(StudyPlanData row) => {
+    'id': row.id,
+    'collection_id': row.collectionId,
+    'deck_id': row.deckId,
+    'start_date': row.startDate,
+    'weekdays': jsonDecode(row.weekdays),
+    'follow_ups': jsonDecode(row.followUps),
+    'updated_at': row.updatedAt.toUtc().toIso8601String(),
+  };
 
   CollectionsCompanion _collectionFromPayload(Map<String, dynamic> payload) {
     return CollectionsCompanion.insert(

@@ -7,8 +7,10 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import '../../domain/models/study_planning.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
+import '../planning/planning_screen.dart';
 
 final homeStatsProvider = StreamProvider<HomeStats>((ref) {
   return ref.watch(appRepositoryProvider).watchHomeStats();
@@ -169,72 +171,120 @@ class _Header extends StatelessWidget {
 }
 
 class _HeroCard extends StatelessWidget {
-  const _HeroCard({required this.dueCards});
+  const _HeroCard({required this.dueCards, this.planning});
 
   final int dueCards;
+  final PlanningOverview? planning;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final upToDate = dueCards == 0;
+    final today = planning?.progress();
+    final hasPlans = planning?.plans.isNotEmpty ?? true;
+    final hasFollowUp = planning?.pendingFollowUps.isNotEmpty ?? false;
+    final studyLocation = planning == null ? '/study' : plannedStudyLocation();
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
-        child: upToDate
-            ? Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (dueCards > 0) ...[
+              Text(
+                '$dueCards',
+                style: theme.textTheme.displayLarge?.copyWith(
+                  color: theme.colorScheme.primary,
+                ),
+              ),
+              Text(
+                dueCards == 1 ? 'carte à revoir' : 'cartes à revoir',
+                style: theme.textTheme.titleMedium,
+              ),
+            ] else ...[
+              Icon(
+                hasPlans ? AppIcons.circleCheck : AppIcons.calendarDays,
+                size: 40,
+                color: theme.colorScheme.primary,
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Text(
+                !hasPlans
+                    ? 'Planifie tes révisions'
+                    : (today?.isComplete ?? false)
+                    ? 'Planning du jour terminé'
+                    : 'Tout est à jour',
+                style: theme.textTheme.titleLarge,
+              ),
+              if (!hasPlans || today?.total == 0 || today == null) ...[
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  hasPlans
+                      ? 'Aucune carte à réviser aujourd’hui.'
+                      : 'Choisis les cours à travailler et les jours de révision.',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ],
+            if (today != null && today.total > 0) ...[
+              const SizedBox(height: AppSpacing.sm),
+              Text('${today.worked} sur ${today.total} cartes travaillées'),
+              const SizedBox(height: AppSpacing.xs),
+              ProgressPill(
+                value: today.worked / today.total,
+                semanticsLabel: 'Progression du planning',
+              ),
+            ],
+            if (dueCards > 0) ...[
+              const SizedBox(height: AppSpacing.lg),
+              Semantics(
+                container: true,
+                button: true,
+                excludeSemantics: true,
+                label: dueCards == 1
+                    ? 'Commencer une session de 1 carte'
+                    : 'Commencer une session de $dueCards cartes',
+                onTap: () => context.push(studyLocation),
+                child: Pressable(
+                  child: FilledButton.icon(
+                    key: const ValueKey('home-study-cta'),
+                    onPressed: () => context.push(studyLocation),
+                    icon: const Icon(AppIcons.play),
+                    label: const Text('Étudier maintenant'),
+                  ),
+                ),
+              ),
+            ],
+            if (planning != null) ...[
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.xs,
+                runSpacing: AppSpacing.xs,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Icon(
-                    AppIcons.circleCheck,
-                    size: 40,
-                    color: theme.colorScheme.primary,
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  Text('Tout est à jour', style: theme.textTheme.titleLarge),
-                  const SizedBox(height: AppSpacing.xs),
-                  Text(
-                    'Aucune carte à réviser aujourd’hui.',
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
+                  FilledButton.tonalIcon(
+                    onPressed: () => context.push(planningLocation()),
+                    icon: const Icon(AppIcons.calendarDays),
+                    label: Text(
+                      !hasPlans
+                          ? 'Créer un planning'
+                          : hasFollowUp
+                          ? 'Choisir la suite'
+                          : 'Voir le planning',
                     ),
                   ),
-                ],
-              )
-            : Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    '$dueCards',
-                    style: theme.textTheme.displayLarge?.copyWith(
-                      color: theme.colorScheme.primary,
-                    ),
-                  ),
-                  Text(
-                    dueCards == 1 ? 'carte à revoir' : 'cartes à revoir',
-                    style: theme.textTheme.titleMedium,
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Semantics(
-                    container: true,
-                    button: true,
-                    excludeSemantics: true,
-                    label: dueCards == 1
-                        ? 'Commencer une session de 1 carte'
-                        : 'Commencer une session de $dueCards cartes',
-                    onTap: () => context.push('/study'),
-                    child: Pressable(
-                      child: FilledButton.icon(
-                        key: const ValueKey('home-study-cta'),
-                        onPressed: () => context.push('/study'),
-                        icon: const Icon(AppIcons.play),
-                        label: const Text('Étudier maintenant'),
-                      ),
-                    ),
+                  TextButton(
+                    onPressed: () => context.push('/study'),
+                    child: const Text('Révision libre'),
                   ),
                 ],
               ),
+            ],
+          ],
+        ),
       ),
     );
   }
@@ -259,11 +309,15 @@ class _Overview extends StatelessWidget {
       ),
     );
     final success = StatCard(
-      value: '${(stats.successRate * 100).round()} %',
+      value:
+          stats.planning != null &&
+              stats.planning!.progress().successRate == null
+          ? '—'
+          : '${(stats.successRate * 100).round()} %',
       label: 'de réussite',
       icon: AppIcons.circleCheck,
     );
-    final hero = _HeroCard(dueCards: stats.dueCards);
+    final hero = _HeroCard(dueCards: stats.dueCards, planning: stats.planning);
     return LayoutBuilder(
       builder: (context, constraints) {
         if (_heroBeside(context, constraints.maxWidth)) {
@@ -510,6 +564,9 @@ class _CollectionCard extends StatelessWidget {
     );
     if (c.dueCards > 0) summary.write(', ${c.dueCards} à revoir');
     if (c.isDisabled) summary.write(', désactivée');
+    if (c.nextReviewAt case final next?) {
+      summary.write(', prochaine révision le ${formatPlanningDate(next)}');
+    }
 
     void open() => context.push('/collection/${c.id}');
 
@@ -579,6 +636,13 @@ class _CollectionCard extends StatelessWidget {
                                   ),
                                 ),
                               ],
+                            ),
+                          ],
+                          if (c.nextReviewAt case final next?) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Prochaine révision · ${formatPlanningDate(next)}',
+                              style: theme.textTheme.bodySmall,
                             ),
                           ],
                           const SizedBox(height: AppSpacing.md),

@@ -1,3 +1,5 @@
+import 'study_planning.dart';
+
 enum TestMode {
   multipleChoice,
   classicFlashcard,
@@ -13,7 +15,14 @@ enum DeckDifficulty { facile, moyen, difficile, avance }
 
 enum DeckStatus { nouveau, maitrise, dues }
 
-enum SyncEntityType { collection, deck, flashcard, reviewLog }
+enum SyncEntityType {
+  collection,
+  deck,
+  flashcard,
+  reviewLog,
+  studyPlan,
+  studyPreference,
+}
 
 enum SyncOperation { upsert, delete }
 
@@ -81,12 +90,14 @@ class HomeStats {
     required this.successRate,
     required this.dueCards,
     required this.totalCardsSeen,
+    this.planning,
   });
 
   final int streakDays;
   final double successRate;
   final int dueCards;
   final int totalCardsSeen;
+  final PlanningOverview? planning;
 }
 
 class CollectionListItem {
@@ -103,6 +114,7 @@ class CollectionListItem {
     required this.updatedAt,
     required this.errorCount,
     this.isDisabled = false,
+    this.nextReviewAt,
   });
 
   final String id;
@@ -117,6 +129,7 @@ class CollectionListItem {
   final DateTime updatedAt;
   final int errorCount;
   final bool isDisabled;
+  final DateTime? nextReviewAt;
 
   double get progress => totalCards == 0 ? 0 : cardsDone / totalCards;
 }
@@ -144,6 +157,7 @@ class DeckListItem {
     required this.updatedAt,
     this.errorCount = 0,
     this.isDisabled = false,
+    this.nextReviewAt,
   });
 
   final String id;
@@ -160,6 +174,7 @@ class DeckListItem {
   final DateTime updatedAt;
   final int errorCount;
   final bool isDisabled;
+  final DateTime? nextReviewAt;
 
   String get badgeLabel {
     if (status == DeckStatus.dues && dueCards > 0) {
@@ -560,6 +575,8 @@ class StudySessionState {
     this.activeDuration = Duration.zero,
     this.cardDisplayedAt,
     this.answerValidatedAt,
+    this.planningDay,
+    this.planId,
   });
 
   final String deckTitle;
@@ -591,6 +608,8 @@ class StudySessionState {
   final Duration activeDuration;
   final DateTime? cardDisplayedAt;
   final DateTime? answerValidatedAt;
+  final DateTime? planningDay;
+  final String? planId;
 
   StudyCard get currentCard => cards[currentIndex];
 
@@ -660,6 +679,8 @@ class StudySessionState {
       activeDuration: activeDuration ?? this.activeDuration,
       cardDisplayedAt: cardDisplayedAt ?? this.cardDisplayedAt,
       answerValidatedAt: answerValidatedAt ?? this.answerValidatedAt,
+      planningDay: planningDay,
+      planId: planId,
     );
   }
 }
@@ -673,6 +694,8 @@ class SavedStudySession {
     required this.currentIndex,
     required this.totalCards,
     required this.requestedMode,
+    this.planningDay,
+    this.planId,
   });
 
   final String? collectionId;
@@ -681,6 +704,8 @@ class SavedStudySession {
   final int currentIndex;
   final int totalCards;
   final TestMode? requestedMode;
+  final DateTime? planningDay;
+  final String? planId;
 }
 
 class StudyCard {
@@ -752,6 +777,7 @@ class FlashcardDueItem {
     required this.question,
     required this.dueAt,
     required this.isDueNow,
+    this.usesPlanningDate = false,
   });
 
   final String id;
@@ -760,6 +786,7 @@ class FlashcardDueItem {
   final String question;
   final DateTime dueAt;
   final bool isDueNow;
+  final bool usesPlanningDate;
 }
 
 class SessionSummary {
@@ -775,6 +802,8 @@ class SessionSummary {
     this.incorrectCardIds = const {},
     this.clozeCorrectGaps = 0,
     this.clozeTotalGaps = 0,
+    this.planningDay,
+    this.planId,
   });
 
   final String? collectionId;
@@ -788,6 +817,8 @@ class SessionSummary {
   final Set<String> incorrectCardIds;
   final int clozeCorrectGaps;
   final int clozeTotalGaps;
+  final DateTime? planningDay;
+  final String? planId;
 
   int get successCount => correctCount;
 

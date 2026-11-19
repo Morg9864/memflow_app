@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import '../../theme/app_theme.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import '../planning/planning_screen.dart';
+import '../../domain/models/study_planning.dart';
 import 'collection_due_cards_screen.dart';
 import '../../widgets/ui.dart';
 
@@ -202,11 +204,23 @@ class _CollectionDetailScreenState
     }
   }
 
-  Future<void> _launchStudy({String? deckId}) async {
-    if (deckId != null) {
-      context.push('/study?deckId=$deckId');
+  void _launchStudy({String? deckId, bool planned = false}) {
+    if (planned) {
+      context.push(
+        plannedStudyLocation(collectionId: widget.collectionId, deckId: deckId),
+      );
     } else {
-      context.push('/study?collectionId=${widget.collectionId}');
+      context.push(
+        Uri(
+          path: '/study',
+          queryParameters: {
+            if (deckId != null)
+              'deckId': deckId
+            else
+              'collectionId': widget.collectionId,
+          },
+        ).toString(),
+      );
     }
   }
 
@@ -298,10 +312,6 @@ class _CollectionDetailScreenState
     final collection = ref.watch(collectionProvider(widget.collectionId));
     final decks = ref.watch(collectionDecksProvider(widget.collectionId));
     final savedSession = ref.watch(activeStudySessionProvider).asData?.value;
-    final collectionCanResume =
-        savedSession?.collectionId == widget.collectionId &&
-        savedSession?.deckId == null;
-
     return AppScaffold(
       child: collection.when(
         data: (item) {
@@ -327,6 +337,13 @@ class _CollectionDetailScreenState
           }
           return LayoutBuilder(
             builder: (context, constraints) {
+              final planned = item.dueCards > 0;
+              final collectionCanResume =
+                  savedSession?.collectionId == widget.collectionId &&
+                  savedSession?.deckId == null &&
+                  savedSession?.planId == null &&
+                  savedSession?.planningDay ==
+                      (planned ? studyDay(DateTime.now()) : null);
               final inlineStudy =
                   constraints.maxWidth >= AppBreakpoints.tablet &&
                   constraints.maxWidth > constraints.maxHeight;
@@ -375,7 +392,7 @@ class _CollectionDetailScreenState
                       : () => _chooseCollectionIcon(item),
                   onStudy: _busy || item.isDisabled
                       ? null
-                      : () => _launchStudy(),
+                      : () => _launchStudy(planned: planned),
                   inlineStudy: inlineStudy,
                   canResume: collectionCanResume,
                   onViewDue: item.isDisabled
@@ -389,6 +406,24 @@ class _CollectionDetailScreenState
                           ),
                         ),
                 ),
+                if (!item.isDisabled)
+                  Wrap(
+                    spacing: AppSpacing.sm,
+                    children: [
+                      TextButton.icon(
+                        onPressed: () => context.push(
+                          planningLocation(collectionId: item.id),
+                        ),
+                        icon: const Icon(AppIcons.calendarDays, size: 18),
+                        label: const Text('Planifier'),
+                      ),
+                      if (planned)
+                        TextButton(
+                          onPressed: () => _launchStudy(),
+                          child: const Text('Révision libre'),
+                        ),
+                    ],
+                  ),
                 Padding(
                   padding: const EdgeInsets.only(
                     top: AppSpacing.md,
@@ -418,7 +453,7 @@ class _CollectionDetailScreenState
                       child: _StudyButton(
                         onPressed: _busy || item.isDisabled
                             ? null
-                            : () => _launchStudy(),
+                            : () => _launchStudy(planned: planned),
                         expanded: true,
                         canResume: collectionCanResume,
                       ),
@@ -517,7 +552,13 @@ class _CollectionDetailScreenState
 
   Widget _buildDeckCard(CollectionListItem collection, DeckListItem deck) {
     final savedSession = ref.watch(activeStudySessionProvider).asData?.value;
-    final canResume = savedSession?.deckId == deck.id;
+    final planned = deck.dueCards > 0;
+    final canResume =
+        savedSession?.deckId == deck.id &&
+        savedSession?.collectionId == (planned ? collection.id : null) &&
+        savedSession?.planId == null &&
+        savedSession?.planningDay ==
+            (planned ? studyDay(DateTime.now()) : null);
     return DeckCard(
       deck: deck,
       canResume: canResume,
@@ -528,7 +569,17 @@ class _CollectionDetailScreenState
       resumeProgress: canResume
           ? 'À reprendre · carte ${savedSession!.currentIndex + 1} sur ${savedSession.totalCards}'
           : null,
-      onTap: collection.isDisabled ? null : () => _launchStudy(deckId: deck.id),
+      onTap: collection.isDisabled
+          ? null
+          : () => _launchStudy(deckId: deck.id, planned: planned),
+      onPlan: collection.isDisabled || deck.isDisabled
+          ? null
+          : () => context.push(
+              planningLocation(collectionId: collection.id, deckId: deck.id),
+            ),
+      onFreeStudy: collection.isDisabled || deck.isDisabled || !planned
+          ? null
+          : () => _launchStudy(deckId: deck.id),
       onDelete: _busy ? null : () => _deleteDeck(deck),
       onToggleDisabled: _busy ? null : () => _toggleDeckDisabled(deck),
       onViewCards: () => context.push(
@@ -843,7 +894,7 @@ class _CollectionProgress extends StatelessWidget {
                       Expanded(
                         child: _ProgressValue(
                           value: c.dueCards,
-                          label: 'À étudier / réviser',
+                          label: 'À réviser aujourd’hui',
                         ),
                       ),
                     ],
@@ -865,11 +916,18 @@ class _CollectionProgress extends StatelessWidget {
                       const SizedBox(height: AppSpacing.sm),
                       _ProgressValue(
                         value: c.dueCards,
-                        label: 'À étudier / réviser',
+                        label: 'À réviser aujourd’hui',
                         horizontal: true,
                       ),
                     ],
                   ),
+                if (c.nextReviewAt case final next?) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Prochaine révision · ${formatPlanningDate(next)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
                 if (onViewDue != null) ...[
                   const SizedBox(height: AppSpacing.sm),
                   Align(
@@ -1106,6 +1164,8 @@ class DeckCard extends StatelessWidget {
     this.canResume = false,
     this.resumeProgress,
     this.onStudyErrors,
+    this.onPlan,
+    this.onFreeStudy,
     this.onDelete,
     this.onViewCards,
     this.onToggleDisabled,
@@ -1116,6 +1176,8 @@ class DeckCard extends StatelessWidget {
   final bool canResume;
   final String? resumeProgress;
   final VoidCallback? onStudyErrors;
+  final VoidCallback? onPlan;
+  final VoidCallback? onFreeStudy;
   final VoidCallback? onDelete;
   final VoidCallback? onViewCards;
   final VoidCallback? onToggleDisabled;
@@ -1127,7 +1189,9 @@ class DeckCard extends StatelessWidget {
         onDelete != null ||
         onViewCards != null ||
         onToggleDisabled != null ||
-        onStudyErrors != null;
+        onStudyErrors != null ||
+        onPlan != null ||
+        onFreeStudy != null;
     final isUnavailable = deck.isDisabled || onTap == null;
     return Pressable(
       enabled: !isUnavailable,
@@ -1170,6 +1234,16 @@ class DeckCard extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: AppSpacing.sm),
+                        if (!isUnavailable && deck.dueCards > 0)
+                          Text(
+                            '${deck.dueCards} à revoir aujourd’hui',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        if (deck.nextReviewAt case final next?)
+                          Text(
+                            'Prochaine révision · ${formatPlanningDate(next)}',
+                            style: theme.textTheme.bodySmall,
+                          ),
                         if (canResume) ...[
                           Text(
                             resumeProgress ?? 'À reprendre',
@@ -1201,9 +1275,29 @@ class DeckCard extends StatelessWidget {
                             onDelete?.call();
                           case _DeckAction.studyErrors:
                             onStudyErrors?.call();
+                          case _DeckAction.plan:
+                            onPlan?.call();
+                          case _DeckAction.freeStudy:
+                            onFreeStudy?.call();
                         }
                       },
                       itemBuilder: (_) => [
+                        if (onPlan != null)
+                          const PopupMenuItem(
+                            value: _DeckAction.plan,
+                            child: _MenuRow(
+                              icon: AppIcons.calendarDays,
+                              label: 'Planifier',
+                            ),
+                          ),
+                        if (onFreeStudy != null)
+                          const PopupMenuItem(
+                            value: _DeckAction.freeStudy,
+                            child: _MenuRow(
+                              icon: AppIcons.play,
+                              label: 'Révision libre',
+                            ),
+                          ),
                         if (onViewCards != null)
                           const PopupMenuItem(
                             value: _DeckAction.viewCards,
@@ -1261,4 +1355,11 @@ class DeckCard extends StatelessWidget {
   }
 }
 
-enum _DeckAction { viewCards, delete, toggleDisabled, studyErrors }
+enum _DeckAction {
+  viewCards,
+  delete,
+  toggleDisabled,
+  studyErrors,
+  plan,
+  freeStudy,
+}

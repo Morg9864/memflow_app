@@ -63,7 +63,14 @@ class SyncService {
                  results.any((result) => result != ConnectivityResult.none),
            );
 
-  static const _tables = ['collections', 'decks', 'flashcards', 'review_logs'];
+  static const _tables = [
+    'collections',
+    'decks',
+    'flashcards',
+    'review_logs',
+    'study_plans',
+    'study_preferences',
+  ];
 
   final AppDatabase _db;
   final SupabaseClient _client;
@@ -336,20 +343,37 @@ class SyncService {
         await _acknowledge(session, entry);
         continue;
       }
-      await _client.from(_tableOf(entry.entityType)).upsert({
-        ...payload,
-        'user_id': session.userId,
-      });
+      try {
+        await _client.from(_tableOf(entry.entityType)).upsert({
+          ...payload,
+          'user_id': session.userId,
+        });
+      } on PostgrestException catch (error) {
+        // A remote course deletion wins over a plan still queued offline.
+        if (entry.entityType != SyncEntityType.studyPlan ||
+            error.code != '23503') {
+          rethrow;
+        }
+      }
       await _acknowledge(session, entry);
     }
 
     for (final entry in deletes) {
       _checkSession(session);
-      await _client
-          .from(_tableOf(entry.entityType))
-          .delete()
-          .eq('id', entry.entityId)
-          .eq('user_id', session.userId);
+      final table = _client.from(_tableOf(entry.entityType));
+      if (entry.entityType == SyncEntityType.studyPlan) {
+        final deletedAt = entry.updatedAt.toUtc().toIso8601String();
+        await table
+            .update({'deleted_at': deletedAt, 'updated_at': deletedAt})
+            .eq('id', entry.entityId)
+            .eq('user_id', session.userId)
+            .lte('updated_at', deletedAt);
+      } else {
+        await table
+            .delete()
+            .eq(_idColumn(entry.entityType), entry.entityId)
+            .eq('user_id', session.userId);
+      }
       await _acknowledge(session, entry);
     }
   }
@@ -363,6 +387,18 @@ class SyncService {
     final remoteCollections = await _fetchAll('collections', session);
     final remoteDecks = await _fetchAll('decks', session);
     final remoteFlashcards = await _fetchAll('flashcards', session);
+    final remotePlans = await _fetchAll(
+      'study_plans',
+      session,
+      orderByCreation: false,
+      excludeDeleted: true,
+    );
+    final remotePreferences = await _fetchAll(
+      'study_preferences',
+      session,
+      orderByCreation: false,
+      idColumn: 'user_id',
+    );
 
     await _localTransaction(session, () async {
       // Resolve protection after the network awaits, atomically with applying
@@ -383,6 +419,34 @@ class SyncService {
         remoteFlashcards,
         protectedIds[SyncEntityType.flashcard]!,
       );
+
+      final protectedPlans = protectedIds[SyncEntityType.studyPlan]!;
+      final protectedPreferences =
+          protectedIds[SyncEntityType.studyPreference]!;
+      await _applyRemoteRows(
+        SyncEntityType.studyPlan,
+        remotePlans,
+        protectedPlans,
+      );
+      await _applyRemoteRows(
+        SyncEntityType.studyPreference,
+        remotePreferences,
+        protectedPreferences,
+      );
+      await (_db.delete(_db.studyPlans)..where(
+            (row) => row.id.isNotIn(_keepIds(remotePlans, protectedPlans)),
+          ))
+          .go();
+      await (_db.delete(_db.studyPreferences)..where(
+            (row) => row.userId.isNotIn(
+              _keepIds(
+                remotePreferences,
+                protectedPreferences,
+                idColumn: 'user_id',
+              ),
+            ),
+          ))
+          .go();
 
       // Ce qui a disparu côté distant disparaît côté local, sauf ce qui porte
       // une intention pas encore poussée.
@@ -429,6 +493,13 @@ class SyncService {
     ids[SyncEntityType.collection]!.addAll(
       cards.map((row) => row.collectionId),
     );
+    final plans = await (_db.select(
+      _db.studyPlans,
+    )..where((row) => row.id.isIn(ids[SyncEntityType.studyPlan]!))).get();
+    ids[SyncEntityType.deck]!.addAll(plans.map((row) => row.deckId).nonNulls);
+    ids[SyncEntityType.collection]!.addAll(
+      plans.map((row) => row.collectionId),
+    );
     final decks = await (_db.select(
       _db.decks,
     )..where((row) => row.id.isIn(ids[SyncEntityType.deck]!))).get();
@@ -438,14 +509,14 @@ class SyncService {
     return ids;
   }
 
-  /// Les journaux ne sont jamais modifiés ni supprimés directement : on ne
-  /// rapatrie que ce qui a été écrit depuis le dernier passage.
+  /// Le curseur suit la réception serveur pour inclure les réponses prises
+  /// hors ligne. L'activité reste datée par l'heure de la réponse.
   Future<void> _pullReviewLogs(_SyncSession session) async {
     final cursor = await _localTransaction(
       session,
-      () => _db.readMetaDateTime(AppDatabase.reviewLogCursorKey),
+      () => _db.readMetaDateTime(AppDatabase.reviewLogReceiptCursorKey),
     );
-    final rows = await _fetchAll('review_logs', session, createdAfter: cursor);
+    final rows = await _fetchAll('review_logs', session, receivedSince: cursor);
     if (rows.isEmpty) {
       return;
     }
@@ -453,22 +524,26 @@ class SyncService {
     DateTime? newest = cursor;
     await _localTransaction(session, () async {
       for (final row in rows) {
+        final createdAt = DateTime.parse(row['created_at'] as String);
         await _db.applyRemoteRecord(
           RemoteSyncRecord(
             entityType: SyncEntityType.reviewLog,
             entityId: row['id'] as String,
             payload: row,
-            updatedAt: DateTime.parse(row['created_at'] as String),
+            updatedAt: createdAt,
           ),
         );
-        final createdAt = DateTime.parse(row['created_at'] as String);
-        if (newest == null || createdAt.isAfter(newest!)) {
-          newest = createdAt;
+        final receivedAt = DateTime.parse(row['received_at'] as String);
+        if (newest == null || receivedAt.isAfter(newest!)) {
+          newest = receivedAt;
         }
       }
       await _db.deleteOrphans();
       if (newest != null) {
-        await _db.writeMetaDateTime(AppDatabase.reviewLogCursorKey, newest!);
+        await _db.writeMetaDateTime(
+          AppDatabase.reviewLogReceiptCursorKey,
+          newest!,
+        );
       }
     });
   }
@@ -479,7 +554,7 @@ class SyncService {
     Set<String> protectedIds,
   ) async {
     for (final row in rows) {
-      final id = row['id'] as String;
+      final id = row[_idColumn(entityType)] as String;
       if (protectedIds.contains(id)) {
         continue;
       }
@@ -496,7 +571,7 @@ class SyncService {
     // A pending child wins over a remote parent deletion. Restore any missing
     // local ancestors too, so the next push can satisfy remote foreign keys.
     final missing = protectedIds.difference(
-      rows.map((row) => row['id'] as String).toSet(),
+      rows.map((row) => row[_idColumn(entityType)] as String).toSet(),
     );
     if (missing.isEmpty) return;
     final pendingIds = {
@@ -516,10 +591,11 @@ class SyncService {
 
   static List<String> _keepIds(
     List<Map<String, dynamic>> remoteRows,
-    Set<String> protectedIds,
-  ) {
+    Set<String> protectedIds, {
+    String idColumn = 'id',
+  }) {
     return {
-      ...remoteRows.map((row) => row['id'] as String),
+      ...remoteRows.map((row) => row[idColumn] as String),
       ...protectedIds,
     }.toList();
   }
@@ -527,11 +603,17 @@ class SyncService {
   Future<List<Map<String, dynamic>>> _fetchAll(
     String table,
     _SyncSession session, {
-    DateTime? createdAfter,
+    DateTime? receivedSince,
+    bool excludeDeleted = false,
+    bool orderByCreation = true,
+    String idColumn = 'id',
   }) async {
     const pageSize = 500;
     final rows = <Map<String, dynamic>>[];
     var offset = 0;
+    final rewindReceiptTo = DateTime.now().toUtc().subtract(
+      const Duration(minutes: 1),
+    );
 
     while (true) {
       _checkSession(session);
@@ -539,12 +621,22 @@ class SyncService {
           .from(table)
           .select()
           .eq('user_id', session.userId);
-      if (createdAfter != null) {
-        query = query.gt('created_at', createdAfter.toUtc().toIso8601String());
+      if (excludeDeleted) query = query.isFilter('deleted_at', null);
+      if (table == 'review_logs') {
+        if (receivedSince != null) {
+          // A recently stamped review may commit after another one already
+          // observed by this client. Re-read that short interval, while
+          // avoiding an endless replay of the migration's legacy timestamp.
+          query = receivedSince.isBefore(rewindReceiptTo)
+              ? query.gt('received_at', receivedSince.toUtc().toIso8601String())
+              : query.gte('received_at', rewindReceiptTo.toIso8601String());
+        }
+        query = query.order('received_at', ascending: true);
+      } else if (orderByCreation) {
+        query = query.order('created_at', ascending: true);
       }
       final page = await query
-          .order('created_at', ascending: true)
-          .order('id', ascending: true)
+          .order(idColumn, ascending: true)
           .range(offset, offset + pageSize - 1);
       _checkSession(session);
       final mapped = (page as List)
@@ -588,6 +680,21 @@ class SyncService {
           _db.reviewLogs,
         )..where((table) => table.id.equals(entityId))).getSingleOrNull();
         return row == null ? null : reviewLogPayload(row);
+      case SyncEntityType.studyPlan:
+        final row = await (_db.select(
+          _db.studyPlans,
+        )..where((table) => table.id.equals(entityId))).getSingleOrNull();
+        return row == null ? null : AppDatabase.studyPlanPayload(row);
+      case SyncEntityType.studyPreference:
+        final row = await (_db.select(
+          _db.studyPreferences,
+        )..where((table) => table.userId.equals(entityId))).getSingleOrNull();
+        return row == null
+            ? null
+            : {
+                'srs_enabled': row.srsEnabled,
+                'updated_at': row.updatedAt.toUtc().toIso8601String(),
+              };
     }
   }
 
@@ -751,6 +858,8 @@ class SyncService {
     SyncEntityType.deck => 1,
     SyncEntityType.flashcard => 2,
     SyncEntityType.reviewLog => 3,
+    SyncEntityType.studyPlan => 2,
+    SyncEntityType.studyPreference => 0,
   };
 
   static String _tableOf(SyncEntityType type) => switch (type) {
@@ -758,7 +867,12 @@ class SyncService {
     SyncEntityType.deck => 'decks',
     SyncEntityType.flashcard => 'flashcards',
     SyncEntityType.reviewLog => 'review_logs',
+    SyncEntityType.studyPlan => 'study_plans',
+    SyncEntityType.studyPreference => 'study_preferences',
   };
+
+  static String _idColumn(SyncEntityType type) =>
+      type == SyncEntityType.studyPreference ? 'user_id' : 'id';
 }
 
 class _SyncSession {

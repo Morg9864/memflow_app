@@ -1,20 +1,40 @@
 import 'package:memflow/theme/app_icons.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../app/providers.dart';
+import '../planning/planning_screen.dart';
 
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 import '../../domain/models/models.dart';
 
-class SessionSummaryScreen extends StatelessWidget {
+class SessionSummaryScreen extends ConsumerWidget {
   const SessionSummaryScreen({super.key, required this.summary});
 
   final SessionSummary summary;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final counts = summary.reviewCounts;
+    final planning = summary.planningDay == null
+        ? null
+        : ref.watch(planningOverviewProvider).value;
+    final sessionPlan = planning?.todaysPlans
+        .where((plan) => plan.id == summary.planId)
+        .firstOrNull;
+    final remaining = summary.planId == null || sessionPlan != null
+        ? planning
+              ?.progress(
+                collectionId: summary.collectionId,
+                deckId: summary.deckId,
+                plan: sessionPlan,
+              )
+              .remaining
+        : null;
+
     // Au-delà d'un texte agrandi, deux colonnes ne tiennent plus: on empile.
     final stack = largeText(context);
     final tiles = <Widget>[
@@ -104,6 +124,32 @@ class SessionSummaryScreen extends StatelessWidget {
                     tone: theme.colorScheme.onSurfaceVariant,
                   ),
                   const SizedBox(height: 24),
+                  if (planning != null &&
+                      summary.planningDay == planning.today) ...[
+                    StudyFollowUps(
+                      planning: planning,
+                      collectionId: summary.collectionId,
+                      deckId: summary.deckId,
+                    ),
+                    if (remaining?.isNotEmpty == true)
+                      FilledButton.icon(
+                        onPressed: () => context.go(
+                          plannedStudyLocation(
+                            collectionId: summary.collectionId,
+                            deckId: summary.deckId,
+                            planId: summary.planId,
+                          ),
+                        ),
+                        icon: const Icon(AppIcons.play),
+                        label: Text(
+                          'Continuer le planning (${remaining!.length})',
+                        ),
+                      ),
+                    TextButton(
+                      onPressed: () => context.go(planningLocation()),
+                      child: const Text('Voir le planning'),
+                    ),
+                  ],
                   if (summary.incorrectCount > 0)
                     TextButton.icon(
                       onPressed: () =>
@@ -124,16 +170,17 @@ class SessionSummaryScreen extends StatelessWidget {
                     child: const Text('Retour à la collection'),
                   ),
                   const SizedBox(height: 10),
-                  FilledButton.tonal(
-                    style: AppTheme.secondaryAction,
-                    onPressed: () {
-                      final params = summary.deckId != null
-                          ? '?deckId=${summary.deckId}'
-                          : '?collectionId=${summary.collectionId}';
-                      context.go('/study$params');
-                    },
-                    child: const Text('Refaire une session'),
-                  ),
+                  if (summary.planningDay == null)
+                    FilledButton.tonal(
+                      style: AppTheme.secondaryAction,
+                      onPressed: () {
+                        final params = summary.deckId != null
+                            ? '?deckId=${summary.deckId}'
+                            : '?collectionId=${summary.collectionId}';
+                        context.go('/study$params');
+                      },
+                      child: const Text('Refaire une session'),
+                    ),
                   const SizedBox(height: 10),
                   TextButton(
                     onPressed: () => context.go('/'),

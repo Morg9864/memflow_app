@@ -7,6 +7,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import '../../domain/models/study_planning.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
 
@@ -38,7 +39,20 @@ import '../../widgets/ui.dart';
 final statisticsOverviewProvider = StreamProvider<StatisticsOverview>((ref) {
   return ref.watch(appRepositoryProvider).watchStatisticsOverview();
 });
-
+final scopedStatisticsProvider =
+    StreamProvider.family<
+      StatisticsOverview,
+      ({String? collectionId, String? deckId})
+    >((ref, scope) {
+      final repository = ref.watch(appRepositoryProvider);
+      if (scope.collectionId == null) {
+        return repository.watchStatisticsOverview();
+      }
+      return repository.watchScopedStatistics(
+        collectionId: scope.collectionId!,
+        deckId: scope.deckId,
+      );
+    });
 const _windowDays = 14;
 
 /// Largeur utile à partir de laquelle activité et tendance se placent côte à côte.
@@ -50,12 +64,32 @@ String _pct(double value) => '${(value * 100).round()} %';
 
 String _plural(int n, String one, String many) => '$n ${n > 1 ? many : one}';
 
-class StatisticsScreen extends ConsumerWidget {
+class StatisticsScreen extends ConsumerStatefulWidget {
   const StatisticsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final stats = ref.watch(statisticsOverviewProvider);
+  ConsumerState<StatisticsScreen> createState() => _StatisticsScreenState();
+}
+
+class _StatisticsScreenState extends ConsumerState<StatisticsScreen> {
+  String? _selectedScope;
+
+  @override
+  Widget build(BuildContext context) {
+    final planning = ref.watch(planningOverviewProvider).value;
+    final selected = _selectedScope?.split(':');
+    final collectionId = selected?.first == 'collection'
+        ? selected?.last
+        : selected?.first == 'deck'
+        ? planning?.decks
+              .where((deck) => deck.id == selected?.last)
+              .firstOrNull
+              ?.collectionId
+        : null;
+    final deckId = selected?.first == 'deck' ? selected?.last : null;
+    final stats = ref.watch(
+      scopedStatisticsProvider((collectionId: collectionId, deckId: deckId)),
+    );
 
     return AppScaffold(
       child: stats.when(
@@ -64,7 +98,49 @@ class StatisticsScreen extends ConsumerWidget {
             children: [
               const _Header(),
               const SizedBox(height: AppSpacing.xl),
+              if (planning != null && planning.collections.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpacing.lg),
+                  child: DropdownButtonFormField<String?>(
+                    initialValue: _selectedScope,
+                    decoration: const InputDecoration(
+                      labelText: 'Filtrer les statistiques par cours',
+                    ),
+                    items: [
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('Tous les cours'),
+                      ),
+                      for (final collection in planning.collections)
+                        DropdownMenuItem<String?>(
+                          value: 'collection:${collection.id}',
+                          child: Text(collection.name),
+                        ),
+                      for (final deck in planning.decks)
+                        DropdownMenuItem<String?>(
+                          value: 'deck:${deck.id}',
+                          child: Text(
+                            '${planning.collections.where((item) => item.id == deck.collectionId).firstOrNull?.name ?? 'Cours'} · ${deck.name}',
+                          ),
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _selectedScope = value),
+                  ),
+                ),
               _KpiRow(data: data),
+              Consumer(
+                builder: (context, ref, child) {
+                  final planning = ref.watch(planningOverviewProvider);
+                  return planning.maybeWhen(
+                    data: (value) => Padding(
+                      padding: const EdgeInsets.only(top: AppSpacing.lg),
+                      child: _PlanningActivity(planning: value),
+                    ),
+                    orElse: () => const SizedBox.shrink(),
+                  );
+                },
+              ),
               const SizedBox(height: AppSpacing.xl),
               LayoutBuilder(
                 builder: (context, constraints) {
@@ -159,6 +235,48 @@ class StatisticsScreen extends ConsumerWidget {
           title: 'Statistiques indisponibles',
           message: 'Impossible de charger tes statistiques. Réessaie.',
           onRetry: () => ref.invalidate(statisticsOverviewProvider),
+        ),
+      ),
+    );
+  }
+}
+
+class _PlanningActivity extends StatelessWidget {
+  const _PlanningActivity({required this.planning});
+
+  final PlanningOverview planning;
+
+  @override
+  Widget build(BuildContext context) {
+    if (planning.activePlans.isEmpty) return const SizedBox.shrink();
+    final activity = planning.recentActivity();
+    final rate = planning.progress().successRate;
+    final theme = Theme.of(context);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Planning des 14 derniers jours',
+              style: theme.textTheme.titleMedium,
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              '${activity.worked} créneaux travaillés sur ${activity.planned}',
+              style: theme.textTheme.bodyLarge,
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              rate == null
+                  ? 'Réussite du jour : aucune réponse'
+                  : 'Réussite du jour : ${_pct(rate)}',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ],
         ),
       ),
     );

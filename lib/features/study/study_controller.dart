@@ -10,7 +10,8 @@ export 'study_rules.dart' show ClozeToken, StudyRules;
 /// Coordinates persistence with the study rules.
 class StudyController {
   StudyController(AppRepository repository, {math.Random? random})
-    : _loadSession = repository.startStudySession,
+    : _repository = repository,
+      _loadSession = repository.startStudySession,
       _submitReview = repository.submitReview,
       _submitReviewWithId = repository.submitReview,
       _saveSession = repository.saveStudySession,
@@ -65,7 +66,8 @@ class StudyController {
     })?
     loadDeckErrorSession,
     math.Random? random,
-  }) : _loadSession = loadSession,
+  }) : _repository = null,
+       _loadSession = loadSession,
        _submitReview = submitReview,
        _submitReviewWithId =
            submitReviewWithId ??
@@ -107,6 +109,7 @@ class StudyController {
            }),
        rules = StudyRules(random: random);
 
+  final AppRepository? _repository;
   final Future<StudySessionState> Function({
     String? collectionId,
     String? deckId,
@@ -196,6 +199,30 @@ class StudyController {
     String? collectionId,
     String? deckId,
   }) => _modeAvailability(collectionId: collectionId, deckId: deckId);
+
+  Future<StudyModeAvailability> planningModeAvailability({
+    String? collectionId,
+    String? deckId,
+    String? planId,
+  }) => _repository!.planningModeAvailability(
+    collectionId: collectionId,
+    deckId: deckId,
+    planId: planId,
+  );
+
+  Future<StudySessionState> loadPlanned({
+    String? collectionId,
+    String? deckId,
+    String? planId,
+    TestMode? forcedMode,
+    required int sessionCardLimit,
+  }) => _repository!.startPlannedStudySession(
+    collectionId: collectionId,
+    deckId: deckId,
+    planId: planId,
+    forcedMode: forcedMode,
+    sessionCardLimit: sessionCardLimit,
+  );
 
   Future<StudySessionState> loadErrorsOnly({
     String? collectionId,

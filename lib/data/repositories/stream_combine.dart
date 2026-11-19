@@ -96,6 +96,17 @@ Stream<R> _combineLatest<R>(
   return controller.stream;
 }
 
+Stream<R> combineLatest2<A, B, R>(
+  Stream<A> streamA,
+  Stream<B> streamB,
+  R Function(A a, B b) combine,
+) {
+  return _combineLatest([
+    streamA.cast<Object?>(),
+    streamB.cast<Object?>(),
+  ], (values) => combine(values[0] as A, values[1] as B));
+}
+
 Stream<R> combineLatest3<A, B, C, R>(
   Stream<A> streamA,
   Stream<B> streamB,

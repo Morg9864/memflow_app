@@ -77,6 +77,7 @@ class SettingsScreen extends ConsumerWidget {
           SettingsGroup(
             label: 'Révision',
             children: [
+              const _SrsSetting(),
               SettingsRow(
                 icon: AppIcons.layers,
                 title: 'Cartes par session',
@@ -171,6 +172,48 @@ class SettingsScreen extends ConsumerWidget {
     );
     if (result != null) {
       await ref.read(sessionCardLimitProvider.notifier).setLimit(result);
+    }
+  }
+}
+
+class _SrsSetting extends ConsumerStatefulWidget {
+  const _SrsSetting();
+
+  @override
+  ConsumerState<_SrsSetting> createState() => _SrsSettingState();
+}
+
+class _SrsSettingState extends ConsumerState<_SrsSetting> {
+  bool _saving = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final setting = ref.watch(srsEnabledProvider);
+    return SwitchListTile(
+      secondary: const Icon(AppIcons.clock3),
+      title: const Text('Répétition espacée (SRS)'),
+      subtitle: const Text(
+        'Utiliser les échéances calculées pour les cartes de tes séances.',
+      ),
+      value: setting.value ?? false,
+      onChanged: _saving || !setting.hasValue ? null : _save,
+    );
+  }
+
+  Future<void> _save(bool enabled) async {
+    setState(() => _saving = true);
+    try {
+      await ref.read(appRepositoryProvider).setSrsEnabled(enabled);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Le réglage n’a pas pu être enregistré.'),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 }

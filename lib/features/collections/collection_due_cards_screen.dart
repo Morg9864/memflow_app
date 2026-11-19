@@ -177,8 +177,8 @@ class _CollectionDueCardsScreenState
 
     if (state.items.isEmpty) {
       return const EmptyState(
-        title: 'Aucune carte',
-        message: 'Cette collection ne contient aucune carte active.',
+        title: 'Aucune échéance',
+        message: 'Aucune carte de cette collection n’est prévue à réviser.',
       );
     }
 
@@ -227,6 +227,10 @@ class _DueCardTile extends StatelessWidget {
     final isDueNow = card.isDueNow;
     final dueLabel = isDueNow
         ? 'now'
+        : card.usesPlanningDate
+        ? DateFormat('dd/MM/yyyy').format(
+            DateTime.utc(card.dueAt.year, card.dueAt.month, card.dueAt.day),
+          )
         : DateFormat('dd/MM/yyyy HH:mm').format(card.dueAt.toLocal());
 
     return Card(
@@ -275,7 +279,9 @@ class _DueCardTile extends StatelessWidget {
                         const SizedBox(width: AppSpacing.sm),
                         Expanded(
                           child: Text(
-                            'Prochaine révision : $dueLabel',
+                            card.usesPlanningDate
+                                ? 'Cours prévu : $dueLabel'
+                                : 'Prochaine révision : $dueLabel',
                             style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.onSurface,
                             ),
@@ -298,7 +304,7 @@ class _DueCardTile extends StatelessWidget {
                   ),
                 ),
               )
-            else
+            else if (!card.usesPlanningDate)
               PopupMenuButton<_DueCardAction>(
                 tooltip: 'Modifier la date',
                 icon: const Icon(AppIcons.ellipsis),

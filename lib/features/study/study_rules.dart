@@ -122,14 +122,16 @@ class StudyRules {
     collectionId: state.collectionId,
     deckId: state.deckId,
     deckTitle: state.deckTitle,
+    planningDay: state.planningDay,
+    planId: state.planId,
     totalCards: state.cards.length,
     reviewCounts: state.reviewCounts,
     correctCount: state.correctCount,
     incorrectCount: state.incorrectCount,
     duration: state.startedAt == null || state.completedAt == null
         ? state.activeDuration == Duration.zero
-            ? null
-            : state.activeDuration
+              ? null
+              : state.activeDuration
         : state.activeDuration == Duration.zero
         ? state.completedAt!.difference(state.startedAt!)
         : state.activeDuration,

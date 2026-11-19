@@ -14,6 +14,7 @@ import '../../app/app_scaffold_messenger.dart';
 import '../../app/session_card_limit_controller.dart';
 import '../../app/providers.dart';
 import '../../domain/models/models.dart';
+import '../../domain/models/study_planning.dart';
 import '../../domain/services/card_mode_service.dart';
 import '../../theme/app_theme.dart';
 import '../../widgets/ui.dart';
@@ -28,6 +29,8 @@ class StudyScreen extends ConsumerStatefulWidget {
     this.forcedMode,
     this.errorCardIds,
     this.errorDeckId,
+    this.isPlanned = false,
+    this.planId,
     this.controller,
   });
 
@@ -36,6 +39,8 @@ class StudyScreen extends ConsumerStatefulWidget {
   final TestMode? forcedMode;
   final Set<String>? errorCardIds;
   final String? errorDeckId;
+  final bool isPlanned;
+  final String? planId;
   final StudyController? controller;
 
   @override
@@ -148,16 +153,29 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
         widget.errorDeckId == null &&
         saved != null &&
         saved.collectionId == widget.collectionId &&
-        saved.deckId == widget.deckId) {
+        saved.deckId == widget.deckId &&
+        saved.planningDay ==
+            (widget.isPlanned ? studyDay(DateTime.now()) : null) &&
+        saved.planId == widget.planId) {
+      if (_choosingMode) setState(() => _choosingMode = false);
       await _load(forcedMode: saved.requestedMode);
       return;
     }
     final StudyModeAvailability availability;
     try {
-      availability = await _controller.modeAvailability(
-        collectionId: widget.collectionId,
-        deckId: widget.deckId,
-      );
+      availability = widget.isPlanned
+          ? await _controller.planningModeAvailability(
+              collectionId: widget.collectionId,
+              deckId: widget.deckId,
+              planId: widget.planId,
+            )
+          : await _controller.modeAvailability(
+              collectionId: widget.collectionId,
+              deckId: widget.deckId,
+            );
+      if (widget.isPlanned && availability.total == 0) {
+        throw StateError('Aucune carte prévue à travailler.');
+      }
     } catch (error) {
       if (mounted) {
         setState(() {
@@ -184,7 +202,15 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
 
   Future<void> _load({TestMode? forcedMode}) async {
     try {
-      final session = widget.errorDeckId != null
+      final session = widget.isPlanned
+          ? await _controller.loadPlanned(
+              collectionId: widget.collectionId,
+              deckId: widget.deckId,
+              planId: widget.planId,
+              forcedMode: forcedMode,
+              sessionCardLimit: ref.read(sessionCardLimitProvider),
+            )
+          : widget.errorDeckId != null
           ? await _controller.loadDeckErrorsOnly(
               deckId: widget.errorDeckId!,
               sessionCardLimit: ref.read(sessionCardLimitProvider),

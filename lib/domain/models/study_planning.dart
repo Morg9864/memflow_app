@@ -1,0 +1,318 @@
+import 'models.dart';
+
+/// Planning dates are civil days in UTC. Date pickers supply civil dates, so
+/// their year/month/day are copied into UTC before passing them to the domain.
+DateTime studyDay(DateTime instant) {
+  final utc = instant.toUtc();
+  return DateTime.utc(utc.year, utc.month, utc.day);
+}
+
+String studyDayKey(DateTime day) => day.toIso8601String().substring(0, 10);
+
+DateTime? parseStudyDay(Object? value) {
+  if (value is! String ||
+      value.startsWith('0000') ||
+      !RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(value)) {
+    return null;
+  }
+  final parsed = DateTime.tryParse('${value}T00:00:00Z');
+  return parsed != null && studyDayKey(parsed) == value ? parsed : null;
+}
+
+class StudyPlan {
+  const StudyPlan({
+    required this.id,
+    required this.collectionId,
+    this.deckId,
+    required this.startDate,
+    this.weekdays = const {},
+    this.followUps = const {},
+  });
+
+  final String id;
+  final String collectionId;
+  final String? deckId;
+  final DateTime startDate;
+  final Set<int> weekdays;
+  final Map<DateTime, DateTime?> followUps;
+
+  bool get isRecurring => weekdays.isNotEmpty;
+
+  bool covers(String collectionId, String deckId) =>
+      this.collectionId == collectionId &&
+      (this.deckId == null || this.deckId == deckId);
+
+  Iterable<DateTime> get oneOffDates sync* {
+    if (isRecurring) return;
+    DateTime? date = startDate;
+    while (date != null) {
+      yield date;
+      final next = followUps[date];
+      if (next == null || !next.isAfter(date)) return;
+      date = next;
+    }
+  }
+
+  bool occursOn(DateTime day) => isRecurring
+      ? !day.isBefore(startDate) && weekdays.contains(day.weekday)
+      : oneOffDates.contains(day);
+
+  DateTime? nextOnOrAfter(DateTime day) {
+    if (!isRecurring) {
+      for (final date in oneOffDates) {
+        if (!date.isBefore(day) && !followUps.containsKey(date)) return date;
+      }
+      return null;
+    }
+    var candidate = day.isBefore(startDate) ? startDate : day;
+    for (var offset = 0; offset < 7; offset++) {
+      if (weekdays.contains(candidate.weekday)) return candidate;
+      candidate = candidate.add(const Duration(days: 1));
+    }
+    return null;
+  }
+
+  Map<String, String?> get followUpPayload => {
+    for (final entry in followUps.entries)
+      studyDayKey(entry.key): entry.value == null
+          ? null
+          : studyDayKey(entry.value!),
+  };
+
+  static StudyPlan? fromPayload(Map<String, dynamic> payload) {
+    final id = payload['id'];
+    final collectionId = payload['collection_id'];
+    final deckId = payload['deck_id'];
+    final date = parseStudyDay(payload['start_date']);
+    final weekdays = payload['weekdays'];
+    if (id is! String ||
+        collectionId is! String ||
+        (deckId != null && deckId is! String) ||
+        date == null ||
+        weekdays is! List ||
+        weekdays.any((day) => day is! int || day < 1 || day > 7)) {
+      return null;
+    }
+    final followUps = <DateTime, DateTime?>{};
+    final raw = payload['follow_ups'];
+    if (raw is Map) {
+      for (final entry in raw.entries) {
+        final occurrence = parseStudyDay(entry.key);
+        final next = parseStudyDay(entry.value);
+        if (occurrence != null &&
+            (entry.value == null || (next?.isAfter(occurrence) ?? false))) {
+          followUps[occurrence] = next;
+        }
+      }
+    }
+    return StudyPlan(
+      id: id,
+      collectionId: collectionId,
+      deckId: deckId as String?,
+      startDate: date,
+      weekdays: weekdays.cast<int>().toSet(),
+      followUps: followUps,
+    );
+  }
+}
+
+class PlanningProgress {
+  const PlanningProgress({
+    this.remaining = const [],
+    this.worked = 0,
+    this.attempts = 0,
+    this.correct = 0,
+  });
+
+  final List<FlashcardRecord> remaining;
+  final int worked;
+  final int attempts;
+  final int correct;
+
+  int get total => worked + remaining.length;
+  double? get successRate => attempts == 0 ? null : correct / attempts;
+  bool get isComplete => worked > 0 && remaining.isEmpty;
+}
+
+class PlanningOverview {
+  PlanningOverview({
+    required this.plans,
+    required this.collections,
+    required this.decks,
+    required this.activeCards,
+    required this.srsEnabled,
+    required this.now,
+    required List<ReviewLogRecord> logs,
+  }) : today = studyDay(now) {
+    for (final log in logs) {
+      _logsByDay.putIfAbsent(studyDay(log.createdAt), () => []).add(log);
+    }
+    for (final log in _logsByDay[today] ?? const <ReviewLogRecord>[]) {
+      _reviewedToday.add(log.flashcardId);
+    }
+    final activeCollections = {
+      for (final collection in collections)
+        if (!collection.isDisabled) collection.id,
+    };
+    final activeDecks = {
+      for (final deck in decks)
+        if (!deck.isDisabled) deck.id: deck.collectionId,
+    };
+    activePlans = plans.where((plan) {
+      return activeCollections.contains(plan.collectionId) &&
+          (plan.deckId == null ||
+              activeDecks[plan.deckId] == plan.collectionId);
+    }).toList();
+    todaysPlans = activePlans.where((plan) => plan.occursOn(today)).toList();
+    _todayCollections = {
+      for (final plan in todaysPlans)
+        if (plan.deckId == null) plan.collectionId,
+    };
+    _todayDecks = todaysPlans.map((plan) => plan.deckId).nonNulls.toSet();
+    final open = todaysPlans.where(
+      (plan) => plan.isRecurring || !plan.followUps.containsKey(today),
+    );
+    _openCollections = {
+      for (final plan in open)
+        if (plan.deckId == null) plan.collectionId,
+    };
+    _openDecks = open.map((plan) => plan.deckId).nonNulls.toSet();
+  }
+
+  final List<StudyPlan> plans;
+  final List<CollectionRecord> collections;
+  final List<DeckRecord> decks;
+  final List<FlashcardRecord> activeCards;
+  final bool srsEnabled;
+  final DateTime now;
+  final DateTime today;
+  late final List<StudyPlan> activePlans;
+  late final List<StudyPlan> todaysPlans;
+  late final Set<String> _todayCollections;
+  late final Set<String> _todayDecks;
+  late final Set<String> _openCollections;
+  late final Set<String> _openDecks;
+  final Map<DateTime, List<ReviewLogRecord>> _logsByDay = {};
+  final Set<String> _reviewedToday = {};
+
+  Iterable<StudyPlan> get pendingFollowUps => todaysPlans.where(
+    (plan) =>
+        !plan.isRecurring &&
+        !plan.followUps.containsKey(today) &&
+        progress(plan: plan).isComplete,
+  );
+
+  PlanningProgress progress({
+    String? collectionId,
+    String? deckId,
+    StudyPlan? plan,
+  }) {
+    final scope = activeCards.where(
+      (card) =>
+          (collectionId == null || collectionId == card.collectionId) &&
+          (deckId == null || deckId == card.deckId) &&
+          (plan == null
+              ? _todayCollections.contains(card.collectionId) ||
+                    _todayDecks.contains(card.deckId)
+              : plan.covers(card.collectionId, card.deckId)),
+    );
+    final ids = <String>{};
+    final remaining = <FlashcardRecord>[];
+    var worked = 0;
+    for (final card in scope) {
+      if (!ids.add(card.id)) continue;
+      if (_reviewedToday.contains(card.id)) {
+        worked++;
+      } else {
+        final isOpen = plan == null
+            ? _openCollections.contains(card.collectionId) ||
+                  _openDecks.contains(card.deckId)
+            : plan.isRecurring || !plan.followUps.containsKey(today);
+        if (isOpen && (!srsEnabled || !card.dueAt.isAfter(now))) {
+          remaining.add(card);
+        }
+      }
+    }
+    var attempts = 0;
+    var correct = 0;
+    for (final log in _logsByDay[today] ?? const <ReviewLogRecord>[]) {
+      if (!ids.contains(log.flashcardId)) continue;
+      attempts++;
+      if (log.wasCorrect) correct++;
+    }
+    return PlanningProgress(
+      remaining: remaining,
+      worked: worked,
+      attempts: attempts,
+      correct: correct,
+    );
+  }
+
+  bool wasReviewedToday(String cardId) => _reviewedToday.contains(cardId);
+
+  DateTime? nextPlanFor(
+    String collectionId, {
+    String? deckId,
+    bool includeToday = true,
+  }) {
+    DateTime? next;
+    final hasRemaining =
+        includeToday &&
+        progress(
+          collectionId: collectionId,
+          deckId: deckId,
+        ).remaining.isNotEmpty;
+    for (final plan in activePlans) {
+      if (plan.collectionId != collectionId ||
+          (deckId != null && plan.deckId != null && plan.deckId != deckId)) {
+        continue;
+      }
+      final candidate = plan.nextOnOrAfter(
+        hasRemaining ? today : today.add(const Duration(days: 1)),
+      );
+      if (candidate != null && (next == null || candidate.isBefore(next))) {
+        next = candidate;
+      }
+    }
+    return next;
+  }
+
+  ({int planned, int worked}) recentActivity({
+    String? collectionId,
+    String? deckId,
+  }) {
+    final activeCollectionIds = {
+      for (final collection in collections)
+        if (!collection.isDisabled) collection.id,
+    };
+    final scopedDecks = decks.where(
+      (deck) =>
+          !deck.isDisabled &&
+          activeCollectionIds.contains(deck.collectionId) &&
+          (collectionId == null || deck.collectionId == collectionId) &&
+          (deckId == null || deck.id == deckId),
+    );
+    var planned = 0;
+    var worked = 0;
+    for (var offset = 13; offset >= 0; offset--) {
+      final day = today.subtract(Duration(days: offset));
+      final occurrences = activePlans.where((plan) => plan.occursOn(day));
+      final reviewedDecks = (_logsByDay[day] ?? const <ReviewLogRecord>[])
+          .map((log) => log.deckId)
+          .toSet();
+      for (final deck in scopedDecks) {
+        if (studyDay(deck.createdAt).isAfter(day)) continue;
+        final matching = occurrences.where(
+          (plan) => plan.covers(deck.collectionId, deck.id),
+        );
+        if (matching.isEmpty) continue;
+        planned++;
+        if (reviewedDecks.contains(deck.id) ||
+            matching.any((plan) => plan.followUps.containsKey(day))) {
+          worked++;
+        }
+      }
+    }
+    return (planned: planned, worked: worked);
+  }
+}
