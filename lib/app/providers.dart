@@ -111,6 +111,18 @@ final planningOverviewProvider = StreamProvider.autoDispose<PlanningOverview>(
   (ref) => ref.watch(appRepositoryProvider).watchPlanningOverview(),
 );
 
+final studyCollectionsProvider =
+    StreamProvider.autoDispose<List<CollectionListItem>>(
+      (ref) => ref.watch(appRepositoryProvider).watchCollections(),
+    );
+
+final studyDecksForCollectionProvider = StreamProvider.autoDispose
+    .family<List<DeckListItem>, String>(
+      (ref, collectionId) => ref
+          .watch(appRepositoryProvider)
+          .watchDecksForCollection(collectionId),
+    );
+
 final srsEnabledProvider = StreamProvider.autoDispose<bool>(
   (ref) => ref.watch(appRepositoryProvider).watchSrsEnabled(),
 );

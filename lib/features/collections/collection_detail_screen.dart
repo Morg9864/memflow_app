@@ -216,8 +216,10 @@ class _CollectionDetailScreenState
           queryParameters: {
             if (deckId != null)
               'deckId': deckId
-            else
+            else ...{
               'collectionId': widget.collectionId,
+              'chooseDeck': '1',
+            },
           },
         ).toString(),
       );

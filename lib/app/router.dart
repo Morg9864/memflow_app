@@ -20,6 +20,7 @@ import '../features/profile/profile_screen.dart';
 import '../features/profile/settings_screen.dart';
 import '../features/stats/stats_screen.dart';
 import '../features/study/session_summary_screen.dart';
+import '../features/study/study_scope_picker_screen.dart';
 import '../features/study/study_screen.dart';
 import '../domain/models/models.dart';
 import '../theme/app_theme.dart';
@@ -121,12 +122,23 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/study',
-        builder: (context, state) => StudyScreen(
-          collectionId: state.uri.queryParameters['collectionId'],
-          deckId: state.uri.queryParameters['deckId'],
-          isPlanned: state.uri.queryParameters['planned'] == '1',
-          planId: state.uri.queryParameters['planId'],
-        ),
+        builder: (context, state) {
+          final collectionId = state.uri.queryParameters['collectionId'];
+          final deckId = state.uri.queryParameters['deckId'];
+          final isPlanned = state.uri.queryParameters['planned'] == '1';
+          if (!isPlanned &&
+              deckId == null &&
+              (collectionId == null ||
+                  state.uri.queryParameters['chooseDeck'] == '1')) {
+            return StudyScopePickerScreen(collectionId: collectionId);
+          }
+          return StudyScreen(
+            collectionId: collectionId,
+            deckId: deckId,
+            isPlanned: isPlanned,
+            planId: state.uri.queryParameters['planId'],
+          );
+        },
       ),
       GoRoute(
         path: '/study/errors',
