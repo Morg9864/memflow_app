@@ -28,6 +28,7 @@ class StudyScreen extends ConsumerStatefulWidget {
     this.deckId,
     this.forcedMode,
     this.errorCardIds,
+    this.errorCardModes = const {},
     this.errorDeckId,
     this.isPlanned = false,
     this.planId,
@@ -38,6 +39,7 @@ class StudyScreen extends ConsumerStatefulWidget {
   final String? deckId;
   final TestMode? forcedMode;
   final Set<String>? errorCardIds;
+  final Map<String, TestMode> errorCardModes;
   final String? errorDeckId;
   final bool isPlanned;
   final String? planId;
@@ -137,6 +139,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
       Future.microtask(() => _load());
       return;
     }
+    if (widget.errorCardIds != null) {
+      Future.microtask(() => _load(forcedMode: widget.forcedMode));
+      return;
+    }
     if (widget.forcedMode != null) {
       Future.microtask(() => _load(forcedMode: widget.forcedMode));
       return;
@@ -225,6 +231,8 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
           : await _controller.loadErrorsOnly(
               collectionId: widget.collectionId,
               deckId: widget.deckId,
+              forcedMode: forcedMode,
+              forcedModesByCard: widget.errorCardModes,
               cardIds: widget.errorCardIds!,
               sessionCardLimit: ref.read(sessionCardLimitProvider),
             );

@@ -138,6 +138,12 @@ class StudyRules {
     incorrectCardIds: state.incorrectCardIds,
     clozeCorrectGaps: state.clozeCorrectGaps,
     clozeTotalGaps: state.clozeTotalGaps,
+    requestedMode: state.requestedMode,
+    incorrectCardModes: {
+      for (final card in state.cards)
+        if (state.incorrectCardIds.contains(card.id))
+          card.id: card.currentTestMode,
+    },
   );
   ReviewResult suggestedResult(bool? wasCorrect) =>
       wasCorrect == null || wasCorrect ? ReviewResult.good : ReviewResult.again;

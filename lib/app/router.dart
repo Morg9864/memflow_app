@@ -140,6 +140,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             collectionId: summary.collectionId,
             deckId: summary.deckId,
             errorCardIds: summary.incorrectCardIds,
+            forcedMode: summary.requestedMode,
+            errorCardModes: summary.incorrectCardModes,
           );
         },
       ),

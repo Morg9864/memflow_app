@@ -90,6 +90,37 @@ void main() {
     expect(find.text('Mode de session'), findsOneWidget);
   });
 
+  testWidgets('error review keeps the mode used on each failed card', (
+    tester,
+  ) async {
+    final repo = FakeRepository();
+    final (router, _) = await pumpApp(tester, repo);
+    router.go(
+      '/session-summary',
+      extra: SessionSummary(
+        collectionId: 'c1',
+        deckId: 'd0',
+        deckTitle: 'Biologie',
+        totalCards: 1,
+        reviewCounts: const {ReviewResult.again: 1},
+        correctCount: 0,
+        incorrectCount: 1,
+        incorrectCardIds: const {'a'},
+        incorrectCardModes: const {'a': TestMode.trueFalse},
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Revoir mes erreurs (1)'));
+    await tester.pumpAndSettle();
+
+    expect(repo.lastErrorReviewMode, isNull);
+    expect(repo.lastErrorReviewModesByCard, {'a': TestMode.trueFalse});
+    expect(find.text('Mode de session'), findsNothing);
+    expect(find.text('Vrai'), findsOneWidget);
+    expect(find.text('Faux'), findsOneWidget);
+  });
+
   group('dismissing the mode sheet exits cleanly', () {
     void expectNoLoadingResidue() {
       expect(find.text('Mode de session'), findsNothing);

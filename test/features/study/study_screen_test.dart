@@ -96,6 +96,8 @@ void main() {
     required StudyController controller,
     Size size = const Size(1200, 1600),
     TargetPlatform? platform,
+    TestMode? forcedMode = TestMode.multipleChoice,
+    Set<String>? errorCardIds,
   }) async {
     tester.view.devicePixelRatio = 1;
     tester.view.physicalSize = size;
@@ -119,7 +121,8 @@ void main() {
           home: StudyScreen(
             collectionId: 'react',
             deckId: 'deck-1',
-            forcedMode: TestMode.multipleChoice,
+            forcedMode: forcedMode,
+            errorCardIds: errorCardIds,
             controller: controller,
           ),
         ),
@@ -128,6 +131,26 @@ void main() {
 
     await tester.pump();
   }
+
+  testWidgets('adaptive error review skips the mode picker', (tester) async {
+    final controller = _FakeStudyController(
+      initialState: buildState([buildCard('a')]),
+      submitReviewImpl:
+          ({required cardId, required result, required wasCorrect}) async {},
+    );
+
+    await pumpStudyScreen(
+      tester,
+      controller: controller,
+      forcedMode: null,
+      errorCardIds: const {'a'},
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('Question a'), findsOneWidget);
+    expect(find.text('Adaptatif'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('a review is not advanced before local save completes', (
     tester,

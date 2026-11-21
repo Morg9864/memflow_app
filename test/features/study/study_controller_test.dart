@@ -95,6 +95,118 @@ void main() {
     );
   }
 
+  test(
+    'error review receives the mode selected for the original session',
+    () async {
+      TestMode? receivedMode;
+      Map<String, TestMode>? receivedModesByCard;
+      final controller = StudyController.fromPersistence(
+        loadSession:
+            ({
+              collectionId,
+              deckId,
+              forcedMode,
+              required sessionCardLimit,
+            }) async => buildState([buildTrueFalseCard()]),
+        loadErrorSession:
+            ({
+              collectionId,
+              deckId,
+              forcedMode,
+              forcedModesByCard,
+              required cardIds,
+              required sessionCardLimit,
+            }) async {
+              receivedMode = forcedMode;
+              receivedModesByCard = forcedModesByCard;
+              return buildState([buildTrueFalseCard()]);
+            },
+        submitReview:
+            ({
+              required cardId,
+              required reviewResult,
+              required wasCorrect,
+              required playedMode,
+            }) async {},
+      );
+
+      await controller.loadErrorsOnly(
+        collectionId: 'geo',
+        deckId: 'deck-1',
+        forcedMode: TestMode.trueFalse,
+        forcedModesByCard: const {'tf': TestMode.trueFalse},
+        cardIds: const {'tf'},
+        sessionCardLimit: 10,
+      );
+
+      expect(receivedMode, TestMode.trueFalse);
+      expect(receivedModesByCard, {'tf': TestMode.trueFalse});
+    },
+  );
+
+  test('session summary retains the selected mode', () {
+    final state = buildState([buildTrueFalseCard()]).copyWith(
+      requestedMode: TestMode.trueFalse,
+      incorrectCardIds: const {'tf'},
+    );
+    final controller = StudyController.fromPersistence(
+      loadSession:
+          ({
+            collectionId,
+            deckId,
+            forcedMode,
+            required sessionCardLimit,
+          }) async => state,
+      submitReview:
+          ({
+            required cardId,
+            required reviewResult,
+            required wasCorrect,
+            required playedMode,
+          }) async {},
+    );
+
+    expect(controller.buildSummary(state).requestedMode, TestMode.trueFalse);
+    expect(controller.buildSummary(state).incorrectCardModes, {
+      'tf': TestMode.trueFalse,
+    });
+
+    final adaptiveState = buildState([
+      buildTrueFalseCard(),
+    ]).copyWith(incorrectCardIds: const {'tf'});
+    final adaptiveSummary = controller.buildSummary(adaptiveState);
+    expect(adaptiveSummary.requestedMode, isNull);
+    expect(adaptiveSummary.incorrectCardModes, {'tf': TestMode.trueFalse});
+  });
+
+  test('a first true/false finish records the wrong card for review', () {
+    final state = buildState([buildTrueFalseCard()]);
+    final completed = StudyRules(
+      random: math.Random(0),
+    ).advance(state, ReviewResult.again, answerWasCorrect: false);
+    final controller = StudyController.fromPersistence(
+      loadSession:
+          ({
+            collectionId,
+            deckId,
+            forcedMode,
+            required sessionCardLimit,
+          }) async => completed,
+      submitReview:
+          ({
+            required cardId,
+            required reviewResult,
+            required wasCorrect,
+            required playedMode,
+          }) async {},
+    );
+
+    final summary = controller.buildSummary(completed);
+    expect(summary.incorrectCount, 1);
+    expect(summary.incorrectCardIds, {'tf'});
+    expect(summary.incorrectCardModes, {'tf': TestMode.trueFalse});
+  });
+
   test('QCM reshuffles the same card without changing its answers', () {
     final rules = StudyRules(random: math.Random(0));
     final card = buildCard('a');

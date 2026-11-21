@@ -767,6 +767,24 @@ class StudyCard {
   final List<String> clozeWordBank;
   final List<String> acceptedAnswers;
   final int level;
+
+  StudyCard copyWith({TestMode? currentTestMode}) => StudyCard(
+    id: id,
+    collectionId: collectionId,
+    deckId: deckId,
+    question: question,
+    correctAnswer: correctAnswer,
+    wrongAnswers: wrongAnswers,
+    hint: hint,
+    explanation: explanation,
+    currentTestMode: currentTestMode ?? this.currentTestMode,
+    allowedTestModes: allowedTestModes,
+    clozeText: clozeText,
+    clozeAnswers: clozeAnswers,
+    clozeWordBank: clozeWordBank,
+    acceptedAnswers: acceptedAnswers,
+    level: level,
+  );
 }
 
 class FlashcardSummary {
@@ -829,6 +847,8 @@ class SessionSummary {
     this.clozeTotalGaps = 0,
     this.planningDay,
     this.planId,
+    this.requestedMode,
+    this.incorrectCardModes = const {},
   });
 
   final String? collectionId;
@@ -844,6 +864,10 @@ class SessionSummary {
   final int clozeTotalGaps;
   final DateTime? planningDay;
   final String? planId;
+
+  /// Null means the session used adaptive mode selection.
+  final TestMode? requestedMode;
+  final Map<String, TestMode> incorrectCardModes;
 
   int get successCount => correctCount;
 

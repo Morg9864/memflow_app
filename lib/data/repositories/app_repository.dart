@@ -495,25 +495,34 @@ class AppRepository {
   Future<StudySessionState> startErrorReviewSession({
     String? collectionId,
     String? deckId,
+    TestMode? forcedMode,
+    Map<String, TestMode>? forcedModesByCard,
     required Set<String> cardIds,
     required int sessionCardLimit,
   }) async {
     final restored = await _restoreStudySession(
       collectionId: collectionId,
       deckId: deckId,
-      forcedMode: null,
+      forcedMode: forcedMode,
+      forcedModesByCard: forcedModesByCard,
       onlyCardIds: cardIds,
     );
     if (restored != null) return restored;
     final session = await startStudySession(
       collectionId: collectionId,
       deckId: deckId,
+      forcedMode: forcedMode,
       onlyCardIds: cardIds,
       sessionCardLimit: sessionCardLimit,
     );
-    final cards = session.cards
-        .where((card) => cardIds.contains(card.id))
-        .toList();
+    final cards = session.cards.where((card) => cardIds.contains(card.id)).map((
+      card,
+    ) {
+      final mode = forcedModesByCard?[card.id];
+      return mode == null || !card.allowedTestModes.contains(mode)
+          ? card
+          : card.copyWith(currentTestMode: mode);
+    }).toList();
     if (cards.isEmpty) throw StateError('Aucune erreur à revoir.');
     final filtered = session.copyWith(
       cards: cards,
@@ -830,6 +839,7 @@ class AppRepository {
     required String? collectionId,
     required String? deckId,
     required TestMode? forcedMode,
+    Map<String, TestMode>? forcedModesByCard,
     Set<String>? onlyCardIds,
     DateTime? planningDay,
     String? planId,
@@ -890,12 +900,14 @@ class AppRepository {
       );
       final cards = restoredIds.map((id) {
         final modeName = savedModes[id] as String?;
-        final cardMode = modeName == null
-            ? savedMode
-            : TestMode.values.firstWhere(
-                (mode) => mode.name == modeName,
-                orElse: () => savedMode ?? TestMode.multipleChoice,
-              );
+        final cardMode =
+            forcedModesByCard?[id] ??
+            (modeName == null
+                ? savedMode
+                : TestMode.values.firstWhere(
+                    (mode) => mode.name == modeName,
+                    orElse: () => savedMode ?? TestMode.multipleChoice,
+                  ));
         return _mapStudyCard(byId[id]!, forcedMode: cardMode);
       }).toList();
       if (restoredIndex < 0 || restoredIndex >= cards.length) return null;

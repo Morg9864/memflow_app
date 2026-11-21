@@ -56,6 +56,8 @@ class StudyController {
     Future<StudySessionState> Function({
       String? collectionId,
       String? deckId,
+      TestMode? forcedMode,
+      Map<String, TestMode>? forcedModesByCard,
       required Set<String> cardIds,
       required int sessionCardLimit,
     })?
@@ -94,12 +96,14 @@ class StudyController {
            (({
              String? collectionId,
              String? deckId,
+             TestMode? forcedMode,
+             Map<String, TestMode>? forcedModesByCard,
              required Set<String> cardIds,
              required int sessionCardLimit,
            }) => loadSession(
              collectionId: collectionId,
              deckId: deckId,
-             forcedMode: null,
+             forcedMode: forcedMode,
              sessionCardLimit: sessionCardLimit,
            )),
        _loadDeckErrorSession =
@@ -142,6 +146,8 @@ class StudyController {
   final Future<StudySessionState> Function({
     String? collectionId,
     String? deckId,
+    TestMode? forcedMode,
+    Map<String, TestMode>? forcedModesByCard,
     required Set<String> cardIds,
     required int sessionCardLimit,
   })
@@ -227,11 +233,15 @@ class StudyController {
   Future<StudySessionState> loadErrorsOnly({
     String? collectionId,
     String? deckId,
+    TestMode? forcedMode,
+    Map<String, TestMode>? forcedModesByCard,
     required Set<String> cardIds,
     required int sessionCardLimit,
   }) => _loadErrorSession(
     collectionId: collectionId,
     deckId: deckId,
+    forcedMode: forcedMode,
+    forcedModesByCard: forcedModesByCard,
     cardIds: cardIds,
     sessionCardLimit: sessionCardLimit,
   );

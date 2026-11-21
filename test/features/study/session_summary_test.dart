@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:memflow/domain/models/models.dart';
 import 'package:memflow/features/study/session_summary_screen.dart';
+import 'package:memflow/theme/app_icons.dart';
 import 'package:memflow/theme/app_theme.dart';
 
 const _title =
@@ -14,6 +15,7 @@ SessionSummary _summary({
   int incorrect = 3,
   int total = 12,
   String title = _title,
+  TestMode? mode,
 }) => SessionSummary(
   collectionId: collectionId,
   deckId: deckId,
@@ -21,6 +23,11 @@ SessionSummary _summary({
   totalCards: total,
   correctCount: total - incorrect,
   incorrectCount: incorrect,
+  incorrectCardIds: incorrect > 0 ? const {'tf-card'} : const {},
+  requestedMode: mode,
+  incorrectCardModes: incorrect > 0 && mode != null
+      ? {'tf-card': mode}
+      : const {},
   duration: const Duration(minutes: 4, seconds: 5),
   reviewCounts: const {
     ReviewResult.again: 2,
@@ -125,10 +132,42 @@ void main() {
     expect(find.text(_title), findsOneWidget);
   });
 
+  testWidgets('error review uses the orange accent', (tester) async {
+    _setView(tester, const Size(360, 800));
+    await _pump(tester, _summary());
+
+    final reviewButton = tester.widget<TextButton>(
+      find.ancestor(
+        of: find.text('Revoir mes erreurs (3)'),
+        matching: find.byType(TextButton),
+      ),
+    );
+    expect(reviewButton.style?.foregroundColor?.resolve({}), AppColors.primary);
+    final encoreTileIcon = tester.widget<Icon>(
+      find.byIcon(AppIcons.rotateCcw).first,
+    );
+    expect(encoreTileIcon.color, AppColors.primary);
+    expect(
+      Theme.of(
+        tester.element(find.byType(Scaffold)),
+      ).progressIndicatorTheme.color,
+      AppColors.primary,
+    );
+  });
+
   testWidgets('Revoir mes erreurs only when there are errors', (tester) async {
     _setView(tester, const Size(360, 800));
     await _pump(tester, _summary(incorrect: 0));
     expect(find.textContaining('Revoir mes erreurs'), findsNothing);
+  });
+
+  testWidgets('true/false session offers error review at its first finish', (
+    tester,
+  ) async {
+    _setView(tester, const Size(360, 800));
+    await _pump(tester, _summary(incorrect: 1, mode: TestMode.trueFalse));
+
+    expect(find.text('Revoir mes erreurs (1)'), findsOneWidget);
   });
 
   testWidgets('Revoir mes erreurs goes to /study/errors', (tester) async {

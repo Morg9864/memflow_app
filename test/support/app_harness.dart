@@ -66,6 +66,8 @@ class FakeAuth implements AuthService {
 class FakeRepository implements AppRepository {
   final log = <String>[];
   Completer<void>? submitGate;
+  TestMode? lastErrorReviewMode;
+  Map<String, TestMode>? lastErrorReviewModesByCard;
 
   @override
   Future<StudyModeAvailability> studyModeAvailability({
@@ -95,8 +97,8 @@ class FakeRepository implements AppRepository {
       hint: null,
       clozeText: null,
       explanation: 'Parce que.',
-      currentTestMode: TestMode.multipleChoice,
-      allowedTestModes: const [TestMode.multipleChoice],
+      currentTestMode: forcedMode ?? TestMode.multipleChoice,
+      allowedTestModes: const [TestMode.multipleChoice, TestMode.trueFalse],
       clozeAnswers: const [],
       clozeWordBank: const [],
       acceptedAnswers: const [],
@@ -120,7 +122,35 @@ class FakeRepository implements AppRepository {
       },
       currentAnswerWasCorrect: null,
       isCompleted: false,
+      requestedMode: forcedMode,
     );
+  }
+
+  @override
+  Future<StudySessionState> startErrorReviewSession({
+    String? collectionId,
+    String? deckId,
+    TestMode? forcedMode,
+    Map<String, TestMode>? forcedModesByCard,
+    required Set<String> cardIds,
+    required int sessionCardLimit,
+  }) async {
+    lastErrorReviewMode = forcedMode;
+    lastErrorReviewModesByCard = forcedModesByCard;
+    final session = await startStudySession(
+      collectionId: collectionId,
+      deckId: deckId,
+      forcedMode: forcedMode,
+      onlyCardIds: cardIds,
+      sessionCardLimit: sessionCardLimit,
+    );
+    final cards = session.cards.where((card) => cardIds.contains(card.id)).map((
+      card,
+    ) {
+      final mode = forcedModesByCard?[card.id];
+      return mode == null ? card : card.copyWith(currentTestMode: mode);
+    }).toList();
+    return session.copyWith(cards: cards, requestedMode: forcedMode);
   }
 
   @override
@@ -139,6 +169,9 @@ class FakeRepository implements AppRepository {
   @override
   Future<void> saveStudySession(StudySessionState state) async =>
       log.add('save:${state.currentIndex}');
+
+  @override
+  Future<SavedStudySession?> savedStudySession() async => null;
 
   // Not under test here.
   @override

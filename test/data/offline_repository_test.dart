@@ -240,6 +240,25 @@ void main() {
     expect(session.currentCard.currentTestMode, TestMode.trueFalse);
   });
 
+  test(
+    'la révision des erreurs reprend le mode joué sur chaque carte',
+    () async {
+      await importDrafts([draft()]);
+      final card = (await database.select(database.flashcards).get()).single;
+
+      final session = await repository.startErrorReviewSession(
+        collectionId: card.collectionId,
+        deckId: card.deckId,
+        cardIds: {card.id},
+        forcedModesByCard: {card.id: TestMode.trueFalse},
+        sessionCardLimit: 1,
+      );
+
+      expect(session.currentCard.id, card.id);
+      expect(session.currentCard.currentTestMode, TestMode.trueFalse);
+    },
+  );
+
   test('un mode imposé indisponible est refusé explicitement', () async {
     await importDrafts([draft()]);
 

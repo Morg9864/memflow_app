@@ -42,7 +42,7 @@ class SessionSummaryScreen extends ConsumerWidget {
         value: counts[ReviewResult.again] ?? 0,
         label: 'encore',
         icon: AppIcons.rotateCcw,
-        tone: AppColors.error,
+        tone: AppColors.primary,
       ),
       _CountTile(
         value: counts[ReviewResult.hard] ?? 0,
@@ -150,8 +150,12 @@ class SessionSummaryScreen extends ConsumerWidget {
                       child: const Text('Voir le planning'),
                     ),
                   ],
-                  if (summary.incorrectCount > 0)
+                  if (summary.incorrectCardIds.isNotEmpty ||
+                      summary.incorrectCount > 0)
                     TextButton.icon(
+                      style: TextButton.styleFrom(
+                        foregroundColor: AppColors.primary,
+                      ),
                       onPressed: () =>
                           context.go('/study/errors', extra: summary),
                       icon: const Icon(AppIcons.rotateCcw),
