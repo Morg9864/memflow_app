@@ -329,12 +329,14 @@ class ProgressPill extends StatelessWidget {
     required this.value,
     this.height = 7,
     this.errorFraction = 0,
+    this.progressColor,
     this.semanticsLabel,
   });
 
   final double value;
   final double height;
   final double errorFraction;
+  final Color? progressColor;
   final String? semanticsLabel;
 
   @override
@@ -366,7 +368,7 @@ class ProgressPill extends StatelessWidget {
                       backgroundColor:
                           theme.colorScheme.surfaceContainerHighest,
                       valueColor: AlwaysStoppedAnimation(
-                        theme.colorScheme.primary,
+                        progressColor ?? theme.colorScheme.primary,
                       ),
                     ),
                   ),

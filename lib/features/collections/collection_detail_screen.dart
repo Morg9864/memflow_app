@@ -1320,6 +1320,7 @@ class DeckCard extends StatelessWidget {
                         ],
                         ProgressPill(
                           value: deck.sessionProgress,
+                          progressColor: AppColors.resultGood,
                           errorFraction: deck.sessionWorked > 0
                               ? (deck.errorCount / deck.sessionWorked)
                                     .clamp(0, 1)
