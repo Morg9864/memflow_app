@@ -328,11 +328,13 @@ class ProgressPill extends StatelessWidget {
     super.key,
     required this.value,
     this.height = 7,
+    this.errorFraction = 0,
     this.semanticsLabel,
   });
 
   final double value;
   final double height;
+  final double errorFraction;
   final String? semanticsLabel;
 
   @override
@@ -345,15 +347,41 @@ class ProgressPill extends StatelessWidget {
       tween: Tween<double>(begin: target, end: target),
       duration: AppMotion.of(context, AppMotion.standard),
       curve: AppMotion.standardCurve,
-      builder: (context, animated, _) => ClipRRect(
-        borderRadius: AppTheme.radiusPill,
-        child: LinearProgressIndicator(
-          minHeight: height,
-          value: animated,
-          semanticsLabel: semanticsLabel,
-          semanticsValue: '${(target * 100).round()} %',
-          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-          valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+      builder: (context, animated, _) => SizedBox(
+        height: height,
+        child: ClipRRect(
+          borderRadius: AppTheme.radiusPill,
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final errorWidth =
+                  constraints.maxWidth * animated * errorFraction.clamp(0, 1);
+              return Stack(
+                children: [
+                  Positioned.fill(
+                    child: LinearProgressIndicator(
+                      minHeight: height,
+                      value: animated,
+                      semanticsLabel: semanticsLabel,
+                      semanticsValue: '${(target * 100).round()} %',
+                      backgroundColor:
+                          theme.colorScheme.surfaceContainerHighest,
+                      valueColor: AlwaysStoppedAnimation(
+                        theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                  if (errorWidth > 0)
+                    Positioned(
+                      top: 0,
+                      bottom: 0,
+                      right: constraints.maxWidth * (1 - animated),
+                      width: errorWidth,
+                      child: ColoredBox(color: theme.colorScheme.error),
+                    ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );

@@ -1217,7 +1217,6 @@ class DeckCard extends StatelessWidget {
         onDelete != null ||
         onViewCards != null ||
         onToggleDisabled != null ||
-        onStudyErrors != null ||
         onPlan != null ||
         onFreeStudy != null;
     final isUnavailable = deck.isDisabled || onTap == null;
@@ -1253,7 +1252,30 @@ class DeckCard extends StatelessWidget {
                           const DisabledBadge(label: 'Désactivé'),
                           const SizedBox(height: AppSpacing.xs),
                         ],
-                        Text(deck.name, style: theme.textTheme.titleMedium),
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: AppSpacing.sm,
+                          runSpacing: 0,
+                          children: [
+                            Text(deck.name, style: theme.textTheme.titleMedium),
+                            if (onStudyErrors != null)
+                              TextButton(
+                                onPressed: onStudyErrors,
+                                style: TextButton.styleFrom(
+                                  foregroundColor: theme.colorScheme.error,
+                                  padding: EdgeInsets.zero,
+                                  minimumSize: const Size(32, 32),
+                                  tapTargetSize:
+                                      MaterialTapTargetSize.shrinkWrap,
+                                  visualDensity: VisualDensity.compact,
+                                  textStyle: theme.textTheme.labelSmall,
+                                ),
+                                child: Text(
+                                  'Réviser les erreurs (${deck.errorCount})',
+                                ),
+                              ),
+                          ],
+                        ),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
                           '${deck.totalCards} cartes · ${(deck.sessionProgress * 100).round()} % du programme',
@@ -1298,6 +1320,11 @@ class DeckCard extends StatelessWidget {
                         ],
                         ProgressPill(
                           value: deck.sessionProgress,
+                          errorFraction: deck.sessionWorked > 0
+                              ? (deck.errorCount / deck.sessionWorked)
+                                    .clamp(0, 1)
+                                    .toDouble()
+                              : 0,
                           semanticsLabel: 'Progression de ${deck.name}',
                         ),
                       ],
@@ -1316,8 +1343,6 @@ class DeckCard extends StatelessWidget {
                             onToggleDisabled?.call();
                           case _DeckAction.delete:
                             onDelete?.call();
-                          case _DeckAction.studyErrors:
-                            onStudyErrors?.call();
                           case _DeckAction.plan:
                             onPlan?.call();
                           case _DeckAction.freeStudy:
@@ -1347,14 +1372,6 @@ class DeckCard extends StatelessWidget {
                             child: _MenuRow(
                               icon: AppIcons.list,
                               label: 'Voir les cartes',
-                            ),
-                          ),
-                        if (onStudyErrors != null)
-                          PopupMenuItem(
-                            value: _DeckAction.studyErrors,
-                            child: _MenuRow(
-                              icon: AppIcons.triangleAlert,
-                              label: 'Réviser les erreurs (${deck.errorCount})',
                             ),
                           ),
                         if (onToggleDisabled != null)
@@ -1398,11 +1415,4 @@ class DeckCard extends StatelessWidget {
   }
 }
 
-enum _DeckAction {
-  viewCards,
-  delete,
-  toggleDisabled,
-  studyErrors,
-  plan,
-  freeStudy,
-}
+enum _DeckAction { viewCards, delete, toggleDisabled, plan, freeStudy }
