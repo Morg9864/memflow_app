@@ -909,6 +909,8 @@ class AppRepository {
         '${deck.collectionId}:${deck.name.toLowerCase()}': deck,
     };
     final importedDeckIds = <String>{};
+    // Preserve the first deck appearance in a CSV when one import shares a timestamp.
+    var nextDeckImportOrder = 0;
 
     await _db.transaction(() async {
       for (final draft in preview.cards) {
@@ -944,7 +946,7 @@ class AppRepository {
             name: draft.deck,
             icon: '🗂️',
             difficulty: DeckDifficulty.facile,
-            createdAt: now,
+            createdAt: now.add(Duration(milliseconds: nextDeckImportOrder++)),
             updatedAt: now,
           );
           await _db

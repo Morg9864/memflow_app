@@ -113,7 +113,10 @@ class _CollectionDetailScreenState
             ? comparison
             : -comparison;
       }
-      return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      final tieBreak = a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      return _deckSortDirection == _SortDirection.ascending
+          ? tieBreak
+          : -tieBreak;
     });
     return sorted;
   }

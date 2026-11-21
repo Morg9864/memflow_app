@@ -252,16 +252,21 @@ class PlanningOverview {
                   card.dueAt.isBefore(cutoff) ||
                   reviewed.contains(card.id));
         }).toList();
+        final collectionDecks =
+            decks
+                .where(
+                  (deck) =>
+                      deck.collectionId == plan.collectionId &&
+                      !deck.isDisabled,
+                )
+                .toList()
+              ..sort((a, b) {
+                final byImport = a.createdAt.compareTo(b.createdAt);
+                return byImport != 0 ? byImport : a.name.compareTo(b.name);
+              });
         final deckIds = plan.deckId != null
             ? [plan.deckId!]
-            : decks
-                  .where(
-                    (deck) =>
-                        deck.collectionId == plan.collectionId &&
-                        !deck.isDisabled,
-                  )
-                  .map((deck) => deck.id)
-                  .toList();
+            : collectionDecks.map((deck) => deck.id).toList();
         final deckProgress = [
           for (final deckId in deckIds)
             () {
