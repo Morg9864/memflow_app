@@ -47,6 +47,16 @@ class PlanningScreen extends ConsumerWidget {
     final state = ref.watch(planningOverviewProvider);
     final planning = state.value;
     final today = planning?.progress();
+    final scheduledPlans =
+        planning == null
+              ? <StudyPlan>[]
+              : planning.plans.where((plan) {
+                  if (!planning.activePlans.contains(plan)) return true;
+                  return plan.isRecurring ||
+                      plan.occursOn(planning.today) ||
+                      plan.nextOnOrAfter(planning.today.add(_oneDay)) != null;
+                }).toList()
+          ..sort((a, b) => a.startDate.compareTo(b.startDate));
     return AppScaffold(
       maxContentWidth: AppTheme.formMaxWidth,
       child: SyncRefreshIndicator(
@@ -112,7 +122,7 @@ class PlanningScreen extends ConsumerWidget {
               ),
               StudyFollowUps(planning: planning),
               const SizedBox(height: AppSpacing.xl),
-              const SectionLabel('Séances'),
+              const SectionLabel('Séances programmées'),
               const SizedBox(height: AppSpacing.sm),
               Align(
                 alignment: Alignment.centerLeft,
@@ -125,20 +135,25 @@ class PlanningScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
-              if (planning.plans.isEmpty)
+              if (scheduledPlans.isEmpty)
                 Text(
                   planning.collections.isEmpty
                       ? 'Importe un cours pour programmer ta première séance.'
-                      : 'Choisis une collection ou un deck pour commencer.',
+                      : 'Aucune séance programmée pour le moment.',
                 ),
-              for (final plan in [
-                ...planning.plans,
-              ]..sort((a, b) => a.startDate.compareTo(b.startDate)))
+              for (final plan in scheduledPlans)
                 _PlanCard(
                   plan: plan,
                   planning: planning,
                   onEdit: () => _showEditor(context, planning, plan),
                 ),
+              const SizedBox(height: AppSpacing.md),
+              const SectionLabel('Séances passées'),
+              const SizedBox(height: AppSpacing.sm),
+              if (planning.pastSessions.isEmpty)
+                const Text('Aucune séance passée pour le moment.'),
+              for (final session in planning.pastSessions)
+                _PastSessionCard(session: session, planning: planning),
             ],
           ],
         ),
@@ -159,6 +174,42 @@ class PlanningScreen extends ConsumerWidget {
       deckId: deckId,
     ),
   );
+}
+
+class _PastSessionCard extends StatelessWidget {
+  const _PastSessionCard({required this.session, required this.planning});
+
+  final PastStudySession session;
+  final PlanningOverview planning;
+
+  @override
+  Widget build(BuildContext context) {
+    final date = DateFormat('d MMMM yyyy', 'fr_FR').format(session.date);
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(AppSpacing.md),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              _planTitle(planning, session.plan),
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            Text('Séance du $date'),
+            Text(
+              '${session.worked}/${session.total} cartes · ${session.percent} %',
+            ),
+            if (session.plan.deckId == null)
+              for (final deck in session.decks)
+                Text(
+                  '${planning.decks.where((item) => item.id == deck.deckId).firstOrNull?.name ?? 'Deck'} · '
+                  '${deck.worked}/${deck.total} cartes · ${deck.percent} %',
+                ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 String _planTitle(PlanningOverview planning, StudyPlan plan) {

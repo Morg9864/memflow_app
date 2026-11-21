@@ -134,6 +134,38 @@ class PlanningProgress {
   bool get isComplete => worked > 0 && remaining.isEmpty;
 }
 
+class PastStudySessionDeckProgress {
+  const PastStudySessionDeckProgress({
+    required this.deckId,
+    required this.worked,
+    required this.total,
+  });
+
+  final String deckId;
+  final int worked;
+  final int total;
+
+  int get percent => total == 0 ? 0 : (worked * 100 / total).round();
+}
+
+class PastStudySession {
+  const PastStudySession({
+    required this.plan,
+    required this.date,
+    required this.worked,
+    required this.total,
+    required this.decks,
+  });
+
+  final StudyPlan plan;
+  final DateTime date;
+  final int worked;
+  final int total;
+  final List<PastStudySessionDeckProgress> decks;
+
+  int get percent => total == 0 ? 0 : (worked * 100 / total).round();
+}
+
 class PlanningOverview {
   PlanningOverview({
     required this.plans,
@@ -201,6 +233,64 @@ class PlanningOverview {
         !plan.followUps.containsKey(today) &&
         progress(plan: plan).isComplete,
   );
+
+  List<PastStudySession> get pastSessions {
+    final sessions = <PastStudySession>[];
+    for (final plan in activePlans.where((plan) => !plan.isRecurring)) {
+      for (final date in plan.oneOffDates.where(
+        (date) => date.isBefore(today),
+      )) {
+        final reviewed = {
+          for (final log in _logsByDay[date] ?? const <ReviewLogRecord>[])
+            log.flashcardId,
+        };
+        final cutoff = date.add(const Duration(days: 1));
+        final plannedCards = activeCards.where((card) {
+          return plan.covers(card.collectionId, card.deckId) &&
+              card.createdAt.isBefore(cutoff) &&
+              (!srsEnabled ||
+                  card.dueAt.isBefore(cutoff) ||
+                  reviewed.contains(card.id));
+        }).toList();
+        final deckIds = plan.deckId != null
+            ? [plan.deckId!]
+            : decks
+                  .where(
+                    (deck) =>
+                        deck.collectionId == plan.collectionId &&
+                        !deck.isDisabled,
+                  )
+                  .map((deck) => deck.id)
+                  .toList();
+        final deckProgress = [
+          for (final deckId in deckIds)
+            () {
+              final cards = plannedCards.where((card) => card.deckId == deckId);
+              final total = cards.length;
+              final worked = cards
+                  .where((card) => reviewed.contains(card.id))
+                  .length;
+              return PastStudySessionDeckProgress(
+                deckId: deckId,
+                worked: worked,
+                total: total,
+              );
+            }(),
+        ];
+        sessions.add(
+          PastStudySession(
+            plan: plan,
+            date: date,
+            worked: deckProgress.fold(0, (sum, deck) => sum + deck.worked),
+            total: deckProgress.fold(0, (sum, deck) => sum + deck.total),
+            decks: deckProgress,
+          ),
+        );
+      }
+    }
+    sessions.sort((a, b) => b.date.compareTo(a.date));
+    return sessions;
+  }
 
   PlanningProgress progress({
     String? collectionId,

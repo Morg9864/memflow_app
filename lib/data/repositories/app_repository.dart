@@ -250,8 +250,21 @@ class AppRepository {
     final decks = await _fetchDecks();
     final flashcards = await _fetchFlashcards();
     final planRows = await _db.select(_db.studyPlans).get();
+    final plans = planRows
+        .map(AppDatabase.studyPlanPayload)
+        .map(StudyPlan.fromPayload)
+        .nonNulls
+        .toList();
     final preference = await _db.select(_db.studyPreferences).getSingleOrNull();
-    final cutoff = studyDay(now).subtract(const Duration(days: 13));
+    final today = studyDay(now);
+    final pastSessionDates = plans
+        .where((plan) => !plan.isRecurring)
+        .expand((plan) => plan.oneOffDates)
+        .where((date) => date.isBefore(today))
+        .toList();
+    final cutoff = pastSessionDates.isEmpty
+        ? today.subtract(const Duration(days: 13))
+        : pastSessionDates.reduce((a, b) => a.isBefore(b) ? a : b);
     final recentLogs =
         await (_db.select(_db.reviewLogs)..where(
               (row) => row.createdAt.isBiggerOrEqualValue(
@@ -261,11 +274,7 @@ class AppRepository {
             .get();
 
     return PlanningOverview(
-      plans: planRows
-          .map(AppDatabase.studyPlanPayload)
-          .map(StudyPlan.fromPayload)
-          .nonNulls
-          .toList(),
+      plans: plans,
       collections: collections,
       decks: decks,
       activeCards: _excludeUnavailableCards(
