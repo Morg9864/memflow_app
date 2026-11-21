@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'app/app_bootstrap.dart';
 import 'app/memflow_app.dart';
@@ -31,6 +32,7 @@ Future<void> _runGuarded() async {
 
 Future<void> _bootstrapAndRun() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('fr_FR');
   for (final family in const ['Lora', 'Outfit']) {
     LicenseRegistry.addLicense(() async* {
       yield LicenseEntryWithLineBreaks([
