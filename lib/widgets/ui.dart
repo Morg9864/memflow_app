@@ -153,13 +153,18 @@ class SyncNowButton extends ConsumerWidget {
 void popOrGo(BuildContext context, String fallback) =>
     context.canPop() ? context.pop() : context.go(fallback);
 
-/// Les quatre onglets, partagés par la barre (téléphone) et le rail (tablette).
+/// Les cinq onglets, partagés par la barre (téléphone) et le rail (tablette).
 const appNavItems = <({IconData icon, IconData? selectedIcon, String label})>[
   (icon: AppIcons.house, selectedIcon: AppIcons.house, label: 'Accueil'),
   (
     icon: AppIcons.chartNoAxesColumnIncreasing,
     selectedIcon: null,
     label: 'Stats',
+  ),
+  (
+    icon: AppIcons.calendarDays,
+    selectedIcon: AppIcons.calendarDays,
+    label: 'Planning',
   ),
   (icon: AppIcons.fileUp, selectedIcon: AppIcons.fileUp, label: 'Importer'),
   (icon: AppIcons.userRound, selectedIcon: AppIcons.userRound, label: 'Profil'),

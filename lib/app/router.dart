@@ -97,14 +97,6 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
-      // Hors coque: pas de barre de navigation.
-      GoRoute(
-        path: '/planning',
-        builder: (context, state) => PlanningScreen(
-          collectionId: state.uri.queryParameters['collectionId'],
-          deckId: state.uri.queryParameters['deckId'],
-        ),
-      ),
       GoRoute(path: '/auth', builder: (context, state) => const AuthScreen()),
       GoRoute(
         path: '/legal/accept',
@@ -168,7 +160,7 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) =>
             SessionSummaryScreen(summary: state.extra! as SessionSummary),
       ),
-      // Coque à quatre onglets: l'état de chaque onglet est conservé.
+      // Coque à cinq onglets: l'état de chaque onglet est conservé.
       StatefulShellRoute.indexedStack(
         builder: (context, state, navigationShell) =>
             TabShell(navigationShell: navigationShell),
@@ -218,6 +210,17 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
+                path: '/planning',
+                builder: (context, state) => PlanningScreen(
+                  collectionId: state.uri.queryParameters['collectionId'],
+                  deckId: state.uri.queryParameters['deckId'],
+                ),
+              ),
+            ],
+          ),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
                 path: '/import',
                 builder: (context, state) => const ImportScreen(),
               ),
@@ -241,7 +244,7 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Hôte des quatre onglets: possède la barre de navigation. Un changement
+/// Hôte des cinq onglets: possède la barre de navigation. Un changement
 /// d'onglet fait un fondu léger (`fast`) du corps; la pile des onglets n'est
 /// pas reconstruite, donc l'état de chaque onglet est conservé.
 class TabShell extends StatefulWidget {

@@ -210,7 +210,9 @@ class _PastSessionCard extends StatelessWidget {
               children: [
                 Text(
                   '${session.percent} %',
-                  style: Theme.of(context).textTheme.headlineSmall,
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
                 ),
                 Text('${session.worked} sur ${session.total} cartes'),
               ],
@@ -240,22 +242,48 @@ class _PastSessionCard extends StatelessWidget {
                 for (final deck in session.decks)
                   SizedBox(
                     width: deckWidth,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          planning.decks
-                                  .where((item) => item.id == deck.deckId)
-                                  .firstOrNull
-                                  ?.name ??
-                              'Deck',
-                          style: Theme.of(context).textTheme.titleSmall,
+                    child: Container(
+                      padding: const EdgeInsets.all(AppSpacing.sm),
+                      decoration: BoxDecoration(
+                        border: Border.all(
+                          color: Theme.of(context).colorScheme.outlineVariant,
                         ),
-                        Text(
-                          '${deck.percent} % · ${deck.worked}/${deck.total} cartes',
-                        ),
-                      ],
+                        borderRadius: AppTheme.radiusSm,
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  planning.decks
+                                          .where(
+                                            (item) => item.id == deck.deckId,
+                                          )
+                                          .firstOrNull
+                                          ?.name ??
+                                      'Deck',
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                              ),
+                              const SizedBox(width: AppSpacing.xs),
+                              Text(
+                                '${deck.percent} %',
+                                style: Theme.of(context).textTheme.titleSmall
+                                    ?.copyWith(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.primary,
+                                    ),
+                              ),
+                            ],
+                          ),
+                          Text('${deck.worked}/${deck.total} cartes'),
+                        ],
+                      ),
                     ),
                   ),
               ],
