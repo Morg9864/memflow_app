@@ -157,14 +157,14 @@ void popOrGo(BuildContext context, String fallback) =>
 const appNavItems = <({IconData icon, IconData? selectedIcon, String label})>[
   (icon: AppIcons.house, selectedIcon: AppIcons.house, label: 'Accueil'),
   (
-    icon: AppIcons.chartNoAxesColumnIncreasing,
-    selectedIcon: null,
-    label: 'Stats',
-  ),
-  (
     icon: AppIcons.calendarDays,
     selectedIcon: AppIcons.calendarDays,
     label: 'Planning',
+  ),
+  (
+    icon: AppIcons.chartNoAxesColumnIncreasing,
+    selectedIcon: null,
+    label: 'Stats',
   ),
   (icon: AppIcons.fileUp, selectedIcon: AppIcons.fileUp, label: 'Importer'),
   (icon: AppIcons.userRound, selectedIcon: AppIcons.userRound, label: 'Profil'),

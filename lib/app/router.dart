@@ -204,19 +204,19 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/stats',
-                builder: (context, state) => const StatisticsScreen(),
+                path: '/planning',
+                builder: (context, state) => PlanningScreen(
+                  collectionId: state.uri.queryParameters['collectionId'],
+                  deckId: state.uri.queryParameters['deckId'],
+                ),
               ),
             ],
           ),
           StatefulShellBranch(
             routes: [
               GoRoute(
-                path: '/planning',
-                builder: (context, state) => PlanningScreen(
-                  collectionId: state.uri.queryParameters['collectionId'],
-                  deckId: state.uri.queryParameters['deckId'],
-                ),
+                path: '/stats',
+                builder: (context, state) => const StatisticsScreen(),
               ),
             ],
           ),
