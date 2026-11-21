@@ -47,6 +47,7 @@ class PlanningScreen extends ConsumerWidget {
     final state = ref.watch(planningOverviewProvider);
     final planning = state.value;
     final today = planning?.progress();
+    final pastSessions = planning?.pastSessions ?? const <PastStudySession>[];
     final scheduledPlans =
         planning == null
               ? <StudyPlan>[]
@@ -150,9 +151,9 @@ class PlanningScreen extends ConsumerWidget {
               const SizedBox(height: AppSpacing.md),
               const SectionLabel('Séances passées'),
               const SizedBox(height: AppSpacing.sm),
-              if (planning.pastSessions.isEmpty)
+              if (pastSessions.isEmpty)
                 const Text('Aucune séance passée pour le moment.'),
-              for (final session in planning.pastSessions)
+              for (final session in pastSessions)
                 _PastSessionCard(session: session, planning: planning),
             ],
           ],
@@ -188,24 +189,111 @@ class _PastSessionCard extends StatelessWidget {
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.md),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              _planTitle(planning, session.plan),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-            Text('Séance du $date'),
-            Text(
-              '${session.worked}/${session.total} cartes · ${session.percent} %',
-            ),
-            if (session.plan.deckId == null)
-              for (final deck in session.decks)
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final title = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
                 Text(
-                  '${planning.decks.where((item) => item.id == deck.deckId).firstOrNull?.name ?? 'Deck'} · '
-                  '${deck.worked}/${deck.total} cartes · ${deck.percent} %',
+                  _planTitle(planning, session.plan),
+                  style: Theme.of(context).textTheme.titleMedium,
                 ),
-          ],
+                Text('Séance du $date'),
+              ],
+            );
+            final overall = Column(
+              crossAxisAlignment: constraints.maxWidth >= 600
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  '${session.percent} %',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                Text('${session.worked} sur ${session.total} cartes'),
+              ],
+            );
+            if (session.plan.deckId != null) {
+              return Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Expanded(child: title),
+                  overall,
+                ],
+              );
+            }
+            final columns = constraints.maxWidth >= 1000
+                ? 3
+                : constraints.maxWidth >= 560
+                ? 2
+                : 1;
+            final spacing = AppSpacing.lg;
+            final deckWidth =
+                (constraints.maxWidth - spacing * (columns - 1)) / columns;
+            final deckDetails = Wrap(
+              spacing: spacing,
+              runSpacing: AppSpacing.md,
+              children: [
+                for (final deck in session.decks)
+                  SizedBox(
+                    width: deckWidth,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          planning.decks
+                                  .where((item) => item.id == deck.deckId)
+                                  .firstOrNull
+                                  ?.name ??
+                              'Deck',
+                          style: Theme.of(context).textTheme.titleSmall,
+                        ),
+                        Text(
+                          '${deck.percent} % · ${deck.worked}/${deck.total} cartes',
+                        ),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+            final results = Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(alignment: Alignment.centerRight, child: overall),
+                const SizedBox(height: AppSpacing.md),
+                deckDetails,
+              ],
+            );
+            if (constraints.maxWidth >= 600) {
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  SizedBox(width: constraints.maxWidth * .32, child: title),
+                  const SizedBox(width: AppSpacing.xl),
+                  Expanded(child: results),
+                ],
+              );
+            }
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(child: title),
+                    overall,
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.md),
+                deckDetails,
+              ],
+            );
+          },
         ),
       ),
     );
