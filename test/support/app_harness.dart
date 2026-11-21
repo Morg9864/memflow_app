@@ -194,6 +194,20 @@ Future<(GoRouter, FakeAuth)> pumpApp(
   final prefs = await SharedPreferences.getInstance();
   final fakeAuth = auth ?? FakeAuth();
   final biology = fixtureCollection('c1', 'Biologie');
+  final biologyDeck = DeckListItem(
+    id: 'd0',
+    collectionId: 'c1',
+    name: 'Cellules',
+    icon: 'C',
+    difficulty: DeckDifficulty.moyen,
+    totalCards: 2,
+    cardsDone: 0,
+    dueCards: 2,
+    progress: 0,
+    status: DeckStatus.dues,
+    createdAt: DateTime.utc(2026),
+    updatedAt: DateTime.utc(2026),
+  );
   await tester.pumpWidget(
     ProviderScope(
       overrides: [
@@ -216,8 +230,11 @@ Future<(GoRouter, FakeAuth)> pumpApp(
         ),
         collectionProvider.overrideWith((ref, id) => Stream.value(biology)),
         collectionDecksProvider.overrideWith(
-          (ref, id) => Stream.value(const <DeckListItem>[]),
+          (ref, id) => Stream.value([biologyDeck]),
         ),
+        studyDecksForCollectionProvider(
+          'c1',
+        ).overrideWith((ref) => Stream.value([biologyDeck])),
         syncStatusProvider.overrideWith(
           (ref) => Stream.value(
             const SyncStatus(state: SyncState.idle, pendingCount: 0),
@@ -241,10 +258,12 @@ Future<(GoRouter, FakeAuth)> pumpApp(
   return (router, fakeAuth);
 }
 
-/// Home -> collection detail -> "Étudier" (mode sheet opens).
+/// Home -> collection detail -> free study -> all decks -> mode sheet.
 Future<void> openModeSheetFromHome(WidgetTester tester) async {
   await tester.tap(find.text('Biologie'));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Étudier'));
+  await tester.tap(find.text('Révision libre'));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text('Tous les decks'));
   await tester.pumpAndSettle();
 }
