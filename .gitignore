@@ -87,6 +87,7 @@ supabase/*
 supabase/migrations/*
 !supabase/migrations/20261117092700_revoke_public_default_privileges.sql
 !supabase/migrations/20261119111732_study_planning.sql
+!supabase/migrations/20261121213841_active_study_sessions.sql
 
 # -----------------------------
 # Tooling / metadata

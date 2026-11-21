@@ -543,6 +543,52 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
     }
   }
 
+  Future<void> _endStudy() async {
+    final current = _state;
+    if (current == null || _isApplyingReview) return;
+    final shouldEnd = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Mettre fin à cette session ?'),
+        content: const Text(
+          'Les cartes déjà notées sont conservées. La carte en cours reste '
+          'sans note et pourra être révisée plus tard.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Continuer la session'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Terminer la session'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || shouldEnd != true) return;
+    final elapsedState = _stateWithCapturedActiveTime(current);
+    _activeSegmentStartedAt = null;
+    try {
+      await _controller.saveSession(
+        elapsedState.copyWith(isCompleted: true, completedAt: DateTime.now()),
+      );
+      if (!mounted) return;
+      ref.invalidate(activeStudySessionProvider);
+      _exitStudy();
+    } catch (_) {
+      if (!mounted) return;
+      _activeSegmentStartedAt = DateTime.now();
+      appScaffoldMessengerKey.currentState
+        ?..clearSnackBars()
+        ..showSnackBar(
+          const SnackBar(
+            content: Text('Impossible de terminer la session. Réessaie.'),
+          ),
+        );
+    }
+  }
+
   bool _canPopStudy() {
     return Navigator.of(context).canPop();
   }
@@ -904,6 +950,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen>
                                   total: state.cards.length,
                                   level: card.level,
                                   onClose: _pauseStudy,
+                                  onEnd: _endStudy,
                                 ),
                                 SizedBox(height: isTablet ? 32 : 8),
                                 Expanded(
@@ -2863,6 +2910,7 @@ class _StudyProgressHeader extends StatelessWidget {
     required this.total,
     required this.level,
     this.onClose,
+    this.onEnd,
   });
 
   final String title;
@@ -2870,6 +2918,7 @@ class _StudyProgressHeader extends StatelessWidget {
   final int total;
   final int level;
   final VoidCallback? onClose;
+  final VoidCallback? onEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -2904,7 +2953,11 @@ class _StudyProgressHeader extends StatelessWidget {
                 style: theme.textTheme.titleSmall,
               ),
             ),
-            const SizedBox(width: 48),
+            IconButton(
+              tooltip: 'Terminer la session',
+              onPressed: onEnd,
+              icon: const Icon(Icons.stop_circle_outlined),
+            ),
           ],
         ),
         const SizedBox(height: 4),

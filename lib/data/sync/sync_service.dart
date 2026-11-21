@@ -93,6 +93,45 @@ class SyncService {
   Stream<SyncStatus> get statusStream => _statusController.stream;
   SyncStatus get status => _status;
 
+  bool _canAccessStudySession(String userId) {
+    final bound = _session;
+    if (bound != null && (bound.userId != userId || !_isCurrent(bound))) {
+      return false;
+    }
+    final authenticatedUserId = _client.auth.currentUser?.id;
+    return authenticatedUserId == userId ||
+        (authenticatedUserId == null && bound?.userId == userId);
+  }
+
+  Future<Map<String, dynamic>?> fetchActiveStudySession(String userId) async {
+    final session = _session;
+    if (!_canAccessStudySession(userId)) return null;
+    if (session != null) _checkSession(session);
+    final row = await _client
+        .from('active_study_sessions')
+        .select('session_data')
+        .eq('user_id', userId)
+        .maybeSingle();
+    if (session != null) _checkSession(session);
+    final data = row?['session_data'];
+    return data is Map ? Map<String, dynamic>.from(data) : null;
+  }
+
+  Future<void> saveActiveStudySession(
+    String userId,
+    Map<String, dynamic> sessionData,
+  ) async {
+    final session = _session;
+    if (!_canAccessStudySession(userId)) return;
+    if (session != null) _checkSession(session);
+    await _client.from('active_study_sessions').upsert({
+      'user_id': userId,
+      'session_data': sessionData,
+      'updated_at': sessionData['updated_at'],
+    }, onConflict: 'user_id');
+    if (session != null) _checkSession(session);
+  }
+
   /// Prend possession de la base locale pour [userId], puis lance une première
   /// synchronisation. Les données d'un autre compte sont effacées.
   Future<void> startFor(String userId) async {

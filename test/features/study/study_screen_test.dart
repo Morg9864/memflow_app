@@ -7,6 +7,7 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:memflow/app/app_scaffold_messenger.dart';
 import 'package:memflow/domain/models/models.dart';
 import 'package:memflow/features/study/study_controller.dart';
@@ -406,6 +407,63 @@ void main() {
     debugDefaultTargetPlatformOverride = null;
   });
 
+  testWidgets('tablet can end a session after confirmation', (tester) async {
+    final savedSessions = <StudySessionState>[];
+    final controller = _FakeStudyController(
+      initialState: buildState([buildCard('end', mode: TestMode.trueFalse)]),
+      submitReviewImpl:
+          ({required cardId, required result, required wasCorrect}) async {},
+      saveSessionImpl: (state) async => savedSessions.add(state),
+    );
+    final router = GoRouter(
+      initialLocation: '/study',
+      routes: [
+        GoRoute(
+          path: '/study',
+          builder: (_, _) => StudyScreen(
+            collectionId: 'react',
+            forcedMode: TestMode.trueFalse,
+            controller: controller,
+          ),
+        ),
+        GoRoute(
+          path: '/collection/:id',
+          builder: (_, _) => const Scaffold(body: Text('Collection')),
+        ),
+      ],
+    );
+    addTearDown(router.dispose);
+    tester.view.devicePixelRatio = 1;
+    tester.view.physicalSize = const Size(880, 1408);
+    addTearDown(() {
+      tester.view.resetPhysicalSize();
+      tester.view.resetDevicePixelRatio();
+    });
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [sharedPreferencesProvider.overrideWithValue(prefs)],
+        child: MaterialApp.router(
+          theme: AppTheme.light(),
+          builder: (context, child) => AdaptiveTheme(child: child!),
+          routerConfig: router,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('Terminer la session'));
+    await tester.pumpAndSettle();
+    expect(find.text('Mettre fin à cette session ?'), findsOneWidget);
+    await tester.tap(find.widgetWithText(FilledButton, 'Terminer la session'));
+    await tester.pumpAndSettle();
+
+    expect(savedSessions, hasLength(1));
+    expect(savedSessions.single.isCompleted, isTrue);
+    expect(find.text('Collection'), findsOneWidget);
+  });
+
   testWidgets('portrait Android tablet: true/false answers sit side by side', (
     tester,
   ) async {
@@ -418,11 +476,20 @@ void main() {
       size: const Size(880, 1408),
       platform: TargetPlatform.android,
     );
+    expect(find.byTooltip('Terminer la session'), findsOneWidget);
     final vrai = topLeftOf(tester, 'Vrai');
     final faux = topLeftOf(tester, 'Faux');
     expect(vrai.dy, faux.dy);
     expect(faux.dx, greaterThan(vrai.dx));
     expect(tileSize(tester, 'Vrai'), tileSize(tester, 'Faux'));
+    final semantics = tester.ensureSemantics();
+    await tester.tap(find.text('Faux'));
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsLabel(RegExp(r'^Faux, .*ta réponse$')),
+      findsOneWidget,
+    );
+    semantics.dispose();
     debugDefaultTargetPlatformOverride = null;
   });
 
@@ -708,6 +775,7 @@ class _FakeStudyController extends StudyController {
   _FakeStudyController({
     required StudySessionState initialState,
     required _SubmitReviewCallback submitReviewImpl,
+    Future<void> Function(StudySessionState state)? saveSessionImpl,
   }) : _initialState = initialState,
        _submitReviewImpl = submitReviewImpl,
        super.fromPersistence(
@@ -726,6 +794,7 @@ class _FakeStudyController extends StudyController {
                required wasCorrect,
                required playedMode,
              }) async {},
+         saveSession: saveSessionImpl,
        );
 
   final StudySessionState _initialState;

@@ -555,6 +555,7 @@ class AppRepository {
     Set<String>? onlyCardIds,
     required int sessionCardLimit,
   }) async {
+    await _refreshStudySessionFromRemote();
     final now = DateTime.now();
     final restored = await _restoreStudySession(
       collectionId: collectionId,
@@ -643,49 +644,169 @@ class AppRepository {
   /// Persists only the session envelope and card IDs. Card content remains in
   /// the normal flashcard table, so edits/deletions are detected on restore.
   Future<void> saveStudySession(StudySessionState state) async {
-    if (state.isCompleted) {
-      await _db.deleteMeta(AppDatabase.activeStudySessionKey);
-      return;
-    }
+    final data = _studySessionData(state);
     await _db.writeMetaString(
       AppDatabase.activeStudySessionKey,
-      jsonEncode({
-        'session_id': state.sessionId,
+      jsonEncode(data),
+    );
+    final owner = _currentAccountId?.call();
+    if (owner != null) {
+      try {
+        await _sync.saveActiveStudySession(owner, data);
+      } catch (_) {
+        // The local copy remains authoritative offline and is retried when the
+        // saved session is next opened on a connected device.
+      }
+    }
+  }
+
+  Map<String, dynamic> _studySessionData(StudySessionState state) {
+    final now = DateTime.now().toUtc().toIso8601String();
+    final scopeKey = state.planningDay != null
+        ? 'planning:${studyDayKey(state.planningDay!)}:/study?planning=1'
+              '${state.collectionId == null ? '' : '&collectionId=${state.collectionId}'}'
+              '${state.deckId == null ? '' : '&deckId=${state.deckId}'}'
+        : state.deckId != null
+        ? 'deck:${state.deckId}'
+        : state.collectionId == null
+        ? null
+        : 'collection:${state.collectionId}';
+    if (state.isCompleted) {
+      return {
+        'version': 1,
+        'status': 'ended',
+        'scope_key': scopeKey,
         'collection_id': state.collectionId,
         'deck_id': state.deckId,
-        'deck_title': state.deckTitle,
-        'card_ids': state.cards.map((card) => card.id).toList(),
-        'requested_mode': state.requestedMode?.name,
-        'planning_day': state.planningDay == null
-            ? null
-            : studyDayKey(state.planningDay!),
-        'plan_id': state.planId,
-        'current_index': state.currentIndex,
-        'review_counts': {
-          for (final entry in state.reviewCounts.entries)
-            entry.key.name: entry.value,
-        },
-        'started_at': state.startedAt?.toIso8601String(),
-        'correct_count': state.correctCount,
-        'incorrect_count': state.incorrectCount,
-        'incorrect_card_ids': state.incorrectCardIds.toList(),
-        'cloze_correct_gaps': state.clozeCorrectGaps,
-        'cloze_total_gaps': state.clozeTotalGaps,
-        'active_seconds': state.activeDuration.inSeconds,
-      }),
-    );
+        'updated_at': now,
+      };
+    }
+    final counts = {
+      for (final entry in state.reviewCounts.entries)
+        entry.key.name: entry.value,
+    };
+    return {
+      'version': 1,
+      'status': 'active',
+      'session_id': state.sessionId,
+      'scope_key': scopeKey,
+      'collection_id': state.collectionId,
+      'deck_id': state.deckId,
+      'deck_title': state.deckTitle,
+      'card_ids': state.cards.map((card) => card.id).toList(),
+      'modes': {
+        for (final card in state.cards) card.id: card.currentTestMode.name,
+      },
+      'chosen_mode': state.requestedMode?.name ?? 'adaptive',
+      'requested_mode': state.requestedMode?.name,
+      'planning_day': state.planningDay == null
+          ? null
+          : studyDayKey(state.planningDay!),
+      'plan_id': state.planId,
+      'index': state.currentIndex,
+      'current_index': state.currentIndex,
+      'review_counts': counts,
+      'started_at': state.startedAt?.toUtc().toIso8601String(),
+      'correct_count': state.correctCount,
+      'incorrect_count': state.incorrectCount,
+      'incorrect_card_ids': state.incorrectCardIds.toList(),
+      'cloze_correct_gaps': state.clozeCorrectGaps,
+      'cloze_total_gaps': state.clozeTotalGaps,
+      'active_seconds': state.activeDuration.inSeconds,
+      'summary': {
+        'counts': counts,
+        'correct': state.correctCount,
+        'incorrect': state.incorrectCount,
+        'missedIds': state.incorrectCardIds.toList(),
+        'duration': state.activeDuration.inMilliseconds,
+      },
+      'updated_at': now,
+    };
+  }
+
+  Future<void> _refreshStudySessionFromRemote() async {
+    final owner = _currentAccountId?.call();
+    if (owner == null) return;
+    try {
+      final remote = await _sync.fetchActiveStudySession(owner);
+      final localRaw = await _db.readMetaString(
+        AppDatabase.activeStudySessionKey,
+      );
+      if (remote == null) {
+        if (localRaw != null) {
+          final legacy = Map<String, dynamic>.from(jsonDecode(localRaw) as Map);
+          legacy
+            ..putIfAbsent('version', () => 1)
+            ..putIfAbsent('status', () => 'active')
+            ..putIfAbsent(
+              'updated_at',
+              () => DateTime.now().toUtc().toIso8601String(),
+            )
+            ..putIfAbsent('index', () => legacy['current_index'] ?? 0)
+            ..putIfAbsent(
+              'chosen_mode',
+              () => legacy['requested_mode'] ?? 'adaptive',
+            )
+            ..putIfAbsent('modes', () => <String, String>{})
+            ..putIfAbsent('scope_key', () {
+              final collectionId = legacy['collection_id'] as String?;
+              final deckId = legacy['deck_id'] as String?;
+              final planningDay = legacy['planning_day'] as String?;
+              if (planningDay != null) {
+                return 'planning:$planningDay:/study?planning=1'
+                    '${collectionId == null ? '' : '&collectionId=$collectionId'}'
+                    '${deckId == null ? '' : '&deckId=$deckId'}';
+              }
+              if (deckId != null) return 'deck:$deckId';
+              return collectionId == null ? null : 'collection:$collectionId';
+            });
+          await _db.writeMetaString(
+            AppDatabase.activeStudySessionKey,
+            jsonEncode(legacy),
+          );
+          await _sync.saveActiveStudySession(owner, legacy);
+        }
+        return;
+      }
+      final local = localRaw == null
+          ? null
+          : Map<String, dynamic>.from(jsonDecode(localRaw) as Map);
+      final remoteUpdated = DateTime.tryParse(
+        remote['updated_at'] as String? ?? '',
+      )?.toUtc();
+      final localUpdated = DateTime.tryParse(
+        local?['updated_at'] as String? ?? '',
+      )?.toUtc();
+      if (local == null ||
+          (remoteUpdated != null &&
+              (localUpdated == null || remoteUpdated.isAfter(localUpdated)))) {
+        await _db.writeMetaString(
+          AppDatabase.activeStudySessionKey,
+          jsonEncode(remote),
+        );
+      } else {
+        await _sync.saveActiveStudySession(owner, local);
+      }
+    } catch (_) {
+      // A remote lookup must not prevent a local study session from resuming.
+    }
   }
 
   /// Résumé de la session sauvegardée, s'il y en a une à reprendre.
   Future<SavedStudySession?> savedStudySession() async {
+    await _refreshStudySessionFromRemote();
     final raw = await _db.readMetaString(AppDatabase.activeStudySessionKey);
     if (raw == null) return null;
     try {
       final data = jsonDecode(raw) as Map<String, dynamic>;
+      if (data['status'] == 'ended') return null;
       final ids = (data['card_ids'] as List<dynamic>).cast<String>();
-      final index = (data['current_index'] as num).toInt();
+      final index = ((data['index'] ?? data['current_index']) as num).toInt();
       if (ids.isEmpty || index < 0 || index >= ids.length) return null;
-      final modeName = data['requested_mode'] as String?;
+      final chosenMode = data['chosen_mode'] as String?;
+      final modeName =
+          data['requested_mode'] as String? ??
+          (chosenMode == 'adaptive' ? null : chosenMode);
       TestMode? mode;
       for (final candidate in TestMode.values) {
         if (candidate.name == modeName) mode = candidate;
@@ -717,22 +838,28 @@ class AppRepository {
     if (raw == null) return null;
     try {
       final data = jsonDecode(raw) as Map<String, dynamic>;
+      if (data['status'] == 'ended') return null;
       if (data['collection_id'] != collectionId ||
           data['deck_id'] != deckId ||
           parseStudyDay(data['planning_day']) != planningDay ||
           data['plan_id'] != planId) {
         return null;
       }
-      final savedMode = data['requested_mode'] == null
+      final chosenMode = data['chosen_mode'] as String?;
+      final modeName =
+          data['requested_mode'] as String? ??
+          (chosenMode == 'adaptive' ? null : chosenMode);
+      final savedMode = modeName == null
           ? null
           : TestMode.values.firstWhere(
-              (mode) => mode.name == data['requested_mode'],
+              (mode) => mode.name == modeName,
               orElse: () => TestMode.multipleChoice,
             );
       if (savedMode != forcedMode) return null;
       final ids = (data['card_ids'] as List<dynamic>).cast<String>();
       if (onlyCardIds != null && ids.any((id) => !onlyCardIds.contains(id))) {
-        final savedIndex = (data['current_index'] as num).toInt();
+        final savedIndex = ((data['index'] ?? data['current_index']) as num)
+            .toInt();
         final unresolvedIds = ids
             .asMap()
             .entries
@@ -740,7 +867,8 @@ class AppRepository {
             .map((entry) => entry.value);
         if (unresolvedIds.any((id) => !onlyCardIds.contains(id))) return null;
       }
-      final savedIndex = (data['current_index'] as num).toInt();
+      final savedIndex = ((data['index'] ?? data['current_index']) as num)
+          .toInt();
       if (savedIndex < 0 || savedIndex >= ids.length) return null;
       final restoredIds = onlyCardIds == null || planningDay != null
           ? ids
@@ -757,11 +885,25 @@ class AppRepository {
         await _db.deleteMeta(AppDatabase.activeStudySessionKey);
         return null;
       }
-      final cards = restoredIds
-          .map((id) => _mapStudyCard(byId[id]!, forcedMode: savedMode))
-          .toList();
+      final savedModes = Map<String, dynamic>.from(
+        data['modes'] as Map? ?? const {},
+      );
+      final cards = restoredIds.map((id) {
+        final modeName = savedModes[id] as String?;
+        final cardMode = modeName == null
+            ? savedMode
+            : TestMode.values.firstWhere(
+                (mode) => mode.name == modeName,
+                orElse: () => savedMode ?? TestMode.multipleChoice,
+              );
+        return _mapStudyCard(byId[id]!, forcedMode: cardMode);
+      }).toList();
       if (restoredIndex < 0 || restoredIndex >= cards.length) return null;
-      final rawCounts = (data['review_counts'] as Map<String, dynamic>?) ?? {};
+      final summary = data['summary'] as Map<String, dynamic>?;
+      final rawCounts =
+          (data['review_counts'] as Map<String, dynamic>?) ??
+          (summary?['counts'] as Map<String, dynamic>?) ??
+          {};
       final counts = {
         for (final result in ReviewResult.values)
           result: (rawCounts[result.name] as num?)?.toInt() ?? 0,
@@ -793,7 +935,9 @@ class AppRepository {
         clozeCorrectGaps: (data['cloze_correct_gaps'] as num?)?.toInt() ?? 0,
         clozeTotalGaps: (data['cloze_total_gaps'] as num?)?.toInt() ?? 0,
         activeDuration: Duration(
-          seconds: (data['active_seconds'] as num?)?.toInt() ?? 0,
+          milliseconds:
+              (summary?['duration'] as num?)?.toInt() ??
+              ((data['active_seconds'] as num?)?.toInt() ?? 0) * 1000,
         ),
         cardDisplayedAt: DateTime.now(),
       );

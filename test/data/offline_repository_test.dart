@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:drift/drift.dart' show Value;
 import 'package:flutter_test/flutter_test.dart';
 import 'package:memflow/data/local/database.dart';
@@ -348,7 +350,40 @@ void main() {
 
     expect(restored.sessionId, created.sessionId);
     expect(restored.currentIndex, 1);
-    expect(restored.cards.map((card) => card.id), created.cards.map((card) => card.id));
+    expect(
+      restored.cards.map((card) => card.id),
+      created.cards.map((card) => card.id),
+    );
+  });
+
+  test('une session terminée ne reste pas proposée à la reprise', () async {
+    await importDrafts([draft(), draft(question: 'Deuxième ?')]);
+    final created = await repository.startStudySession(sessionCardLimit: 2);
+    final envelope =
+        jsonDecode(
+              (await database.readMetaString(
+                AppDatabase.activeStudySessionKey,
+              ))!,
+            )
+            as Map<String, dynamic>;
+    expect(envelope, containsPair('status', 'active'));
+    expect(envelope, contains('scope_key'));
+    expect(envelope, contains('updated_at'));
+
+    await repository.saveStudySession(created.copyWith(isCompleted: true));
+
+    expect(await repository.savedStudySession(), isNull);
+    final ended =
+        jsonDecode(
+              (await database.readMetaString(
+                AppDatabase.activeStudySessionKey,
+              ))!,
+            )
+            as Map<String, dynamic>;
+    expect(ended, containsPair('status', 'ended'));
+    final next = await repository.startStudySession(sessionCardLimit: 2);
+    expect(next.sessionId, isNot(created.sessionId));
+    expect(next.currentIndex, 0);
   });
 
   test('une review avec le même identifiant est idempotente', () async {
