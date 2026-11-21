@@ -1262,7 +1262,7 @@ class DeckCard extends StatelessWidget {
                               TextButton(
                                 onPressed: onStudyErrors,
                                 style: TextButton.styleFrom(
-                                  foregroundColor: theme.colorScheme.error,
+                                  foregroundColor: theme.colorScheme.primary,
                                   padding: EdgeInsets.zero,
                                   minimumSize: const Size(32, 32),
                                   tapTargetSize:
@@ -1321,6 +1321,7 @@ class DeckCard extends StatelessWidget {
                         ProgressPill(
                           value: deck.sessionProgress,
                           progressColor: AppColors.resultGood,
+                          errorColor: AppColors.primary,
                           errorFraction: deck.sessionWorked > 0
                               ? (deck.errorCount / deck.sessionWorked)
                                     .clamp(0, 1)

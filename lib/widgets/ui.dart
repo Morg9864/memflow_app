@@ -330,6 +330,7 @@ class ProgressPill extends StatelessWidget {
     this.height = 7,
     this.errorFraction = 0,
     this.progressColor,
+    this.errorColor,
     this.semanticsLabel,
   });
 
@@ -337,6 +338,7 @@ class ProgressPill extends StatelessWidget {
   final double height;
   final double errorFraction;
   final Color? progressColor;
+  final Color? errorColor;
   final String? semanticsLabel;
 
   @override
@@ -378,7 +380,9 @@ class ProgressPill extends StatelessWidget {
                       bottom: 0,
                       right: constraints.maxWidth * (1 - animated),
                       width: errorWidth,
-                      child: ColoredBox(color: theme.colorScheme.error),
+                      child: ColoredBox(
+                        color: errorColor ?? theme.colorScheme.error,
+                      ),
                     ),
                 ],
               );
