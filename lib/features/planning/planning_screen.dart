@@ -33,6 +33,30 @@ String plannedStudyLocation({
 String formatPlanningDate(DateTime date) =>
     DateFormat('dd/MM/yyyy').format(date);
 
+String formatRelativePlanningDate(DateTime date, {DateTime? today}) {
+  final reference = studyDay(today ?? DateTime.now());
+  final day = studyDay(date);
+  final difference = day.difference(reference).inDays;
+  return switch (difference) {
+    0 => 'aujourd’hui',
+    1 => 'demain',
+    > 1 => 'dans $difference jours',
+    -1 => 'hier',
+    _ => 'il y a ${difference.abs()} jours',
+  };
+}
+
+String formatRelativeSrsDate(DateTime date, {DateTime? today}) {
+  final reference = studyDay(today ?? DateTime.now());
+  final difference = studyDay(date).difference(reference).inDays;
+  if (difference < 0) {
+    return difference == -1
+        ? 'en retard depuis hier'
+        : 'en retard depuis ${difference.abs()} jours';
+  }
+  return formatRelativePlanningDate(date, today: reference);
+}
+
 const _shortDayNames = ['Lun.', 'Mar.', 'Mer.', 'Jeu.', 'Ven.', 'Sam.', 'Dim.'];
 const _oneDay = Duration(days: 1);
 
@@ -227,74 +251,87 @@ class _PastSessionCard extends StatelessWidget {
                 ],
               );
             }
-            final columns = constraints.maxWidth >= 1000
-                ? 3
-                : constraints.maxWidth >= 560
-                ? 2
-                : 1;
-            final spacing = AppSpacing.lg;
-            final deckWidth =
-                (constraints.maxWidth - spacing * (columns - 1)) / columns;
-            final deckDetails = Wrap(
-              spacing: spacing,
-              runSpacing: AppSpacing.md,
-              children: [
-                for (final deck in session.decks)
-                  SizedBox(
-                    width: deckWidth,
-                    child: Container(
-                      padding: const EdgeInsets.all(AppSpacing.sm),
-                      decoration: BoxDecoration(
-                        border: Border.all(
-                          color: Theme.of(context).colorScheme.outlineVariant,
-                        ),
-                        borderRadius: AppTheme.radiusSm,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            final results = LayoutBuilder(
+              builder: (context, resultConstraints) {
+                final columns = resultConstraints.maxWidth >= 760
+                    ? 3
+                    : resultConstraints.maxWidth >= 480
+                    ? 2
+                    : 1;
+                final spacing = AppSpacing.md;
+                final deckWidth =
+                    (resultConstraints.maxWidth - spacing * (columns - 1)) /
+                    columns;
+                final deckDetails = Wrap(
+                  spacing: spacing,
+                  runSpacing: AppSpacing.md,
+                  children: [
+                    for (final deck in session.decks)
+                      SizedBox(
+                        width: deckWidth,
+                        child: Container(
+                          padding: const EdgeInsets.all(AppSpacing.sm),
+                          decoration: BoxDecoration(
+                            border: Border.all(
+                              color: Theme.of(
+                                context,
+                              ).colorScheme.outlineVariant,
+                            ),
+                            borderRadius: AppTheme.radiusSm,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              Expanded(
-                                child: Text(
-                                  planning.decks
-                                          .where(
-                                            (item) => item.id == deck.deckId,
-                                          )
-                                          .firstOrNull
-                                          ?.name ??
-                                      'Deck',
-                                  style: Theme.of(context).textTheme.titleSmall,
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.xs),
-                              Text(
-                                '${deck.percent} %',
-                                style: Theme.of(context).textTheme.titleSmall
-                                    ?.copyWith(
-                                      color: Theme.of(
+                              Row(
+                                mainAxisAlignment:
+                                    MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      planning.decks
+                                              .where(
+                                                (item) =>
+                                                    item.id == deck.deckId,
+                                              )
+                                              .firstOrNull
+                                              ?.name ??
+                                          'Deck',
+                                      style: Theme.of(
                                         context,
-                                      ).colorScheme.primary,
+                                      ).textTheme.titleSmall,
                                     ),
+                                  ),
+                                  const SizedBox(width: AppSpacing.xs),
+                                  Text(
+                                    '${deck.percent} %',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleSmall
+                                        ?.copyWith(
+                                          color: Theme.of(
+                                            context,
+                                          ).colorScheme.primary,
+                                        ),
+                                  ),
+                                ],
                               ),
+                              Text('${deck.worked}/${deck.total} cartes'),
                             ],
                           ),
-                          Text('${deck.worked}/${deck.total} cartes'),
-                        ],
+                        ),
                       ),
-                    ),
-                  ),
-              ],
-            );
-            final results = Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Align(alignment: Alignment.centerRight, child: overall),
-                const SizedBox(height: AppSpacing.md),
-                deckDetails,
-              ],
+                  ],
+                );
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Align(alignment: Alignment.centerRight, child: overall),
+                    const SizedBox(height: AppSpacing.md),
+                    deckDetails,
+                  ],
+                );
+              },
             );
             if (constraints.maxWidth >= 600) {
               return Row(
@@ -309,16 +346,9 @@ class _PastSessionCard extends StatelessWidget {
             return Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(child: title),
-                    overall,
-                  ],
-                ),
+                title,
                 const SizedBox(height: AppSpacing.md),
-                deckDetails,
+                results,
               ],
             );
           },
@@ -361,6 +391,10 @@ class _PlanCard extends ConsumerWidget {
     final next = plan.nextOnOrAfter(
       today.remaining.isEmpty ? planning.today.add(_oneDay) : planning.today,
     );
+    final last = planning.lastPlanBefore(
+      collectionId: plan.collectionId,
+      deckId: plan.deckId,
+    );
     final cadence = plan.isRecurring
         ? weekdays.map((day) => _shortDayNames[day - 1]).join(' · ')
         : 'Séance ponctuelle';
@@ -388,8 +422,10 @@ class _PlanCard extends ConsumerWidget {
                         !plan.followUps.containsKey(planning.today)
                   ? 'Séance terminée. Choisis la suite.'
                   : next == null
-                  ? 'Aucune prochaine séance'
-                  : 'Prochaine séance le ${formatPlanningDate(next)}',
+                  ? last != null
+                        ? 'Dernière séance ${formatRelativePlanningDate(last, today: planning.today)}'
+                        : 'Aucune prochaine séance'
+                  : 'Prochaine séance ${formatRelativePlanningDate(next, today: planning.today)}',
             ),
             Wrap(
               crossAxisAlignment: WrapCrossAlignment.center,

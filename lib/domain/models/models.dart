@@ -115,6 +115,11 @@ class CollectionListItem {
     required this.errorCount,
     this.isDisabled = false,
     this.nextReviewAt,
+    this.sessionWorked = 0,
+    this.sessionTotal = 0,
+    this.sessionDate,
+    this.srsEnabled = false,
+    this.nextSessionAt,
   });
 
   final String id;
@@ -130,8 +135,15 @@ class CollectionListItem {
   final int errorCount;
   final bool isDisabled;
   final DateTime? nextReviewAt;
+  final int sessionWorked;
+  final int sessionTotal;
+  final DateTime? sessionDate;
+  final bool srsEnabled;
+  final DateTime? nextSessionAt;
 
   double get progress => totalCards == 0 ? 0 : cardsDone / totalCards;
+  double get sessionProgress =>
+      sessionTotal == 0 ? 0 : sessionWorked / sessionTotal;
 }
 
 class CollectionDetailData {
@@ -158,6 +170,11 @@ class DeckListItem {
     this.errorCount = 0,
     this.isDisabled = false,
     this.nextReviewAt,
+    this.sessionWorked = 0,
+    this.sessionTotal = 0,
+    this.sessionDate,
+    this.srsEnabled = false,
+    this.nextSessionAt,
   });
 
   final String id;
@@ -175,6 +192,14 @@ class DeckListItem {
   final int errorCount;
   final bool isDisabled;
   final DateTime? nextReviewAt;
+  final int sessionWorked;
+  final int sessionTotal;
+  final DateTime? sessionDate;
+  final bool srsEnabled;
+  final DateTime? nextSessionAt;
+
+  double get sessionProgress =>
+      sessionTotal == 0 ? 0 : sessionWorked / sessionTotal;
 
   String get badgeLabel {
     if (status == DeckStatus.dues && dueCards > 0) {

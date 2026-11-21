@@ -1819,6 +1819,16 @@ class AppRepository {
     int errorCount,
     PlanningOverview planning,
   ) {
+    final session = planning.progress(collectionId: collection.id);
+    final previousSession = session.total == 0
+        ? planning.previousSessionProgress(collectionId: collection.id)
+        : null;
+    final sessionWorked = session.total > 0
+        ? session.worked
+        : previousSession?.worked ?? 0;
+    final sessionTotal = session.total > 0
+        ? session.total
+        : previousSession?.total ?? 0;
     return CollectionListItem(
       id: collection.id,
       name: collection.name,
@@ -1830,6 +1840,14 @@ class AppRepository {
       nextReviewAt: planning.srsEnabled
           ? _earliestDue(flashcards)
           : planning.nextPlanFor(collection.id),
+      nextSessionAt: planning.nextPlanFor(collection.id),
+      sessionWorked: sessionWorked,
+      sessionTotal: sessionTotal,
+      sessionDate: session.total > 0
+          ? planning.today
+          : previousSession?.date ??
+                planning.lastPlanBefore(collectionId: collection.id),
+      srsEnabled: planning.srsEnabled,
       color: collection.color,
       createdAt: collection.createdAt,
       updatedAt: collection.updatedAt,
@@ -1844,7 +1862,17 @@ class AppRepository {
     PlanningOverview planning,
   ) {
     final cardsDone = flashcards.where((card) => card.repetitions > 0).length;
-    final dueCards = planning.progress(deckId: deck.id).remaining.length;
+    final session = planning.progress(
+      collectionId: deck.collectionId,
+      deckId: deck.id,
+    );
+    final previousSession = session.total == 0
+        ? planning.previousSessionProgress(
+            collectionId: deck.collectionId,
+            deckId: deck.id,
+          )
+        : null;
+    final dueCards = session.remaining.length;
     final masteredCards = flashcards.where((card) => card.mastered).length;
     final totalCards = flashcards.length;
     final status = dueCards > 0
@@ -1863,6 +1891,20 @@ class AppRepository {
       cardsDone: cardsDone,
       dueCards: dueCards,
       progress: totalCards == 0 ? 0 : cardsDone / totalCards,
+      sessionWorked: session.total > 0
+          ? session.worked
+          : previousSession?.worked ?? 0,
+      sessionTotal: session.total > 0
+          ? session.total
+          : previousSession?.total ?? 0,
+      sessionDate: session.total > 0
+          ? planning.today
+          : previousSession?.date ??
+                planning.lastPlanBefore(
+                  collectionId: deck.collectionId,
+                  deckId: deck.id,
+                ),
+      srsEnabled: planning.srsEnabled,
       status: status,
       createdAt: deck.createdAt,
       updatedAt: deck.updatedAt,
@@ -1875,6 +1917,7 @@ class AppRepository {
               planning.activeCards.where((card) => card.deckId == deck.id),
             )
           : planning.nextPlanFor(deck.collectionId, deckId: deck.id),
+      nextSessionAt: planning.nextPlanFor(deck.collectionId, deckId: deck.id),
     );
   }
 

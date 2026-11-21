@@ -558,14 +558,25 @@ class _CollectionCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final c = collection;
+    final dueReview = c.srsEnabled ? c.nextReviewAt : null;
     final tablet = MediaQuery.sizeOf(context).width >= AppBreakpoints.tablet;
-    final summary = StringBuffer(
-      '${c.name}, ${c.cardsDone} sur ${c.totalCards} cartes faites',
-    );
+    final summary = StringBuffer(c.name);
+    if (c.sessionTotal > 0) {
+      summary.write(
+        ', ${c.sessionWorked} sur ${c.sessionTotal} cartes travaillées',
+      );
+    }
     if (c.dueCards > 0) summary.write(', ${c.dueCards} à revoir');
     if (c.isDisabled) summary.write(', désactivée');
-    if (c.nextReviewAt case final next?) {
-      summary.write(', prochaine révision le ${formatPlanningDate(next)}');
+    if (c.nextSessionAt case final next?) {
+      summary.write(', prochaine séance ${formatRelativePlanningDate(next)}');
+    } else if (dueReview case final next?) {
+      summary.write(', prochaine révision ${formatRelativeSrsDate(next)}');
+    } else if (c.sessionDate != null &&
+        c.sessionDate!.isBefore(studyDay(DateTime.now()))) {
+      summary.write(
+        ', dernière séance ${formatRelativePlanningDate(c.sessionDate!)}',
+      );
     }
 
     void open() => context.push('/collection/${c.id}');
@@ -611,7 +622,9 @@ class _CollectionCard extends StatelessWidget {
                           Text(c.name, style: theme.textTheme.titleMedium),
                           const SizedBox(height: AppSpacing.xs),
                           Text(
-                            '${c.cardsDone} / ${c.totalCards} cartes faites',
+                            c.sessionTotal > 0
+                                ? '${c.sessionWorked} / ${c.sessionTotal} cartes travaillées'
+                                : 'Aucune carte prévue aujourd’hui',
                             style: theme.textTheme.bodySmall,
                           ),
                           if (c.dueCards > 0 && !c.isDisabled) ...[
@@ -638,16 +651,31 @@ class _CollectionCard extends StatelessWidget {
                               ],
                             ),
                           ],
-                          if (c.nextReviewAt case final next?) ...[
+                          if (c.nextSessionAt case final next?) ...[
                             const SizedBox(height: AppSpacing.xs),
                             Text(
-                              'Prochaine révision · ${formatPlanningDate(next)}',
+                              'Prochaine séance ${formatRelativePlanningDate(next)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ] else if (dueReview case final due?) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Prochaine révision ${formatRelativeSrsDate(due)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                          ] else if (c.sessionDate != null &&
+                              c.sessionDate!.isBefore(
+                                studyDay(DateTime.now()),
+                              )) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              'Dernière séance ${formatRelativePlanningDate(c.sessionDate!)}',
                               style: theme.textTheme.bodySmall,
                             ),
                           ],
                           const SizedBox(height: AppSpacing.md),
                           ProgressPill(
-                            value: c.progress,
+                            value: c.sessionProgress,
                             semanticsLabel: 'Progression de ${c.name}',
                           ),
                         ],

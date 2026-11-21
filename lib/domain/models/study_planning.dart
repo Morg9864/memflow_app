@@ -297,6 +297,64 @@ class PlanningOverview {
     return sessions;
   }
 
+  ({DateTime date, int worked, int total})? previousSessionProgress({
+    required String collectionId,
+    String? deckId,
+  }) {
+    for (final session in pastSessions) {
+      if (session.plan.collectionId != collectionId ||
+          (deckId == null
+              ? session.plan.deckId != null
+              : !session.plan.covers(collectionId, deckId))) {
+        continue;
+      }
+      if (deckId == null) {
+        return (
+          date: session.date,
+          worked: session.worked,
+          total: session.total,
+        );
+      }
+      final deck = session.decks
+          .where((item) => item.deckId == deckId)
+          .firstOrNull;
+      if (deck != null) {
+        return (date: session.date, worked: deck.worked, total: deck.total);
+      }
+    }
+    return null;
+  }
+
+  DateTime? lastPlanBefore({required String collectionId, String? deckId}) {
+    DateTime? latest;
+    for (final plan in activePlans) {
+      if (plan.collectionId != collectionId ||
+          (deckId == null
+              ? plan.deckId != null
+              : plan.deckId != null && plan.deckId != deckId)) {
+        continue;
+      }
+      DateTime? candidate;
+      if (plan.isRecurring) {
+        for (var offset = 1; offset <= 7; offset++) {
+          final day = today.subtract(Duration(days: offset));
+          if (plan.occursOn(day)) {
+            candidate = day;
+            break;
+          }
+        }
+      } else {
+        for (final day in plan.oneOffDates) {
+          if (day.isBefore(today)) candidate = day;
+        }
+      }
+      if (candidate != null && (latest == null || candidate.isAfter(latest))) {
+        latest = candidate;
+      }
+    }
+    return latest;
+  }
+
   PlanningProgress progress({
     String? collectionId,
     String? deckId,

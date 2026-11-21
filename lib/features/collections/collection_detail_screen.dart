@@ -834,6 +834,7 @@ class _CollectionProgress extends StatelessWidget {
   Widget build(BuildContext context) {
     final c = collection;
     final theme = Theme.of(context);
+    final dueReview = c.srsEnabled ? c.nextReviewAt : null;
     return LayoutBuilder(
       builder: (context, constraints) {
         final horizontalStats =
@@ -848,12 +849,16 @@ class _CollectionProgress extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        'Progression',
+                        c.sessionDate == studyDay(DateTime.now())
+                            ? 'Programme du jour'
+                            : c.sessionDate != null
+                            ? 'Dernière séance'
+                            : 'Programme du jour',
                         style: theme.textTheme.titleMedium,
                       ),
                     ),
                     Text(
-                      '${(c.progress * 100).round()} %',
+                      '${(c.sessionProgress * 100).round()} %',
                       style: theme.textTheme.titleSmall?.copyWith(
                         fontFeatures: AppTheme.tabularFigures,
                       ),
@@ -862,17 +867,19 @@ class _CollectionProgress extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.xs),
                 Text(
-                  '${c.cardsDone} carte${c.cardsDone == 1 ? '' : 's'} étudiée${c.cardsDone == 1 ? '' : 's'} sur ${c.totalCards}',
+                  c.sessionTotal > 0
+                      ? '${c.sessionWorked} sur ${c.sessionTotal} cartes travaillées'
+                      : 'Aucune carte prévue aujourd’hui.',
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(height: AppSpacing.md),
                 Semantics(
                   label: 'Progression de la collection',
-                  value: '${(c.progress * 100).round()} pour cent',
+                  value: '${(c.sessionProgress * 100).round()} pour cent',
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(999),
                     child: LinearProgressIndicator(
-                      value: c.progress,
+                      value: c.sessionProgress,
                       minHeight: 6,
                       backgroundColor: AppColors.surfaceHigh,
                       color: AppColors.primary,
@@ -926,10 +933,25 @@ class _CollectionProgress extends StatelessWidget {
                       ),
                     ],
                   ),
-                if (c.nextReviewAt case final next?) ...[
+                if (c.nextSessionAt case final next?) ...[
                   const SizedBox(height: AppSpacing.sm),
                   Text(
-                    'Prochaine révision · ${formatPlanningDate(next)}',
+                    'Prochaine séance ${formatRelativePlanningDate(next)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ] else if (dueReview case final due?) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Prochaine révision ${formatRelativeSrsDate(due)}',
+                    style: theme.textTheme.bodySmall,
+                  ),
+                ],
+                if (c.nextSessionAt == null &&
+                    c.sessionDate != null &&
+                    c.sessionDate!.isBefore(studyDay(DateTime.now()))) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    'Dernière séance ${formatRelativePlanningDate(c.sessionDate!)}',
                     style: theme.textTheme.bodySmall,
                   ),
                 ],
@@ -1190,6 +1212,7 @@ class DeckCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final dueReview = deck.srsEnabled ? deck.nextReviewAt : null;
     final hasOptions =
         onDelete != null ||
         onViewCards != null ||
@@ -1233,7 +1256,7 @@ class DeckCard extends StatelessWidget {
                         Text(deck.name, style: theme.textTheme.titleMedium),
                         const SizedBox(height: AppSpacing.sm),
                         Text(
-                          '${deck.totalCards} cartes · ${(deck.progress * 100).round()} % étudiées',
+                          '${deck.totalCards} cartes · ${(deck.sessionProgress * 100).round()} % du programme',
                           style: theme.textTheme.bodySmall,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -1244,9 +1267,24 @@ class DeckCard extends StatelessWidget {
                             '${deck.dueCards} à revoir aujourd’hui',
                             style: theme.textTheme.bodySmall,
                           ),
-                        if (deck.nextReviewAt case final next?)
+                        if (deck.nextSessionAt case final next?)
                           Text(
-                            'Prochaine révision · ${formatPlanningDate(next)}',
+                            'Prochaine séance ${formatRelativePlanningDate(next)}',
+                            style: theme.textTheme.bodySmall,
+                          ),
+                        if (deck.nextSessionAt == null)
+                          if (dueReview case final due?)
+                            Text(
+                              'Prochaine révision ${formatRelativeSrsDate(due)}',
+                              style: theme.textTheme.bodySmall,
+                            ),
+                        if (deck.nextSessionAt == null &&
+                            deck.sessionDate != null &&
+                            deck.sessionDate!.isBefore(
+                              studyDay(DateTime.now()),
+                            ))
+                          Text(
+                            'Dernière séance ${formatRelativePlanningDate(deck.sessionDate!)}',
                             style: theme.textTheme.bodySmall,
                           ),
                         if (canResume) ...[
@@ -1259,7 +1297,7 @@ class DeckCard extends StatelessWidget {
                           const SizedBox(height: AppSpacing.xs),
                         ],
                         ProgressPill(
-                          value: deck.progress,
+                          value: deck.sessionProgress,
                           semanticsLabel: 'Progression de ${deck.name}',
                         ),
                       ],
