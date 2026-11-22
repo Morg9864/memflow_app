@@ -219,10 +219,35 @@ class _PastSessionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  _planTitle(planning, session.plan),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
+                if (session.plan.deckId != null)
+                  Text.rich(
+                    TextSpan(
+                      text:
+                          planning.decks
+                              .where((item) => item.id == session.plan.deckId)
+                              .firstOrNull
+                              ?.name ??
+                          'Deck',
+                      style: Theme.of(context).textTheme.titleMedium,
+                      children: [
+                        TextSpan(
+                          text:
+                              ' · ${planning.collections.where((item) => item.id == session.plan.collectionId).firstOrNull?.name ?? 'Collection'}',
+                          style: Theme.of(context).textTheme.bodyMedium
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Text(
+                    _planTitle(planning, session.plan),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
                 Text('Séance du $date'),
               ],
             );

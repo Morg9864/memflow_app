@@ -243,9 +243,27 @@ class PlanningOverview {
       for (var index = 0; index < dates.length; index++) {
         final date = dates[index];
         final nextOccurrence =
-            plan.oneOffDates
-                .where((candidate) => candidate.isAfter(date))
-                .firstOrNull ??
+            activePlans
+                .where(
+                  (candidate) =>
+                      candidate.collectionId == plan.collectionId &&
+                      (candidate.deckId == null ||
+                          plan.deckId == null ||
+                          candidate.deckId == plan.deckId),
+                )
+                .map(
+                  (candidate) => candidate.nextOnOrAfter(
+                    date.add(const Duration(days: 1)),
+                  ),
+                )
+                .whereType<DateTime>()
+                .fold<DateTime?>(
+                  null,
+                  (nearest, candidate) =>
+                      nearest == null || candidate.isBefore(nearest)
+                      ? candidate
+                      : nearest,
+                ) ??
             today.add(const Duration(days: 1));
         final intervalLogs = _logsByDay.entries
             .where(
