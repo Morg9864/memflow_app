@@ -324,6 +324,59 @@ class PlanningOverview {
     required String collectionId,
     String? deckId,
   }) {
+    bool coversProgressScope(StudyPlan plan) =>
+        plan.collectionId == collectionId &&
+        (deckId == null
+            ? plan.deckId == null
+            : plan.deckId == null || plan.deckId == deckId);
+    if (activePlans.any(
+      (plan) => coversProgressScope(plan) && plan.occursOn(today),
+    )) {
+      return null;
+    }
+
+    final lastScheduledDay = lastPlanBefore(
+      collectionId: collectionId,
+      deckId: deckId,
+    );
+    final scopedCards = activeCards.where(
+      (card) =>
+          card.collectionId == collectionId &&
+          (deckId == null || card.deckId == deckId),
+    );
+    DateTime? latestFreeDay;
+    for (final card in scopedCards) {
+      final lastReviewedAt = card.lastReviewedAt;
+      if (lastReviewedAt == null) continue;
+      final reviewDay = studyDay(lastReviewedAt);
+      if (!reviewDay.isAfter(today) &&
+          (lastScheduledDay == null || reviewDay.isAfter(lastScheduledDay)) &&
+          (latestFreeDay == null || reviewDay.isAfter(latestFreeDay))) {
+        latestFreeDay = reviewDay;
+      }
+    }
+    final freeDay = latestFreeDay;
+    final freeProgress = freeDay == null
+        ? null
+        : () {
+            final cutoff = freeDay.add(const Duration(days: 1));
+            final cardsAtSession = scopedCards
+                .where((card) => card.createdAt.isBefore(cutoff))
+                .toList();
+            final total = cardsAtSession.length;
+            final worked = cardsAtSession
+                .where(
+                  (card) =>
+                      card.lastReviewedAt != null &&
+                      studyDay(card.lastReviewedAt!) == freeDay,
+                )
+                .length;
+            return total == 0
+                ? null
+                : (date: freeDay, worked: worked, total: total);
+          }();
+
+    ({DateTime date, int worked, int total})? scheduledProgress;
     for (final session in pastSessions) {
       if (session.plan.collectionId != collectionId ||
           (deckId == null
@@ -332,20 +385,31 @@ class PlanningOverview {
         continue;
       }
       if (deckId == null) {
-        return (
+        scheduledProgress = (
           date: session.date,
           worked: session.worked,
           total: session.total,
         );
+        break;
       }
       final deck = session.decks
           .where((item) => item.deckId == deckId)
           .firstOrNull;
       if (deck != null) {
-        return (date: session.date, worked: deck.worked, total: deck.total);
+        scheduledProgress = (
+          date: session.date,
+          worked: deck.worked,
+          total: deck.total,
+        );
+        break;
       }
     }
-    return null;
+    if (scheduledProgress == null) return freeProgress;
+    if (freeProgress == null) return scheduledProgress;
+    return freeProgress.worked / freeProgress.total >
+            scheduledProgress.worked / scheduledProgress.total
+        ? freeProgress
+        : scheduledProgress;
   }
 
   DateTime? lastPlanBefore({required String collectionId, String? deckId}) {
