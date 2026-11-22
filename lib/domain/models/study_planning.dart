@@ -335,81 +335,74 @@ class PlanningOverview {
       return null;
     }
 
+    final scopedCards = activeCards
+        .where(
+          (card) =>
+              card.collectionId == collectionId &&
+              (deckId == null || card.deckId == deckId),
+        )
+        .toList();
     final lastScheduledDay = lastPlanBefore(
       collectionId: collectionId,
       deckId: deckId,
     );
-    final scopedCards = activeCards.where(
-      (card) =>
-          card.collectionId == collectionId &&
-          (deckId == null || card.deckId == deckId),
-    );
-    DateTime? latestFreeDay;
-    for (final card in scopedCards) {
-      final lastReviewedAt = card.lastReviewedAt;
-      if (lastReviewedAt == null) continue;
-      final reviewDay = studyDay(lastReviewedAt);
-      if (!reviewDay.isAfter(today) &&
-          (lastScheduledDay == null || reviewDay.isAfter(lastScheduledDay)) &&
-          (latestFreeDay == null || reviewDay.isAfter(latestFreeDay))) {
-        latestFreeDay = reviewDay;
-      }
+    if (lastScheduledDay == null) {
+      final seenCards = scopedCards
+          .where((card) => card.lastReviewedAt != null)
+          .toList();
+      if (seenCards.isEmpty || scopedCards.isEmpty) return null;
+      final latestActivity = seenCards
+          .map((card) => card.lastReviewedAt!)
+          .reduce((a, b) => a.isAfter(b) ? a : b);
+      return (
+        date: studyDay(latestActivity),
+        worked: seenCards.length,
+        total: scopedCards.length,
+      );
     }
-    final freeDay = latestFreeDay;
-    final freeProgress = freeDay == null
-        ? null
-        : () {
-            final cutoff = freeDay.add(const Duration(days: 1));
-            final cardsAtSession = scopedCards
-                .where((card) => card.createdAt.isBefore(cutoff))
-                .toList();
-            final total = cardsAtSession.length;
-            final worked = cardsAtSession
-                .where(
-                  (card) =>
-                      card.lastReviewedAt != null &&
-                      studyDay(card.lastReviewedAt!) == freeDay,
-                )
-                .length;
-            return total == 0
-                ? null
-                : (date: freeDay, worked: worked, total: total);
-          }();
 
-    ({DateTime date, int worked, int total})? scheduledProgress;
-    for (final session in pastSessions) {
-      if (session.plan.collectionId != collectionId ||
-          (deckId == null
-              ? session.plan.deckId != null
-              : !session.plan.covers(collectionId, deckId))) {
-        continue;
-      }
-      if (deckId == null) {
-        scheduledProgress = (
-          date: session.date,
-          worked: session.worked,
-          total: session.total,
-        );
-        break;
-      }
-      final deck = session.decks
-          .where((item) => item.deckId == deckId)
-          .firstOrNull;
-      if (deck != null) {
-        scheduledProgress = (
-          date: session.date,
-          worked: deck.worked,
-          total: deck.total,
-        );
-        break;
-      }
-    }
-    if (scheduledProgress == null) return freeProgress;
-    if (freeProgress == null) return scheduledProgress;
-    return freeProgress.worked / freeProgress.total >
-            scheduledProgress.worked / scheduledProgress.total
-        ? freeProgress
-        : scheduledProgress;
+    final matchingPlans = activePlans.where(coversProgressScope).toList();
+    final previousPlans = matchingPlans
+        .where((plan) => plan.occursOn(lastScheduledDay))
+        .toList();
+    final cutoff = lastScheduledDay.add(const Duration(days: 1));
+    final intervalLogs = _logsByDay.entries
+        .where(
+          (entry) =>
+              !entry.key.isBefore(lastScheduledDay) &&
+              !entry.key.isAfter(today),
+        )
+        .expand((entry) => entry.value)
+        .toList();
+    final reviewedOnDay = {
+      for (final log
+          in _logsByDay[lastScheduledDay] ?? const <ReviewLogRecord>[])
+        log.flashcardId,
+    };
+    final reviewed = {for (final log in intervalLogs) log.flashcardId};
+    final lateDueIds = {
+      for (final log in intervalLogs)
+        if (studyDay(log.createdAt).isAfter(lastScheduledDay) &&
+            studyDay(log.scheduledDueAt).isBefore(cutoff))
+          log.flashcardId,
+    };
+    final plannedCards = scopedCards.where((card) {
+      final covered = previousPlans.any(
+        (plan) => plan.covers(card.collectionId, card.deckId),
+      );
+      return covered &&
+          card.createdAt.isBefore(cutoff) &&
+          (!srsEnabled ||
+              card.dueAt.isBefore(cutoff) ||
+              reviewedOnDay.contains(card.id) ||
+              lateDueIds.contains(card.id));
+    }).toList();
+    if (plannedCards.isEmpty) return null;
+    return (
+      date: lastScheduledDay,
+      worked: plannedCards.where((card) => reviewed.contains(card.id)).length,
+      total: plannedCards.length,
+    );
   }
 
   DateTime? lastPlanBefore({required String collectionId, String? deckId}) {
