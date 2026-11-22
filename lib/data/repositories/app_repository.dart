@@ -543,15 +543,22 @@ class AppRepository {
   }) async {
     final deck = await _fetchDeck(deckId);
     if (deck == null) throw StateError('Deck introuvable.');
-    final cardIds = (await _fetchFailedFlashcards(
-      deckId: deckId,
-    )).map((card) => card.id).toSet();
+    final failedCards = await _fetchFailedFlashcards(deckId: deckId);
+    final cardIds = failedCards.map((card) => card.id).toSet();
     if (cardIds.isEmpty) {
       throw StateError('Aucune carte erronée dans ce deck.');
     }
+    final forcedModesByCard = {
+      for (final card in failedCards)
+        if (card.allowedTestModes.contains(
+          card.lastTestMode ?? card.currentTestMode,
+        ))
+          card.id: card.lastTestMode ?? card.currentTestMode,
+    };
     return startErrorReviewSession(
       collectionId: deck.collectionId,
       deckId: deck.id,
+      forcedModesByCard: forcedModesByCard,
       cardIds: cardIds,
       sessionCardLimit: sessionCardLimit,
     );
