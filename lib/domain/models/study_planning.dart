@@ -237,20 +237,43 @@ class PlanningOverview {
   List<PastStudySession> get pastSessions {
     final sessions = <PastStudySession>[];
     for (final plan in activePlans.where((plan) => !plan.isRecurring)) {
-      for (final date in plan.oneOffDates.where(
-        (date) => date.isBefore(today),
-      )) {
-        final reviewed = {
+      final dates = plan.oneOffDates
+          .where((date) => date.isBefore(today))
+          .toList();
+      for (var index = 0; index < dates.length; index++) {
+        final date = dates[index];
+        final nextOccurrence =
+            plan.oneOffDates
+                .where((candidate) => candidate.isAfter(date))
+                .firstOrNull ??
+            today.add(const Duration(days: 1));
+        final intervalLogs = _logsByDay.entries
+            .where(
+              (entry) =>
+                  !entry.key.isBefore(date) &&
+                  entry.key.isBefore(nextOccurrence),
+            )
+            .expand((entry) => entry.value)
+            .toList();
+        final reviewedOnDate = {
           for (final log in _logsByDay[date] ?? const <ReviewLogRecord>[])
             log.flashcardId,
         };
+        final reviewed = {for (final log in intervalLogs) log.flashcardId};
         final cutoff = date.add(const Duration(days: 1));
+        final lateDueIds = {
+          for (final log in intervalLogs)
+            if (studyDay(log.createdAt).isAfter(date) &&
+                studyDay(log.scheduledDueAt).isBefore(cutoff))
+              log.flashcardId,
+        };
         final plannedCards = activeCards.where((card) {
           return plan.covers(card.collectionId, card.deckId) &&
               card.createdAt.isBefore(cutoff) &&
               (!srsEnabled ||
                   card.dueAt.isBefore(cutoff) ||
-                  reviewed.contains(card.id));
+                  reviewedOnDate.contains(card.id) ||
+                  lateDueIds.contains(card.id));
         }).toList();
         final collectionDecks =
             decks
